@@ -85,8 +85,8 @@ void ImGuiBackend::createPipeline(finevk::RenderPass* renderPass,
 {
     // Create pipeline layout with push constants
     pipelineLayout_ = finevk::PipelineLayout::create(device_)
-        .descriptorSetLayout(descriptorSetLayout_.get())
-        .pushConstant<PushConstantBlock>(VK_SHADER_STAGE_VERTEX_BIT)
+        .addDescriptorSetLayout(descriptorSetLayout_->handle())
+        .addPushConstantRange(VK_SHADER_STAGE_VERTEX_BIT, 0, sizeof(PushConstantBlock))
         .build();
 
     // Build shader paths
@@ -225,9 +225,11 @@ void ImGuiBackend::ensureBufferCapacity(uint32_t frameIndex,
         frame.vertexCapacity = vertexCount + 5000;  // Growth buffer
         VkDeviceSize size = frame.vertexCapacity * sizeof(ImDrawVert);
 
-        frame.vertexBuffer = finevk::Buffer::createVertexBuffer(
-            device_, size,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        frame.vertexBuffer = finevk::Buffer::create(device_)
+            .size(size)
+            .usage(VK_BUFFER_USAGE_VERTEX_BUFFER_BIT)
+            .memoryUsage(finevk::MemoryUsage::CpuToGpu)
+            .build();
     }
 
     // Resize index buffer if needed
@@ -235,9 +237,11 @@ void ImGuiBackend::ensureBufferCapacity(uint32_t frameIndex,
         frame.indexCapacity = indexCount + 10000;  // Growth buffer
         VkDeviceSize size = frame.indexCapacity * sizeof(ImDrawIdx);
 
-        frame.indexBuffer = finevk::Buffer::createIndexBuffer(
-            device_, size,
-            VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT);
+        frame.indexBuffer = finevk::Buffer::create(device_)
+            .size(size)
+            .usage(VK_BUFFER_USAGE_INDEX_BUFFER_BIT)
+            .memoryUsage(finevk::MemoryUsage::CpuToGpu)
+            .build();
     }
 }
 

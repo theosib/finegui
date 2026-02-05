@@ -7,6 +7,8 @@
  * Internal implementation header for the finevk rendering backend.
  */
 
+#include <finegui/gui_draw_data.hpp>
+
 #include <finevk/finevk.hpp>
 
 #include <imgui.h>
@@ -14,6 +16,7 @@
 #include <memory>
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 namespace finegui {
 namespace backend {
@@ -106,7 +109,7 @@ public:
      * @param data Captured draw data
      */
     void renderDrawData(finevk::CommandBuffer& cmd, uint32_t frameIndex,
-                        const struct GuiDrawData& data);
+                        const GuiDrawData& data);
 
     /**
      * @brief Rebuild font texture from ImGui font atlas

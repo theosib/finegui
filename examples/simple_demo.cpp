@@ -8,25 +8,35 @@
 #include <finegui/finegui.hpp>
 
 #include <finevk/finevk.hpp>
-#include <finevk/engine/finevk_engine.hpp>
 
 #include <iostream>
 
 int main() {
     try {
+        // Create Vulkan instance
+        auto instance = finevk::Instance::create()
+            .applicationName("finegui demo")
+            .enableValidation(true)
+            .build();
+
+        // Create window
+        auto window = finevk::Window::create(instance.get())
+            .title("finegui Demo")
+            .size(1280, 720)
+            .build();
+
+        // Select physical device and create logical device
+        auto physicalDevice = instance->selectPhysicalDevice(window.get());
+        auto device = physicalDevice.createLogicalDevice()
+            .surface(window->surface())
+            .build();
+
+        // Bind device to window
+        window->bindDevice(device.get());
+
         // Create renderer
         finevk::RendererConfig config;
-        config.width = 1280;
-        config.height = 720;
-        config.enableValidation = true;
-        config.framesInFlight = 2;
-        config.vsync = true;
-
-        auto renderer = finevk::SimpleRenderer::create(config);
-
-        // Create input manager
-        // Note: SimpleRenderer doesn't expose window directly, so for a real app
-        // you'd use Window class. This demo keeps it simple.
+        auto renderer = finevk::SimpleRenderer::create(window.get(), config);
 
         // Create GUI system
         finegui::GuiConfig guiConfig;
@@ -44,8 +54,8 @@ int main() {
         float clearColor[3] = {0.1f, 0.1f, 0.15f};
 
         // Main loop
-        while (!renderer->shouldClose()) {
-            renderer->pollEvents();
+        while (window->isOpen()) {
+            window->pollEvents();
 
             if (auto frame = renderer->beginFrame()) {
                 // beginFrame() auto-gets delta time and frame index from renderer
@@ -84,10 +94,10 @@ int main() {
                 gui.endFrame();
 
                 // Render
-                auto cmd = renderer->beginRenderPass(
+                renderer->beginRenderPass(
                     {clearColor[0], clearColor[1], clearColor[2], 1.0f});
 
-                gui.render(cmd);
+                gui.render(frame);
 
                 renderer->endRenderPass();
                 renderer->endFrame();

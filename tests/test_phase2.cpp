@@ -17,6 +17,45 @@
 
 using namespace finegui;
 
+// Helper to create renderer with window
+struct TestContext {
+    finevk::InstancePtr instance;
+    finevk::WindowPtr window;
+    finevk::LogicalDevicePtr device;
+    std::unique_ptr<finevk::SimpleRenderer> renderer;
+
+    static TestContext create(const char* title = "finegui test") {
+        TestContext ctx;
+
+        // Create Vulkan instance
+        ctx.instance = finevk::Instance::create()
+            .applicationName(title)
+            .enableValidation(true)
+            .build();
+
+        // Create window
+        ctx.window = finevk::Window::create(ctx.instance.get())
+            .title(title)
+            .size(800, 600)
+            .build();
+
+        // Select physical device and create logical device
+        auto physicalDevice = ctx.instance->selectPhysicalDevice(ctx.window.get());
+        ctx.device = physicalDevice.createLogicalDevice()
+            .surface(ctx.window->surface())
+            .build();
+
+        // Bind device to window
+        ctx.window->bindDevice(ctx.device.get());
+
+        // Create renderer
+        finevk::RendererConfig config;
+        ctx.renderer = finevk::SimpleRenderer::create(ctx.window.get(), config);
+
+        return ctx;
+    }
+};
+
 // ============================================================================
 // Rendering Tests (require Vulkan)
 // ============================================================================
@@ -24,25 +63,17 @@ using namespace finegui;
 void test_gui_system_creation() {
     std::cout << "Testing: GuiSystem creation with SimpleRenderer... ";
 
-    // Create a simple renderer
-    finevk::RendererConfig config;
-    config.width = 800;
-    config.height = 600;
-    config.enableValidation = true;
-    config.framesInFlight = 2;
-
-    auto renderer = finevk::SimpleRenderer::create(config);
-    assert(renderer != nullptr);
+    auto ctx = TestContext::create("test_gui_system_creation");
 
     // Create GuiSystem
     GuiConfig guiConfig;
-    guiConfig.msaaSamples = renderer->msaaSamples();
+    guiConfig.msaaSamples = ctx.renderer->msaaSamples();
 
-    GuiSystem gui(renderer->device(), guiConfig);
+    GuiSystem gui(ctx.renderer->device(), guiConfig);
     assert(!gui.isInitialized());
 
     // Initialize
-    gui.initialize(renderer.get());
+    gui.initialize(ctx.renderer.get());
     assert(gui.isInitialized());
 
     std::cout << "PASSED\n";
@@ -51,25 +82,19 @@ void test_gui_system_creation() {
 void test_basic_frame() {
     std::cout << "Testing: Basic frame rendering... ";
 
-    // Create renderer and GUI
-    finevk::RendererConfig config;
-    config.width = 800;
-    config.height = 600;
-    config.enableValidation = true;
-
-    auto renderer = finevk::SimpleRenderer::create(config);
+    auto ctx = TestContext::create("test_basic_frame");
 
     GuiConfig guiConfig;
-    guiConfig.msaaSamples = renderer->msaaSamples();
+    guiConfig.msaaSamples = ctx.renderer->msaaSamples();
 
-    GuiSystem gui(renderer->device(), guiConfig);
-    gui.initialize(renderer.get());
+    GuiSystem gui(ctx.renderer->device(), guiConfig);
+    gui.initialize(ctx.renderer.get());
 
     // Run a few frames
-    for (int i = 0; i < 3 && !renderer->shouldClose(); i++) {
-        renderer->pollEvents();
+    for (int i = 0; i < 3 && ctx.window->isOpen(); i++) {
+        ctx.window->pollEvents();
 
-        if (auto frame = renderer->beginFrame()) {
+        if (auto frame = ctx.renderer->beginFrame()) {
             gui.beginFrame();  // Auto mode - gets frame index and delta time
 
             // Simple ImGui content
@@ -79,31 +104,25 @@ void test_basic_frame() {
 
             gui.endFrame();
 
-            auto cmd = renderer->beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
-            gui.render(cmd);
-            renderer->endRenderPass();
-            renderer->endFrame();
+            ctx.renderer->beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+            gui.render(frame);
+            ctx.renderer->endRenderPass();
+            ctx.renderer->endFrame();
         }
     }
 
-    renderer->waitIdle();
+    ctx.renderer->waitIdle();
     std::cout << "PASSED\n";
 }
 
 void test_input_processing() {
     std::cout << "Testing: Input processing... ";
 
-    // Create renderer and GUI
-    finevk::RendererConfig config;
-    config.width = 800;
-    config.height = 600;
-    config.enableValidation = true;
-
-    auto renderer = finevk::SimpleRenderer::create(config);
+    auto ctx = TestContext::create("test_input_processing");
 
     GuiConfig guiConfig;
-    GuiSystem gui(renderer->device(), guiConfig);
-    gui.initialize(renderer.get());
+    GuiSystem gui(ctx.renderer->device(), guiConfig);
+    gui.initialize(ctx.renderer.get());
 
     // Simulate input events
     InputEvent mouseMove{};
@@ -134,24 +153,18 @@ void test_input_processing() {
     (void)wantMouse;
     (void)wantKeyboard;
 
-    renderer->waitIdle();
+    ctx.renderer->waitIdle();
     std::cout << "PASSED\n";
 }
 
 void test_state_updates() {
     std::cout << "Testing: State update handling... ";
 
-    // Create renderer and GUI
-    finevk::RendererConfig config;
-    config.width = 800;
-    config.height = 600;
-    config.enableValidation = true;
-
-    auto renderer = finevk::SimpleRenderer::create(config);
+    auto ctx = TestContext::create("test_state_updates");
 
     GuiConfig guiConfig;
-    GuiSystem gui(renderer->device(), guiConfig);
-    gui.initialize(renderer.get());
+    GuiSystem gui(ctx.renderer->device(), guiConfig);
+    gui.initialize(ctx.renderer.get());
 
     // Define a test state update
     struct TestState : TypedStateUpdate<TestState> {
@@ -171,7 +184,7 @@ void test_state_updates() {
 
     assert(receivedValue == 42);
 
-    renderer->waitIdle();
+    ctx.renderer->waitIdle();
     std::cout << "PASSED\n";
 }
 

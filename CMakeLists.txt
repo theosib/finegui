@@ -12,28 +12,48 @@ option(FINEGUI_BUILD_TESTS "Build tests" ON)
 option(FINEGUI_BUILD_EXAMPLES "Build examples" ON)
 
 # =============================================================================
-# Find finevk (sibling project)
+# Find finevk (sibling project with pre-built libraries)
 # =============================================================================
-# finevk is expected to be built alongside finegui as a sibling project
 set(FINEVK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../FineStructureVK")
+set(FINEVK_BUILD_DIR "${FINEVK_ROOT}/build")
 
-if(NOT EXISTS "${FINEVK_ROOT}/CMakeLists.txt")
+if(NOT EXISTS "${FINEVK_ROOT}/include/finevk/finevk.hpp")
     message(FATAL_ERROR "finevk not found at ${FINEVK_ROOT}. "
             "Please ensure FineStructureVK is a sibling directory.")
 endif()
 
-# Add finevk as a subdirectory if not already added
+if(NOT EXISTS "${FINEVK_BUILD_DIR}/libfinevk-core.dylib")
+    message(FATAL_ERROR "finevk libraries not found at ${FINEVK_BUILD_DIR}. "
+            "Please build FineStructureVK first.")
+endif()
+
+# Create imported targets for finevk libraries
 if(NOT TARGET finevk-core)
-    # Disable finevk examples/tests when building as subdirectory
-    set(FINEVK_BUILD_TESTS OFF CACHE BOOL "" FORCE)
-    set(FINEVK_BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
-    add_subdirectory("${FINEVK_ROOT}" "${CMAKE_CURRENT_BINARY_DIR}/finevk")
+    add_library(finevk-core SHARED IMPORTED)
+    set_target_properties(finevk-core PROPERTIES
+        IMPORTED_LOCATION "${FINEVK_BUILD_DIR}/libfinevk-core.dylib"
+        INTERFACE_INCLUDE_DIRECTORIES "${FINEVK_ROOT}/include"
+    )
+endif()
+
+if(NOT TARGET finevk-engine)
+    add_library(finevk-engine SHARED IMPORTED)
+    set_target_properties(finevk-engine PROPERTIES
+        IMPORTED_LOCATION "${FINEVK_BUILD_DIR}/libfinevk-engine.dylib"
+        INTERFACE_INCLUDE_DIRECTORIES "${FINEVK_ROOT}/include"
+    )
 endif()
 
 # =============================================================================
 # Find Vulkan (for shader compilation)
 # =============================================================================
 find_package(Vulkan REQUIRED)
+
+# =============================================================================
+# Find GLFW and GLM (required by finevk headers)
+# =============================================================================
+find_package(glfw3 REQUIRED)
+find_package(glm REQUIRED)
 
 # =============================================================================
 # ImGui
@@ -131,6 +151,8 @@ target_link_libraries(finegui
         finevk-core
         finevk-engine
         Vulkan::Vulkan
+        glfw
+        glm::glm
 )
 
 # Add shader output directory for runtime loading
