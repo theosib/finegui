@@ -89,11 +89,21 @@ public:
     }
 
     /**
-     * @brief Initialize from SimpleRenderer
-     * @param renderer The simple renderer (extracts render pass and command pool)
+     * @brief Initialize from a RenderSurface (SimpleRenderer, OffscreenSurface, etc.)
+     * @param surface The render surface (extracts render pass, command pool, etc.)
      * @param subpass Subpass index (default 0)
      */
-    void initialize(finevk::SimpleRenderer* renderer, uint32_t subpass = 0);
+    void initialize(finevk::RenderSurface* surface, uint32_t subpass = 0);
+
+    /// Convenience overload for references
+    void initialize(finevk::RenderSurface& surface, uint32_t subpass = 0) {
+        initialize(&surface, subpass);
+    }
+
+    /// Backward-compatible overload: SimpleRenderer IS a RenderSurface
+    void initialize(finevk::SimpleRenderer* renderer, uint32_t subpass = 0) {
+        initialize(static_cast<finevk::RenderSurface*>(renderer), subpass);
+    }
 
     /// Convenience overload for references
     void initialize(finevk::SimpleRenderer& renderer, uint32_t subpass = 0) {

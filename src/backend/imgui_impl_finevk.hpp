@@ -5,6 +5,7 @@
  * @brief ImGui backend using finevk
  *
  * Internal implementation header for the finevk rendering backend.
+ * Supports ImGui 1.92+ with ImGuiBackendFlags_RendererHasTextures.
  */
 
 #include <finegui/gui_draw_data.hpp>
@@ -42,12 +43,20 @@ struct FrameRenderData {
 };
 
 /**
- * @brief Registered texture entry
+ * @brief Backend texture data stored in ImTextureData::BackendUserData
+ */
+struct BackendTextureData {
+    finevk::TextureRef texture;
+    finevk::DescriptorSetPtr descriptorSet;
+};
+
+/**
+ * @brief Registered texture entry (for user-registered textures)
  */
 struct TextureEntry {
     finevk::Texture* texture = nullptr;
     finevk::Sampler* sampler = nullptr;
-    VkDescriptorSet descriptorSet = VK_NULL_HANDLE;
+    finevk::DescriptorSetPtr descriptorSet;
 };
 
 /**
@@ -55,7 +64,7 @@ struct TextureEntry {
  */
 class ImGuiBackend {
 public:
-    ImGuiBackend(finevk::LogicalDevice* device, uint32_t framesInFlight);
+    ImGuiBackend(finevk::RenderSurface* surface);
     ~ImGuiBackend();
 
     // Non-copyable, non-movable (for simplicity)
@@ -75,11 +84,6 @@ public:
                     VkSampleCountFlagBits msaaSamples);
 
     /**
-     * @brief Create/upload font texture
-     */
-    void createFontTexture(finevk::CommandPool* commandPool);
-
-    /**
      * @brief Register a texture for use in GUI
      * @return Unique texture ID
      */
@@ -89,11 +93,6 @@ public:
      * @brief Unregister a texture
      */
     void unregisterTexture(uint64_t textureId);
-
-    /**
-     * @brief Get descriptor set for a texture ID
-     */
-    VkDescriptorSet getTextureDescriptor(uint64_t textureId);
 
     /**
      * @brief Render ImGui draw data
@@ -112,18 +111,6 @@ public:
                         const GuiDrawData& data);
 
     /**
-     * @brief Rebuild font texture from ImGui font atlas
-     *
-     * Call this after modifying fonts via ImGui's font API.
-     */
-    void rebuildFontTexture();
-
-    /**
-     * @brief Get font texture descriptor (used as default)
-     */
-    VkDescriptorSet getFontDescriptor() const { return fontDescriptorSet_; }
-
-    /**
      * @brief Get the pipeline layout
      */
     finevk::PipelineLayout* pipelineLayout() { return pipelineLayout_.get(); }
@@ -138,10 +125,16 @@ private:
                         VkSampleCountFlagBits msaaSamples);
     void createDescriptorResources();
     void ensureBufferCapacity(uint32_t frameIndex, size_t vertexCount, size_t indexCount);
-    VkDescriptorSet allocateTextureDescriptor(finevk::Texture* texture, finevk::Sampler* sampler);
+    finevk::DescriptorSetPtr allocateTextureDescriptor(finevk::Texture* texture, finevk::Sampler* sampler);
+    finevk::DescriptorSetPtr allocateTextureDescriptor(VkImageView view, VkSampler sampler);
 
+    // ImGui 1.92+ texture lifecycle
+    void updateTexture(ImTextureData* tex);
+    void destroyTexture(ImTextureData* tex);
+
+    finevk::RenderSurface* surface_ = nullptr;
     finevk::LogicalDevice* device_ = nullptr;
-    finevk::CommandPool* commandPool_ = nullptr;  // Stored for font rebuild
+    finevk::CommandPool* commandPool_ = nullptr;
     uint32_t framesInFlight_ = 2;
     bool initialized_ = false;
 
@@ -152,16 +145,14 @@ private:
 
     // Descriptor resources
     finevk::DescriptorPoolPtr descriptorPool_;
-    VkDescriptorSet fontDescriptorSet_ = VK_NULL_HANDLE;
 
-    // Font texture
-    finevk::TextureRef fontTexture_;
-    finevk::SamplerPtr fontSampler_;
+    // Default sampler for textures
+    finevk::SamplerPtr defaultSampler_;
 
     // Per-frame data
     std::vector<FrameRenderData> frameData_;
 
-    // Registered textures
+    // User-registered textures (separate from ImGui-managed textures)
     std::unordered_map<uint64_t, TextureEntry> textures_;
     uint64_t nextTextureId_ = 1;
 

@@ -1,6 +1,8 @@
 /**
  * @file imgui_impl_finevk.cpp
  * @brief ImGui finevk backend implementation
+ *
+ * Supports ImGui 1.92+ with ImGuiBackendFlags_RendererHasTextures.
  */
 
 #include "imgui_impl_finevk.hpp"
@@ -17,12 +19,13 @@ namespace backend {
 // Constructor/Destructor
 // ============================================================================
 
-ImGuiBackend::ImGuiBackend(finevk::LogicalDevice* device, uint32_t framesInFlight)
-    : device_(device)
-    , framesInFlight_(framesInFlight)
+ImGuiBackend::ImGuiBackend(finevk::RenderSurface* surface)
+    : surface_(surface)
+    , device_(surface->device())
+    , framesInFlight_(surface->framesInFlight())
 {
-    if (!device_) {
-        throw std::runtime_error("ImGuiBackend: device cannot be null");
+    if (!surface_) {
+        throw std::runtime_error("ImGuiBackend: surface cannot be null");
     }
 
     // Get shader directory from compile definition or use relative path
@@ -39,6 +42,24 @@ ImGuiBackend::ImGuiBackend(finevk::LogicalDevice* device, uint32_t framesInFligh
 ImGuiBackend::~ImGuiBackend() {
     if (device_) {
         device_->waitIdle();
+
+        // Clean up all ImGui-managed textures (only if context still exists)
+        ImGuiContext* ctx = ImGui::GetCurrentContext();
+        if (ctx != nullptr) {
+            ImGuiPlatformIO& platform_io = ImGui::GetPlatformIO();
+            for (ImTextureData* tex : platform_io.Textures) {
+                if (tex->BackendUserData != nullptr) {
+                    auto* backendTex = static_cast<BackendTextureData*>(tex->BackendUserData);
+                    IM_DELETE(backendTex);
+
+                    tex->SetTexID(ImTextureID_Invalid);
+                    tex->BackendUserData = nullptr;
+                }
+            }
+        }
+
+        // Clean up user-registered textures (DescriptorSetPtr handles freeing)
+        textures_.clear();
     }
 }
 
@@ -55,11 +76,21 @@ void ImGuiBackend::initialize(finevk::RenderPass* renderPass,
         throw std::runtime_error("ImGuiBackend::initialize: renderPass and commandPool required");
     }
 
-    commandPool_ = commandPool;  // Store for font rebuild
+    commandPool_ = commandPool;
 
     createDescriptorResources();
     createPipeline(renderPass, subpass, msaaSamples);
-    createFontTexture(commandPool);
+
+    // Create default sampler for ImGui textures
+    defaultSampler_ = finevk::Sampler::create(device_)
+        .filter(VK_FILTER_LINEAR)
+        .addressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
+        .build();
+
+    // Set ImGui backend flags to indicate we support the new texture system
+    ImGuiIO& io = ImGui::GetIO();
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasTextures;
 
     initialized_ = true;
 }
@@ -70,12 +101,10 @@ void ImGuiBackend::createDescriptorResources() {
         .combinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT)
         .build();
 
-    // Create descriptor pool with enough sets for font + registered textures
-    // Start with 100, can be expanded if needed
-    descriptorPool_ = finevk::DescriptorPool::create(device_)
-        .maxSets(100)
-        .poolSize(VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 100)
-        .allowFree(true)
+    // Create descriptor pool from layout (auto-sizes pool types)
+    descriptorPool_ = finevk::DescriptorPool::fromLayout(
+        descriptorSetLayout_.get(), 100)
+        .allowFree()
         .build();
 }
 
@@ -119,40 +148,96 @@ void ImGuiBackend::createPipeline(finevk::RenderPass* renderPass,
         .build();
 }
 
-void ImGuiBackend::createFontTexture(finevk::CommandPool* commandPool) {
-    ImGuiIO& io = ImGui::GetIO();
+// ============================================================================
+// ImGui 1.92+ Texture Lifecycle
+// ============================================================================
 
-    // Get font atlas data
-    unsigned char* pixels;
-    int width, height;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
+void ImGuiBackend::updateTexture(ImTextureData* tex) {
+    if (tex->Status == ImTextureStatus_OK)
+        return;
 
-    // Create texture from memory
-    fontTexture_ = finevk::Texture::fromMemory(
-        device_,
-        pixels,
-        static_cast<uint32_t>(width),
-        static_cast<uint32_t>(height),
-        commandPool,
-        false,  // No mipmaps
-        false   // Not sRGB
-    );
+    if (tex->Status == ImTextureStatus_WantDestroy) {
+        destroyTexture(tex);
+        return;
+    }
 
-    // Create sampler
-    fontSampler_ = finevk::Sampler::create(device_)
-        .filter(VK_FILTER_LINEAR)
-        .addressMode(VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE)
-        .build();
+    if (tex->Status == ImTextureStatus_WantCreate) {
+        // Create new texture
+        IM_ASSERT(tex->TexID == ImTextureID_Invalid && tex->BackendUserData == nullptr);
+        IM_ASSERT(tex->Format == ImTextureFormat_RGBA32);
 
-    // Allocate descriptor set for font
-    fontDescriptorSet_ = allocateTextureDescriptor(fontTexture_.get(), fontSampler_.get());
+        auto* backendTex = IM_NEW(BackendTextureData)();
+        tex->BackendUserData = backendTex;
 
-    // Store font texture ID in ImGui
-    io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(static_cast<uint64_t>(0)));
+        // Create texture from ImGui's pixel data
+        backendTex->texture = finevk::Texture::fromMemory(
+            device_,
+            tex->GetPixels(),
+            static_cast<uint32_t>(tex->Width),
+            static_cast<uint32_t>(tex->Height),
+            commandPool_,
+            false,  // No mipmaps
+            false   // Not sRGB
+        );
+
+        // Allocate descriptor set
+        backendTex->descriptorSet = allocateTextureDescriptor(
+            backendTex->texture.get(), defaultSampler_.get());
+
+        // Store texture ID (raw handle for ImGui draw commands)
+        tex->SetTexID(reinterpret_cast<ImTextureID>(backendTex->descriptorSet->handle()));
+    }
+    else if (tex->Status == ImTextureStatus_WantUpdates) {
+        // ImGui 1.92+ lazily rasterizes font glyphs. When new glyphs are needed,
+        // the atlas is updated and we must re-upload the texture data.
+        IM_ASSERT(tex->BackendUserData != nullptr);
+        auto* backendTex = static_cast<BackendTextureData*>(tex->BackendUserData);
+
+        // Defer old resources for GPU-safe deletion (no stall)
+        surface_->deferDelete(std::move(backendTex->texture));
+        surface_->deferDelete(std::move(backendTex->descriptorSet));
+
+        // Recreate texture from updated pixel data
+        backendTex->texture = finevk::Texture::fromMemory(
+            device_,
+            tex->GetPixels(),
+            static_cast<uint32_t>(tex->Width),
+            static_cast<uint32_t>(tex->Height),
+            commandPool_,
+            false,  // No mipmaps
+            false   // Not sRGB
+        );
+
+        // Reallocate descriptor set for new texture
+        backendTex->descriptorSet = allocateTextureDescriptor(
+            backendTex->texture.get(), defaultSampler_.get());
+
+        // Update texture ID
+        tex->SetTexID(reinterpret_cast<ImTextureID>(backendTex->descriptorSet->handle()));
+    }
+
+    // Mark as OK after processing
+    tex->SetStatus(ImTextureStatus_OK);
+}
+
+void ImGuiBackend::destroyTexture(ImTextureData* tex) {
+    if (tex->BackendUserData != nullptr) {
+        auto* backendTex = static_cast<BackendTextureData*>(tex->BackendUserData);
+
+        // Defer resource release for GPU-safe deletion
+        surface_->deferDelete(std::move(backendTex->texture));
+        surface_->deferDelete(std::move(backendTex->descriptorSet));
+
+        IM_DELETE(backendTex);
+
+        tex->SetTexID(ImTextureID_Invalid);
+        tex->BackendUserData = nullptr;
+    }
+    tex->SetStatus(ImTextureStatus_Destroyed);
 }
 
 // ============================================================================
-// Texture management
+// Texture management (user-registered textures)
 // ============================================================================
 
 uint64_t ImGuiBackend::registerTexture(finevk::Texture* texture, finevk::Sampler* sampler) {
@@ -161,7 +246,7 @@ uint64_t ImGuiBackend::registerTexture(finevk::Texture* texture, finevk::Sampler
     }
 
     // Use default sampler if none provided
-    finevk::Sampler* actualSampler = sampler ? sampler : fontSampler_.get();
+    finevk::Sampler* actualSampler = sampler ? sampler : defaultSampler_.get();
 
     uint64_t id = nextTextureId_++;
 
@@ -170,40 +255,30 @@ uint64_t ImGuiBackend::registerTexture(finevk::Texture* texture, finevk::Sampler
     entry.sampler = actualSampler;
     entry.descriptorSet = allocateTextureDescriptor(texture, actualSampler);
 
-    textures_[id] = entry;
+    textures_[id] = std::move(entry);
     return id;
 }
 
 void ImGuiBackend::unregisterTexture(uint64_t textureId) {
     auto it = textures_.find(textureId);
     if (it != textures_.end()) {
-        descriptorPool_->free(it->second.descriptorSet);
-        textures_.erase(it);
+        textures_.erase(it);  // DescriptorSetPtr handles freeing
     }
 }
 
-VkDescriptorSet ImGuiBackend::getTextureDescriptor(uint64_t textureId) {
-    if (textureId == 0) {
-        return fontDescriptorSet_;
-    }
-
-    auto it = textures_.find(textureId);
-    if (it != textures_.end()) {
-        return it->second.descriptorSet;
-    }
-
-    // Fall back to font texture if not found
-    return fontDescriptorSet_;
-}
-
-VkDescriptorSet ImGuiBackend::allocateTextureDescriptor(finevk::Texture* texture,
-                                                         finevk::Sampler* sampler)
+finevk::DescriptorSetPtr ImGuiBackend::allocateTextureDescriptor(finevk::Texture* texture,
+                                                                   finevk::Sampler* sampler)
 {
-    VkDescriptorSet set = descriptorPool_->allocate(descriptorSetLayout_.get());
+    return allocateTextureDescriptor(texture->view()->handle(), sampler->handle());
+}
+
+finevk::DescriptorSetPtr ImGuiBackend::allocateTextureDescriptor(VkImageView view, VkSampler sampler)
+{
+    auto set = descriptorPool_->allocateManaged(descriptorSetLayout_.get());
 
     finevk::DescriptorWriter(device_)
-        .writeImage(set, 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
-                    texture->view()->handle(), sampler->handle(),
+        .writeImage(set->handle(), 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                    view, sampler,
                     VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL)
         .update();
 
@@ -253,6 +328,15 @@ void ImGuiBackend::render(finevk::CommandBuffer& cmd, uint32_t frameIndex) {
     ImDrawData* drawData = ImGui::GetDrawData();
     if (!drawData || drawData->TotalVtxCount == 0) {
         return;
+    }
+
+    // Process texture updates (ImGui 1.92+ texture lifecycle)
+    if (drawData->Textures != nullptr) {
+        for (ImTextureData* tex : *drawData->Textures) {
+            if (tex->Status != ImTextureStatus_OK) {
+                updateTexture(tex);
+            }
+        }
     }
 
     // Ensure buffers are large enough
@@ -343,9 +427,8 @@ void ImGuiBackend::render(finevk::CommandBuffer& cmd, uint32_t frameIndex) {
                     static_cast<uint32_t>(clipMax.x - clipMin.x),
                     static_cast<uint32_t>(clipMax.y - clipMin.y));
 
-                // Get texture descriptor
-                uint64_t texId = reinterpret_cast<uint64_t>(pcmd->GetTexID());
-                VkDescriptorSet texDescriptor = getTextureDescriptor(texId);
+                // Get texture descriptor - in 1.92+, GetTexID() returns the descriptor set directly
+                VkDescriptorSet texDescriptor = reinterpret_cast<VkDescriptorSet>(pcmd->GetTexID());
 
                 // Bind descriptor set
                 cmd.bindDescriptorSet(*pipelineLayout_, texDescriptor, 0);
@@ -437,7 +520,7 @@ void ImGuiBackend::renderDrawData(finevk::CommandBuffer& cmd, uint32_t frameInde
             static_cast<uint32_t>(clipMaxY - clipMinY));
 
         // Get texture descriptor
-        VkDescriptorSet texDescriptor = getTextureDescriptor(drawCmd.texture.id);
+        VkDescriptorSet texDescriptor = reinterpret_cast<VkDescriptorSet>(drawCmd.texture.id);
 
         // Bind descriptor set
         cmd.bindDescriptorSet(*pipelineLayout_, texDescriptor, 0);
@@ -449,44 +532,6 @@ void ImGuiBackend::renderDrawData(finevk::CommandBuffer& cmd, uint32_t frameInde
                         drawCmd.vertexOffset,
                         0);
     }
-}
-
-void ImGuiBackend::rebuildFontTexture() {
-    if (!commandPool_) {
-        throw std::runtime_error("ImGuiBackend::rebuildFontTexture: not initialized");
-    }
-
-    // Wait for GPU to finish using current font texture
-    device_->waitIdle();
-
-    // Free old font descriptor
-    if (fontDescriptorSet_ != VK_NULL_HANDLE) {
-        descriptorPool_->free(fontDescriptorSet_);
-        fontDescriptorSet_ = VK_NULL_HANDLE;
-    }
-
-    // Get new font atlas data from ImGui
-    ImGuiIO& io = ImGui::GetIO();
-    unsigned char* pixels;
-    int width, height;
-    io.Fonts->GetTexDataAsRGBA32(&pixels, &width, &height);
-
-    // Create new texture
-    fontTexture_ = finevk::Texture::fromMemory(
-        device_,
-        pixels,
-        static_cast<uint32_t>(width),
-        static_cast<uint32_t>(height),
-        commandPool_,
-        false,  // No mipmaps
-        false   // Not sRGB
-    );
-
-    // Allocate new descriptor set
-    fontDescriptorSet_ = allocateTextureDescriptor(fontTexture_.get(), fontSampler_.get());
-
-    // Update ImGui's texture ID
-    io.Fonts->SetTexID(reinterpret_cast<ImTextureID>(static_cast<uint64_t>(0)));
 }
 
 } // namespace backend

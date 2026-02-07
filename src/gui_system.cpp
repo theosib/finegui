@@ -27,7 +27,7 @@ struct GuiSystem::Impl {
     std::unique_ptr<backend::ImGuiBackend> backend;
 
     // Rendering state
-    finevk::SimpleRenderer* renderer = nullptr;
+    finevk::RenderSurface* surface = nullptr;
     uint32_t framesInFlight = 2;
     uint32_t currentFrameIndex = 0;  // For manual mode tracking
     bool initialized = false;
@@ -40,6 +40,7 @@ struct GuiSystem::Impl {
     float displayHeight = 600.0f;
     float framebufferScaleX = 1.0f;
     float framebufferScaleY = 1.0f;
+    float dpiScale = 1.0f;  // Cached from config
 
     // Time tracking for automatic delta time
     using Clock = std::chrono::steady_clock;
@@ -47,6 +48,10 @@ struct GuiSystem::Impl {
     bool firstFrame = true;
 
     ~Impl() {
+        // Destroy backend first while ImGui context is still valid
+        // This allows proper cleanup of GPU resources for ImGui textures
+        backend.reset();
+
         if (context) {
             ImGui::DestroyContext(context);
         }
@@ -76,6 +81,12 @@ GuiSystem::GuiSystem(finevk::LogicalDevice* device, const GuiConfig& config)
         impl_->framesInFlight = 2;  // Safe default
     }
 
+    // Set up DPI scaling
+    // dpiScale of 0 means use 1.0 (auto-detect requires window access in initialize())
+    impl_->dpiScale = config.dpiScale > 0.0f ? config.dpiScale : 1.0f;
+    impl_->framebufferScaleX = impl_->dpiScale;
+    impl_->framebufferScaleY = impl_->dpiScale;
+
     // Create ImGui context
     impl_->context = ImGui::CreateContext();
     ImGui::SetCurrentContext(impl_->context);
@@ -92,24 +103,31 @@ GuiSystem::GuiSystem(finevk::LogicalDevice* device, const GuiConfig& config)
     io.DisplaySize = ImVec2(impl_->displayWidth, impl_->displayHeight);
     io.DisplayFramebufferScale = ImVec2(impl_->framebufferScaleX, impl_->framebufferScaleY);
 
-    // Configure font if specified
+    // Configure font
+    // RasterizerDensity handles high-DPI: rasterizes at dpiScale resolution
+    // but displays at the logical font size. No manual size scaling needed.
+    float logicalFontSize = config.fontSize * config.fontScale;
     if (!config.fontPath.empty()) {
-        float fontSize = config.fontSize * config.fontScale;
-        io.Fonts->AddFontFromFileTTF(config.fontPath.c_str(), fontSize);
+        ImFontConfig fontConfig;
+        fontConfig.RasterizerDensity = impl_->dpiScale;
+        io.Fonts->AddFontFromFileTTF(config.fontPath.c_str(), logicalFontSize, &fontConfig);
     } else if (config.fontData && config.fontDataSize > 0) {
-        // Font from memory (ImGui takes ownership of the data copy)
-        float fontSize = config.fontSize * config.fontScale;
         ImFontConfig fontConfig;
         fontConfig.FontDataOwnedByAtlas = false;  // We manage the data
+        fontConfig.RasterizerDensity = impl_->dpiScale;
         io.Fonts->AddFontFromMemoryTTF(
             const_cast<void*>(config.fontData),
             static_cast<int>(config.fontDataSize),
-            fontSize,
+            logicalFontSize,
             &fontConfig);
+    } else {
+        ImFontConfig fontConfig;
+        fontConfig.SizePixels = logicalFontSize;
+        fontConfig.RasterizerDensity = impl_->dpiScale;
+        io.Fonts->AddFontDefaultVector(&fontConfig);
     }
 
-    // Create backend
-    impl_->backend = std::make_unique<backend::ImGuiBackend>(device, impl_->framesInFlight);
+    // Backend is created in initialize() when we have a RenderSurface
 }
 
 GuiSystem::~GuiSystem() = default;
@@ -128,6 +146,9 @@ void GuiSystem::initialize(finevk::RenderPass* renderPass,
     if (!renderPass || !commandPool) {
         throw std::runtime_error("GuiSystem::initialize: renderPass and commandPool required");
     }
+    if (!impl_->backend) {
+        throw std::runtime_error("GuiSystem::initialize: backend not created. Use initialize(RenderSurface*) instead.");
+    }
 
     ImGui::SetCurrentContext(impl_->context);
 
@@ -135,19 +156,24 @@ void GuiSystem::initialize(finevk::RenderPass* renderPass,
     impl_->initialized = true;
 }
 
-void GuiSystem::initialize(finevk::SimpleRenderer* renderer, uint32_t subpass) {
-    if (!renderer) {
-        throw std::runtime_error("GuiSystem::initialize: renderer cannot be null");
+void GuiSystem::initialize(finevk::RenderSurface* surface, uint32_t subpass) {
+    if (!surface) {
+        throw std::runtime_error("GuiSystem::initialize: surface cannot be null");
     }
 
-    impl_->renderer = renderer;
+    impl_->surface = surface;
 
-    // Get display size from renderer
-    auto extent = renderer->extent();
-    impl_->displayWidth = static_cast<float>(extent.width);
-    impl_->displayHeight = static_cast<float>(extent.height);
+    // Create backend with the surface (provides device, framesInFlight, deferDelete)
+    impl_->backend = std::make_unique<backend::ImGuiBackend>(surface);
 
-    initialize(renderer->renderPass(), renderer->commandPool(), subpass);
+    // Get display size from surface (framebuffer size) and convert to logical size
+    // For high-DPI displays, displayWidth/Height should be the logical size,
+    // while framebufferScale handles the actual pixel scaling
+    auto extent = surface->extent();
+    impl_->displayWidth = static_cast<float>(extent.width) / impl_->dpiScale;
+    impl_->displayHeight = static_cast<float>(extent.height) / impl_->dpiScale;
+
+    initialize(surface->renderPass(), surface->commandPool(), subpass);
 }
 
 TextureHandle GuiSystem::registerTexture(finevk::Texture* texture, finevk::Sampler* sampler) {
@@ -213,8 +239,9 @@ void GuiSystem::processInput(const InputEvent& event) {
             break;
 
         case InputEventType::WindowResize:
-            impl_->displayWidth = static_cast<float>(event.windowWidth);
-            impl_->displayHeight = static_cast<float>(event.windowHeight);
+            // Convert to logical size for high-DPI
+            impl_->displayWidth = static_cast<float>(event.windowWidth) / impl_->dpiScale;
+            impl_->displayHeight = static_cast<float>(event.windowHeight) / impl_->dpiScale;
             io.DisplaySize = ImVec2(impl_->displayWidth, impl_->displayHeight);
             break;
     }
@@ -238,8 +265,8 @@ void GuiSystem::beginFrame() {
 
     // Get frame index from renderer
     uint32_t frameIndex = 0;
-    if (impl_->renderer) {
-        frameIndex = impl_->renderer->currentFrame();
+    if (impl_->surface) {
+        frameIndex = impl_->surface->currentFrame();
     }
 
     beginFrame(frameIndex, deltaTime);
@@ -248,8 +275,8 @@ void GuiSystem::beginFrame() {
 void GuiSystem::beginFrame(float deltaTime) {
     // Get frame index from renderer if available
     uint32_t frameIndex = 0;
-    if (impl_->renderer) {
-        frameIndex = impl_->renderer->currentFrame();
+    if (impl_->surface) {
+        frameIndex = impl_->surface->currentFrame();
     }
 
     beginFrame(frameIndex, deltaTime);
@@ -262,10 +289,11 @@ void GuiSystem::beginFrame(uint32_t frameIndex, float deltaTime) {
     ImGuiIO& io = ImGui::GetIO();
 
     // Update display size from renderer if available
-    if (impl_->renderer) {
-        auto extent = impl_->renderer->extent();
-        impl_->displayWidth = static_cast<float>(extent.width);
-        impl_->displayHeight = static_cast<float>(extent.height);
+    // Convert framebuffer size to logical size for high-DPI support
+    if (impl_->surface) {
+        auto extent = impl_->surface->extent();
+        impl_->displayWidth = static_cast<float>(extent.width) / impl_->dpiScale;
+        impl_->displayHeight = static_cast<float>(extent.height) / impl_->dpiScale;
     }
 
     io.DisplaySize = ImVec2(impl_->displayWidth, impl_->displayHeight);
@@ -386,7 +414,11 @@ void GuiSystem::rebuildFontAtlas() {
     }
 
     ImGui::SetCurrentContext(impl_->context);
-    impl_->backend->rebuildFontTexture();
+    // ImGui 1.92+ with ImGuiBackendFlags_RendererHasTextures handles font texture
+    // rebuilding automatically through the texture lifecycle system. When fonts
+    // are added/modified, ImGui marks the texture as needing update and the backend
+    // handles it during the next render call. This function is kept for API
+    // compatibility but is effectively a no-op.
 }
 
 finevk::LogicalDevice* GuiSystem::device() const {

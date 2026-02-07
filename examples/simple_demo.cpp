@@ -38,14 +38,24 @@ int main() {
         finevk::RendererConfig config;
         auto renderer = finevk::SimpleRenderer::create(window.get(), config);
 
-        // Create GUI system
+        // Create input manager for handling user input
+        auto input = finevk::InputManager::create(window.get());
+
+        // Create GUI system with high-DPI support
         finegui::GuiConfig guiConfig;
         guiConfig.msaaSamples = renderer->msaaSamples();
+        // Scale font for high-DPI displays
+        auto contentScale = window->contentScale();
+        guiConfig.dpiScale = contentScale.x;
+        guiConfig.fontSize = 16.0f;  // Will be scaled by dpiScale
 
         finegui::GuiSystem gui(renderer->device(), guiConfig);
         gui.initialize(renderer.get());
 
         std::cout << "finegui demo started. Close window to exit.\n";
+        if (window->isHighDPI()) {
+            std::cout << "High-DPI display detected (scale: " << contentScale.x << "x)\n";
+        }
 
         // Demo state
         float sliderValue = 0.5f;
@@ -56,6 +66,13 @@ int main() {
         // Main loop
         while (window->isOpen()) {
             window->pollEvents();
+
+            // Process input events and forward to GUI
+            input->update();
+            finevk::InputEvent event;
+            while (input->pollEvent(event)) {
+                gui.processInput(finegui::InputAdapter::fromFineVK(event));
+            }
 
             if (auto frame = renderer->beginFrame()) {
                 // beginFrame() auto-gets delta time and frame index from renderer
@@ -94,12 +111,12 @@ int main() {
                 gui.endFrame();
 
                 // Render
-                renderer->beginRenderPass(
+                frame.beginRenderPass(
                     {clearColor[0], clearColor[1], clearColor[2], 1.0f});
 
                 gui.render(frame);
 
-                renderer->endRenderPass();
+                frame.endRenderPass();
                 renderer->endFrame();
             }
         }
