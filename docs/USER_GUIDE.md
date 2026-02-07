@@ -2,6 +2,8 @@
 
 finegui is a GUI toolkit built on Dear ImGui with a finevk (Vulkan) backend. It provides immediate-mode GUI widgets for games and applications using finevk for rendering.
 
+The build produces both a **static library** (`libfinegui.a`) and a **shared library** (`libfinegui.dylib`). Link against whichever suits your project.
+
 ## Quick Start
 
 ```cpp

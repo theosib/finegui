@@ -2,6 +2,10 @@
 
 Dense API reference for finegui (Dear ImGui + finevk Vulkan backend). Optimized for LLM context windows.
 
+## Build
+
+Builds both static (`libfinegui.a`) and shared (`libfinegui.dylib`) libraries. Tests link against the shared library. Examples link against the static library.
+
 ## Architecture
 
 finegui wraps Dear ImGui with a Vulkan backend using finevk. Immediate-mode GUI: call widget functions each frame, no persistent widget objects. Renders as the last step in a render pass (on top of 3D content).

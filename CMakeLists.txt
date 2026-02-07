@@ -129,49 +129,63 @@ set(FINEGUI_HEADERS
     include/finegui/texture_handle.hpp
 )
 
+# Helper function to configure a finegui library target (static or shared)
+function(finegui_configure_target target_name)
+    target_include_directories(${target_name}
+        PUBLIC
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+            $<INSTALL_INTERFACE:include>
+        PRIVATE
+            ${IMGUI_DIR}
+            ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+
+    # Make ImGui headers available to consumers
+    target_include_directories(${target_name}
+        PUBLIC
+            $<BUILD_INTERFACE:${IMGUI_DIR}>
+    )
+
+    target_link_libraries(${target_name}
+        PUBLIC
+            finevk-core
+            finevk-engine
+            Vulkan::Vulkan
+            glfw
+            glm::glm
+    )
+
+    # Add shader output directory for runtime loading
+    target_compile_definitions(${target_name}
+        PRIVATE
+            FINEGUI_SHADER_DIR="${SHADER_OUTPUT_DIR}"
+    )
+
+    # Compiler warnings
+    if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+        target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+    elseif(MSVC)
+        target_compile_options(${target_name} PRIVATE /W4)
+    endif()
+
+    # Add shader dependency
+    if(TARGET finegui_shaders)
+        add_dependencies(${target_name} finegui_shaders)
+    endif()
+endfunction()
+
+# --- Static library ---
 add_library(finegui STATIC ${FINEGUI_SOURCES} ${FINEGUI_HEADERS})
+finegui_configure_target(finegui)
 
-target_include_directories(finegui
-    PUBLIC
-        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
-    PRIVATE
-        ${IMGUI_DIR}
-        ${CMAKE_CURRENT_SOURCE_DIR}/src
+# --- Shared library ---
+add_library(finegui-shared SHARED ${FINEGUI_SOURCES} ${FINEGUI_HEADERS})
+finegui_configure_target(finegui-shared)
+set_target_properties(finegui-shared PROPERTIES
+    OUTPUT_NAME finegui
+    VERSION ${PROJECT_VERSION}
+    SOVERSION ${PROJECT_VERSION_MAJOR}
 )
-
-# Make ImGui headers available to consumers
-target_include_directories(finegui
-    PUBLIC
-        $<BUILD_INTERFACE:${IMGUI_DIR}>
-)
-
-target_link_libraries(finegui
-    PUBLIC
-        finevk-core
-        finevk-engine
-        Vulkan::Vulkan
-        glfw
-        glm::glm
-)
-
-# Add shader output directory for runtime loading
-target_compile_definitions(finegui
-    PRIVATE
-        FINEGUI_SHADER_DIR="${SHADER_OUTPUT_DIR}"
-)
-
-# Compiler warnings
-if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
-    target_compile_options(finegui PRIVATE -Wall -Wextra -Wpedantic)
-elseif(MSVC)
-    target_compile_options(finegui PRIVATE /W4)
-endif()
-
-# Add shader dependency
-if(TARGET finegui_shaders)
-    add_dependencies(finegui finegui_shaders)
-endif()
 
 # =============================================================================
 # Tests
