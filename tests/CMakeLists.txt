@@ -14,3 +14,18 @@ add_executable(test_phase2
 )
 
 target_link_libraries(test_phase2 PRIVATE finegui-shared)
+
+# Retained-mode tests
+if(FINEGUI_BUILD_RETAINED)
+    # Unit tests - widget tree construction (no Vulkan required)
+    add_executable(test_retained_unit
+        test_retained_unit.cpp
+    )
+    target_link_libraries(test_retained_unit PRIVATE finegui-retained-shared)
+
+    # Integration tests - rendering with Vulkan
+    add_executable(test_retained_render
+        test_retained_render.cpp
+    )
+    target_link_libraries(test_retained_render PRIVATE finegui-retained-shared)
+endif()

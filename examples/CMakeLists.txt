@@ -11,3 +11,14 @@ target_link_libraries(simple_demo PRIVATE finegui)
 if(TARGET finegui_shaders)
     add_dependencies(simple_demo finegui_shaders)
 endif()
+
+# Retained-mode demo
+if(FINEGUI_BUILD_RETAINED)
+    add_executable(retained_demo
+        retained_demo.cpp
+    )
+    target_link_libraries(retained_demo PRIVATE finegui-retained)
+    if(TARGET finegui_shaders)
+        add_dependencies(retained_demo finegui_shaders)
+    endif()
+endif()

@@ -10,6 +10,8 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # =============================================================================
 option(FINEGUI_BUILD_TESTS "Build tests" ON)
 option(FINEGUI_BUILD_EXAMPLES "Build examples" ON)
+option(FINEGUI_BUILD_RETAINED "Build retained-mode widget system" ON)
+option(FINEGUI_BUILD_SCRIPT "Build script engine integration (requires finescript)" OFF)
 
 # =============================================================================
 # Find finevk (sibling project with pre-built libraries)
@@ -186,6 +188,63 @@ set_target_properties(finegui-shared PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION ${PROJECT_VERSION_MAJOR}
 )
+
+# =============================================================================
+# finegui-retained library (optional retained-mode widget system)
+# =============================================================================
+if(FINEGUI_BUILD_RETAINED)
+    set(FINEGUI_RETAINED_SOURCES
+        src/retained/widget_node.cpp
+        src/retained/gui_renderer.cpp
+    )
+
+    set(FINEGUI_RETAINED_HEADERS
+        include/finegui/widget_node.hpp
+        include/finegui/gui_renderer.hpp
+    )
+
+    # Helper function to configure a finegui-retained library target
+    function(finegui_retained_configure_target target_name link_finegui_target)
+        target_include_directories(${target_name}
+            PUBLIC
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                $<INSTALL_INTERFACE:include>
+            PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+
+        # ImGui headers needed for the renderer
+        target_include_directories(${target_name}
+            PUBLIC
+                $<BUILD_INTERFACE:${IMGUI_DIR}>
+        )
+
+        target_link_libraries(${target_name}
+            PUBLIC
+                ${link_finegui_target}
+        )
+
+        # Compiler warnings
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+        elseif(MSVC)
+            target_compile_options(${target_name} PRIVATE /W4)
+        endif()
+    endfunction()
+
+    # --- Static library ---
+    add_library(finegui-retained STATIC ${FINEGUI_RETAINED_SOURCES} ${FINEGUI_RETAINED_HEADERS})
+    finegui_retained_configure_target(finegui-retained finegui)
+
+    # --- Shared library ---
+    add_library(finegui-retained-shared SHARED ${FINEGUI_RETAINED_SOURCES} ${FINEGUI_RETAINED_HEADERS})
+    finegui_retained_configure_target(finegui-retained-shared finegui-shared)
+    set_target_properties(finegui-retained-shared PROPERTIES
+        OUTPUT_NAME finegui-retained
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+endif()
 
 # =============================================================================
 # Tests
