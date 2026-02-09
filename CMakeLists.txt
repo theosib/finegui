@@ -247,6 +247,95 @@ if(FINEGUI_BUILD_RETAINED)
 endif()
 
 # =============================================================================
+# Find finescript (optional, sibling project)
+# =============================================================================
+if(FINEGUI_BUILD_SCRIPT)
+    if(NOT FINEGUI_BUILD_RETAINED)
+        message(FATAL_ERROR "FINEGUI_BUILD_SCRIPT requires FINEGUI_BUILD_RETAINED=ON")
+    endif()
+
+    set(FINESCRIPT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../game-language")
+    set(FINESCRIPT_BUILD_DIR "${FINESCRIPT_ROOT}/build")
+
+    if(NOT EXISTS "${FINESCRIPT_ROOT}/include/finescript/script_engine.h")
+        message(FATAL_ERROR "finescript not found at ${FINESCRIPT_ROOT}. "
+                "Please ensure game-language is a sibling directory.")
+    endif()
+
+    if(NOT EXISTS "${FINESCRIPT_BUILD_DIR}/libfinescript.dylib")
+        message(FATAL_ERROR "finescript library not found at ${FINESCRIPT_BUILD_DIR}. "
+                "Please build game-language first.")
+    endif()
+
+    if(NOT TARGET finescript)
+        add_library(finescript SHARED IMPORTED)
+        set_target_properties(finescript PROPERTIES
+            IMPORTED_LOCATION "${FINESCRIPT_BUILD_DIR}/libfinescript.dylib"
+            INTERFACE_INCLUDE_DIRECTORIES "${FINESCRIPT_ROOT}/include"
+        )
+    endif()
+endif()
+
+# =============================================================================
+# finegui-script library (optional script engine integration)
+# =============================================================================
+if(FINEGUI_BUILD_SCRIPT)
+    set(FINEGUI_SCRIPT_SOURCES
+        src/script/widget_converter.cpp
+        src/script/script_bindings.cpp
+        src/script/script_gui.cpp
+        src/script/script_gui_manager.cpp
+    )
+
+    set(FINEGUI_SCRIPT_HEADERS
+        include/finegui/widget_converter.hpp
+        include/finegui/script_bindings.hpp
+        include/finegui/script_gui.hpp
+        include/finegui/script_gui_manager.hpp
+    )
+
+    function(finegui_script_configure_target target_name link_retained_target)
+        target_include_directories(${target_name}
+            PUBLIC
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+                $<INSTALL_INTERFACE:include>
+            PRIVATE
+                ${CMAKE_CURRENT_SOURCE_DIR}/src
+        )
+
+        target_include_directories(${target_name}
+            PUBLIC
+                $<BUILD_INTERFACE:${IMGUI_DIR}>
+        )
+
+        target_link_libraries(${target_name}
+            PUBLIC
+                ${link_retained_target}
+                finescript
+        )
+
+        if(CMAKE_CXX_COMPILER_ID MATCHES "Clang|GNU")
+            target_compile_options(${target_name} PRIVATE -Wall -Wextra -Wpedantic)
+        elseif(MSVC)
+            target_compile_options(${target_name} PRIVATE /W4)
+        endif()
+    endfunction()
+
+    # --- Static library ---
+    add_library(finegui-script STATIC ${FINEGUI_SCRIPT_SOURCES} ${FINEGUI_SCRIPT_HEADERS})
+    finegui_script_configure_target(finegui-script finegui-retained)
+
+    # --- Shared library ---
+    add_library(finegui-script-shared SHARED ${FINEGUI_SCRIPT_SOURCES} ${FINEGUI_SCRIPT_HEADERS})
+    finegui_script_configure_target(finegui-script-shared finegui-retained-shared)
+    set_target_properties(finegui-script-shared PROPERTIES
+        OUTPUT_NAME finegui-script
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+endif()
+
+# =============================================================================
 # Tests
 # =============================================================================
 if(FINEGUI_BUILD_TESTS)

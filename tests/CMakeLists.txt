@@ -29,3 +29,18 @@ if(FINEGUI_BUILD_RETAINED)
     )
     target_link_libraries(test_retained_render PRIVATE finegui-retained-shared)
 endif()
+
+# Script integration tests
+if(FINEGUI_BUILD_SCRIPT)
+    # Unit tests - conversion, bindings, ScriptGui logic (no Vulkan required)
+    add_executable(test_script_unit
+        test_script_unit.cpp
+    )
+    target_link_libraries(test_script_unit PRIVATE finegui-script-shared)
+
+    # Integration tests - rendering with Vulkan
+    add_executable(test_script_render
+        test_script_render.cpp
+    )
+    target_link_libraries(test_script_render PRIVATE finegui-script-shared)
+endif()

@@ -193,9 +193,9 @@ void ImGuiBackend::updateTexture(ImTextureData* tex) {
         IM_ASSERT(tex->BackendUserData != nullptr);
         auto* backendTex = static_cast<BackendTextureData*>(tex->BackendUserData);
 
-        // Defer old resources for GPU-safe deletion (no stall)
-        surface_->deferDelete(std::move(backendTex->texture));
+        // Defer old resources for GPU-safe deletion
         surface_->deferDelete(std::move(backendTex->descriptorSet));
+        surface_->deferDelete(std::move(backendTex->texture));
 
         // Recreate texture from updated pixel data
         backendTex->texture = finevk::Texture::fromMemory(
@@ -224,9 +224,9 @@ void ImGuiBackend::destroyTexture(ImTextureData* tex) {
     if (tex->BackendUserData != nullptr) {
         auto* backendTex = static_cast<BackendTextureData*>(tex->BackendUserData);
 
-        // Defer resource release for GPU-safe deletion
-        surface_->deferDelete(std::move(backendTex->texture));
+        // Defer resources for GPU-safe deletion
         surface_->deferDelete(std::move(backendTex->descriptorSet));
+        surface_->deferDelete(std::move(backendTex->texture));
 
         IM_DELETE(backendTex);
 
