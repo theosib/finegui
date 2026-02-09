@@ -13,6 +13,7 @@
 
 #include <finegui/widget_node.hpp>
 #include <finegui/gui_renderer.hpp>
+#include <imgui.h>
 
 #include <iostream>
 #include <cassert>
@@ -458,6 +459,592 @@ void test_settings_panel_pattern() {
 }
 
 // ============================================================================
+// Phase 3 Builder Tests
+// ============================================================================
+
+void test_same_line_builder() {
+    std::cout << "Testing: WidgetNode::sameLine builder... ";
+
+    auto sl = WidgetNode::sameLine();
+    assert(sl.type == WidgetNode::Type::SameLine);
+    assert(sl.offsetX == 0.0f);
+
+    auto sl2 = WidgetNode::sameLine(100.0f);
+    assert(sl2.offsetX == 100.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_spacing_builder() {
+    std::cout << "Testing: WidgetNode::spacing builder... ";
+
+    auto sp = WidgetNode::spacing();
+    assert(sp.type == WidgetNode::Type::Spacing);
+
+    std::cout << "PASSED\n";
+}
+
+void test_text_colored_builder() {
+    std::cout << "Testing: WidgetNode::textColored builder... ";
+
+    auto tc = WidgetNode::textColored(1.0f, 0.3f, 0.3f, 1.0f, "Error!");
+    assert(tc.type == WidgetNode::Type::TextColored);
+    assert(tc.textContent == "Error!");
+    assert(tc.colorR == 1.0f);
+    assert(tc.colorG == 0.3f);
+    assert(tc.colorB == 0.3f);
+    assert(tc.colorA == 1.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_text_wrapped_builder() {
+    std::cout << "Testing: WidgetNode::textWrapped builder... ";
+
+    auto tw = WidgetNode::textWrapped("This is a long text that wraps.");
+    assert(tw.type == WidgetNode::Type::TextWrapped);
+    assert(tw.textContent == "This is a long text that wraps.");
+
+    std::cout << "PASSED\n";
+}
+
+void test_text_disabled_builder() {
+    std::cout << "Testing: WidgetNode::textDisabled builder... ";
+
+    auto td = WidgetNode::textDisabled("Grayed out");
+    assert(td.type == WidgetNode::Type::TextDisabled);
+    assert(td.textContent == "Grayed out");
+
+    std::cout << "PASSED\n";
+}
+
+void test_progress_bar_builder() {
+    std::cout << "Testing: WidgetNode::progressBar builder... ";
+
+    auto pb = WidgetNode::progressBar(0.75f);
+    assert(pb.type == WidgetNode::Type::ProgressBar);
+    assert(pb.floatValue == 0.75f);
+    assert(pb.width == 0.0f);
+    assert(pb.overlayText.empty());
+
+    auto pb2 = WidgetNode::progressBar(0.5f, 200.0f, 20.0f, "50%");
+    assert(pb2.floatValue == 0.5f);
+    assert(pb2.width == 200.0f);
+    assert(pb2.height == 20.0f);
+    assert(pb2.overlayText == "50%");
+
+    std::cout << "PASSED\n";
+}
+
+void test_collapsing_header_builder() {
+    std::cout << "Testing: WidgetNode::collapsingHeader builder... ";
+
+    auto ch = WidgetNode::collapsingHeader("Details", {
+        WidgetNode::text("Hidden content"),
+    });
+    assert(ch.type == WidgetNode::Type::CollapsingHeader);
+    assert(ch.label == "Details");
+    assert(ch.children.size() == 1);
+    assert(ch.defaultOpen == false);
+
+    auto ch2 = WidgetNode::collapsingHeader("Open", {}, true);
+    assert(ch2.defaultOpen == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase3_type_names() {
+    std::cout << "Testing: widgetTypeName for Phase 3 types... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::SameLine)) == "SameLine");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Spacing)) == "Spacing");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TextColored)) == "TextColored");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TextWrapped)) == "TextWrapped");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TextDisabled)) == "TextDisabled");
+    assert(std::string(widgetTypeName(WidgetNode::Type::ProgressBar)) == "ProgressBar");
+    assert(std::string(widgetTypeName(WidgetNode::Type::CollapsingHeader)) == "CollapsingHeader");
+
+    std::cout << "PASSED\n";
+}
+
+void test_debug_overlay_pattern() {
+    std::cout << "Testing: Debug overlay pattern from design doc... ";
+
+    auto overlay = WidgetNode::window("Debug", {
+        WidgetNode::text("FPS: 60"),
+        WidgetNode::sameLine(),
+        WidgetNode::text("(16.7 ms)"),
+        WidgetNode::progressBar(0.5f, 0.0f, 0.0f, "60 fps"),
+        WidgetNode::separator(),
+        WidgetNode::collapsingHeader("Renderer", {
+            WidgetNode::text("Draw calls: 42"),
+            WidgetNode::text("Triangles: 12345"),
+        }),
+    });
+
+    assert(overlay.children.size() == 6);
+    assert(overlay.children[0].type == WidgetNode::Type::Text);
+    assert(overlay.children[1].type == WidgetNode::Type::SameLine);
+    assert(overlay.children[2].type == WidgetNode::Type::Text);
+    assert(overlay.children[3].type == WidgetNode::Type::ProgressBar);
+    assert(overlay.children[4].type == WidgetNode::Type::Separator);
+    assert(overlay.children[5].type == WidgetNode::Type::CollapsingHeader);
+    assert(overlay.children[5].children.size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_hud_pattern() {
+    std::cout << "Testing: HUD pattern from design doc... ";
+
+    auto hud = WidgetNode::window("##hud", {
+        WidgetNode::textColored(1.0f, 0.3f, 0.3f, 1.0f, "HP"),
+        WidgetNode::sameLine(),
+        WidgetNode::progressBar(0.85f, 200.0f, 20.0f, "85/100"),
+        WidgetNode::spacing(),
+        WidgetNode::textColored(0.3f, 0.5f, 1.0f, 1.0f, "MP"),
+        WidgetNode::sameLine(),
+        WidgetNode::progressBar(0.6f, 200.0f, 20.0f, "60/100"),
+    });
+
+    assert(hud.children.size() == 7);
+    assert(hud.children[0].type == WidgetNode::Type::TextColored);
+    assert(hud.children[0].colorR == 1.0f);
+    assert(hud.children[1].type == WidgetNode::Type::SameLine);
+    assert(hud.children[2].type == WidgetNode::Type::ProgressBar);
+    assert(hud.children[2].overlayText == "85/100");
+    assert(hud.children[3].type == WidgetNode::Type::Spacing);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Phase 4 Builder Tests
+// ============================================================================
+
+void test_tab_bar_builder() {
+    std::cout << "Testing: WidgetNode::tabBar builder... ";
+
+    auto tb = WidgetNode::tabBar("my_tabs", {
+        WidgetNode::tabItem("Tab 1", {
+            WidgetNode::text("Content 1"),
+        }),
+        WidgetNode::tabItem("Tab 2", {
+            WidgetNode::text("Content 2"),
+        }),
+    });
+    assert(tb.type == WidgetNode::Type::TabBar);
+    assert(tb.id == "my_tabs");
+    assert(tb.children.size() == 2);
+    assert(tb.children[0].type == WidgetNode::Type::TabItem);
+    assert(tb.children[0].label == "Tab 1");
+    assert(tb.children[0].children.size() == 1);
+    assert(tb.children[1].label == "Tab 2");
+
+    std::cout << "PASSED\n";
+}
+
+void test_tab_item_builder() {
+    std::cout << "Testing: WidgetNode::tabItem builder... ";
+
+    auto ti = WidgetNode::tabItem("Settings", {
+        WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f),
+    });
+    assert(ti.type == WidgetNode::Type::TabItem);
+    assert(ti.label == "Settings");
+    assert(ti.children.size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_tree_node_builder() {
+    std::cout << "Testing: WidgetNode::treeNode builder... ";
+
+    auto tn = WidgetNode::treeNode("Root", {
+        WidgetNode::treeNode("Child 1", {}, false, true),
+        WidgetNode::treeNode("Child 2", {
+            WidgetNode::treeNode("Grandchild", {}, false, true),
+        }),
+    }, true);
+    assert(tn.type == WidgetNode::Type::TreeNode);
+    assert(tn.label == "Root");
+    assert(tn.defaultOpen == true);
+    assert(tn.leaf == false);
+    assert(tn.children.size() == 2);
+    assert(tn.children[0].label == "Child 1");
+    assert(tn.children[0].leaf == true);
+    assert(tn.children[1].children.size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_child_builder() {
+    std::cout << "Testing: WidgetNode::child builder... ";
+
+    auto ch = WidgetNode::child("##scroll", 300.0f, 200.0f, true, true, {
+        WidgetNode::text("Scrollable content"),
+    });
+    assert(ch.type == WidgetNode::Type::Child);
+    assert(ch.id == "##scroll");
+    assert(ch.width == 300.0f);
+    assert(ch.height == 200.0f);
+    assert(ch.border == true);
+    assert(ch.autoScroll == true);
+    assert(ch.children.size() == 1);
+
+    auto ch2 = WidgetNode::child("##simple");
+    assert(ch2.border == false);
+    assert(ch2.autoScroll == false);
+    assert(ch2.width == 0.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_menu_bar_builder() {
+    std::cout << "Testing: WidgetNode::menuBar builder... ";
+
+    auto mb = WidgetNode::menuBar({
+        WidgetNode::menu("File", {
+            WidgetNode::menuItem("New"),
+            WidgetNode::menuItem("Open"),
+            WidgetNode::separator(),
+            WidgetNode::menuItem("Exit"),
+        }),
+        WidgetNode::menu("Edit", {
+            WidgetNode::menuItem("Undo"),
+        }),
+    });
+    assert(mb.type == WidgetNode::Type::MenuBar);
+    assert(mb.children.size() == 2);
+    assert(mb.children[0].type == WidgetNode::Type::Menu);
+    assert(mb.children[0].label == "File");
+    assert(mb.children[0].children.size() == 4);
+    assert(mb.children[0].children[2].type == WidgetNode::Type::Separator);
+
+    std::cout << "PASSED\n";
+}
+
+void test_menu_builder() {
+    std::cout << "Testing: WidgetNode::menu builder... ";
+
+    auto menu = WidgetNode::menu("View", {
+        WidgetNode::menuItem("Zoom In"),
+        WidgetNode::menuItem("Zoom Out"),
+    });
+    assert(menu.type == WidgetNode::Type::Menu);
+    assert(menu.label == "View");
+    assert(menu.children.size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_menu_item_builder() {
+    std::cout << "Testing: WidgetNode::menuItem builder... ";
+
+    bool clicked = false;
+    auto mi = WidgetNode::menuItem("Save", [&clicked](WidgetNode&) {
+        clicked = true;
+    }, "Ctrl+S", false);
+    assert(mi.type == WidgetNode::Type::MenuItem);
+    assert(mi.label == "Save");
+    assert(mi.shortcutText == "Ctrl+S");
+    assert(mi.checked == false);
+    assert(mi.onClick);
+
+    mi.onClick(mi);
+    assert(clicked);
+
+    auto mi2 = WidgetNode::menuItem("Show Grid", {}, "", true);
+    assert(mi2.checked == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase4_type_names() {
+    std::cout << "Testing: widgetTypeName for Phase 4 types... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::TabBar)) == "TabBar");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TabItem)) == "TabItem");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TreeNode)) == "TreeNode");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Child)) == "Child");
+    assert(std::string(widgetTypeName(WidgetNode::Type::MenuBar)) == "MenuBar");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Menu)) == "Menu");
+    assert(std::string(widgetTypeName(WidgetNode::Type::MenuItem)) == "MenuItem");
+
+    std::cout << "PASSED\n";
+}
+
+void test_settings_panel_with_tabs() {
+    std::cout << "Testing: Settings panel with tabs pattern... ";
+
+    auto settings = WidgetNode::window("Settings", {
+        WidgetNode::tabBar("settings_tabs", {
+            WidgetNode::tabItem("Audio", {
+                WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f),
+                WidgetNode::checkbox("Mute", false),
+            }),
+            WidgetNode::tabItem("Video", {
+                WidgetNode::combo("Resolution", {"1080p", "1440p", "4K"}, 0),
+            }),
+        }),
+        WidgetNode::separator(),
+        WidgetNode::button("Apply"),
+    });
+
+    assert(settings.children.size() == 3);
+    auto& tabBar = settings.children[0];
+    assert(tabBar.type == WidgetNode::Type::TabBar);
+    assert(tabBar.children.size() == 2);
+    assert(tabBar.children[0].type == WidgetNode::Type::TabItem);
+    assert(tabBar.children[0].children.size() == 2);
+    assert(tabBar.children[1].children.size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_scene_hierarchy_pattern() {
+    std::cout << "Testing: Scene hierarchy pattern... ";
+
+    auto hierarchy = WidgetNode::window("Scene", {
+        WidgetNode::child("##tree", 0.0f, -30.0f, false, false, {
+            WidgetNode::treeNode("Root", {
+                WidgetNode::treeNode("Player", {
+                    WidgetNode::treeNode("Camera", {}, false, true),
+                    WidgetNode::treeNode("Mesh", {}, false, true),
+                }, true),
+                WidgetNode::treeNode("Lights", {
+                    WidgetNode::treeNode("Sun", {}, false, true),
+                }),
+            }, true),
+        }),
+        WidgetNode::button("Add Entity"),
+    });
+
+    assert(hierarchy.children.size() == 2);
+    auto& child = hierarchy.children[0];
+    assert(child.type == WidgetNode::Type::Child);
+    assert(child.height == -30.0f);
+    assert(child.children.size() == 1);
+
+    auto& root = child.children[0];
+    assert(root.type == WidgetNode::Type::TreeNode);
+    assert(root.defaultOpen == true);
+    assert(root.children.size() == 2);
+    assert(root.children[0].children[0].leaf == true);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Phase 5 Builder Tests
+// ============================================================================
+
+void test_table_builder() {
+    std::cout << "Testing: WidgetNode::table builder... ";
+
+    auto tbl = WidgetNode::table("stats", 2, {"Name", "Value"}, {
+        WidgetNode::tableRow({
+            WidgetNode::text("HP"),
+            WidgetNode::text("100"),
+        }),
+        WidgetNode::tableRow({
+            WidgetNode::text("MP"),
+            WidgetNode::text("50"),
+        }),
+    }, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH);
+    assert(tbl.type == WidgetNode::Type::Table);
+    assert(tbl.id == "stats");
+    assert(tbl.columnCount == 2);
+    assert(tbl.items.size() == 2);
+    assert(tbl.items[0] == "Name");
+    assert(tbl.items[1] == "Value");
+    assert(tbl.children.size() == 2);
+    assert(tbl.children[0].type == WidgetNode::Type::TableRow);
+    assert(tbl.children[0].children.size() == 2);
+    assert(tbl.tableFlags == (ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH));
+
+    // Minimal table
+    auto tbl2 = WidgetNode::table("##grid", 4);
+    assert(tbl2.columnCount == 4);
+    assert(tbl2.items.empty());
+    assert(tbl2.children.empty());
+    assert(tbl2.tableFlags == 0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_table_row_builder() {
+    std::cout << "Testing: WidgetNode::tableRow builder... ";
+
+    // Container mode: children map to columns
+    auto row = WidgetNode::tableRow({
+        WidgetNode::text("A"),
+        WidgetNode::text("B"),
+        WidgetNode::text("C"),
+    });
+    assert(row.type == WidgetNode::Type::TableRow);
+    assert(row.children.size() == 3);
+
+    // Bare mode: no children (just advances to next row)
+    auto bare = WidgetNode::tableRow();
+    assert(bare.type == WidgetNode::Type::TableRow);
+    assert(bare.children.empty());
+
+    std::cout << "PASSED\n";
+}
+
+void test_table_next_column_builder() {
+    std::cout << "Testing: WidgetNode::tableNextColumn builder... ";
+
+    auto col = WidgetNode::tableNextColumn();
+    assert(col.type == WidgetNode::Type::TableColumn);
+    assert(col.children.empty());
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase5_type_names() {
+    std::cout << "Testing: widgetTypeName for Phase 5 types... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::Table)) == "Table");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TableColumn)) == "TableColumn");
+    assert(std::string(widgetTypeName(WidgetNode::Type::TableRow)) == "TableRow");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Phase 6 Builder Tests
+// ============================================================================
+
+void test_color_edit_builder() {
+    std::cout << "Testing: WidgetNode::colorEdit builder... ";
+
+    auto ce = WidgetNode::colorEdit("Accent Color", 0.2f, 0.4f, 0.8f, 1.0f);
+    assert(ce.type == WidgetNode::Type::ColorEdit);
+    assert(ce.label == "Accent Color");
+    assert(ce.colorR == 0.2f);
+    assert(ce.colorG == 0.4f);
+    assert(ce.colorB == 0.8f);
+    assert(ce.colorA == 1.0f);
+
+    // Default values
+    auto ce2 = WidgetNode::colorEdit("Default");
+    assert(ce2.colorR == 1.0f);
+    assert(ce2.colorG == 1.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_color_picker_builder() {
+    std::cout << "Testing: WidgetNode::colorPicker builder... ";
+
+    auto cp = WidgetNode::colorPicker("Background", 0.1f, 0.1f, 0.15f, 1.0f);
+    assert(cp.type == WidgetNode::Type::ColorPicker);
+    assert(cp.label == "Background");
+    assert(cp.colorR == 0.1f);
+    assert(cp.colorB == 0.15f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_drag_float_builder() {
+    std::cout << "Testing: WidgetNode::dragFloat builder... ";
+
+    auto df = WidgetNode::dragFloat("Speed", 1.5f, 0.1f, 0.0f, 10.0f);
+    assert(df.type == WidgetNode::Type::DragFloat);
+    assert(df.label == "Speed");
+    assert(df.floatValue == 1.5f);
+    assert(df.dragSpeed == 0.1f);
+    assert(df.minFloat == 0.0f);
+    assert(df.maxFloat == 10.0f);
+
+    // Default speed
+    auto df2 = WidgetNode::dragFloat("X", 0.0f);
+    assert(df2.dragSpeed == 1.0f);
+    assert(df2.minFloat == 0.0f);
+    assert(df2.maxFloat == 0.0f);  // 0 = no clamp
+
+    std::cout << "PASSED\n";
+}
+
+void test_drag_int_builder() {
+    std::cout << "Testing: WidgetNode::dragInt builder... ";
+
+    auto di = WidgetNode::dragInt("Count", 50, 1.0f, 0, 100);
+    assert(di.type == WidgetNode::Type::DragInt);
+    assert(di.label == "Count");
+    assert(di.intValue == 50);
+    assert(di.dragSpeed == 1.0f);
+    assert(di.minInt == 0);
+    assert(di.maxInt == 100);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase6_type_names() {
+    std::cout << "Testing: widgetTypeName for Phase 6 types... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::ColorEdit)) == "ColorEdit");
+    assert(std::string(widgetTypeName(WidgetNode::Type::ColorPicker)) == "ColorPicker");
+    assert(std::string(widgetTypeName(WidgetNode::Type::DragFloat)) == "DragFloat");
+    assert(std::string(widgetTypeName(WidgetNode::Type::DragInt)) == "DragInt");
+
+    std::cout << "PASSED\n";
+}
+
+void test_data_table_pattern() {
+    std::cout << "Testing: Data table pattern... ";
+
+    // Keybindings table from design doc
+    auto keybinds = WidgetNode::window("Settings", {
+        WidgetNode::table("keybinds", 2, {"Action", "Key"}, {
+            WidgetNode::tableRow({
+                WidgetNode::text("Jump"),
+                WidgetNode::text("Space"),
+            }),
+            WidgetNode::tableRow({
+                WidgetNode::text("Shoot"),
+                WidgetNode::text("LMB"),
+            }),
+        }, ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersH),
+    });
+
+    assert(keybinds.children.size() == 1);
+    auto& table = keybinds.children[0];
+    assert(table.type == WidgetNode::Type::Table);
+    assert(table.columnCount == 2);
+    assert(table.items.size() == 2);
+    assert(table.items[0] == "Action");
+    assert(table.children.size() == 2);
+    assert(table.children[0].children[0].textContent == "Jump");
+    assert(table.children[1].children[1].textContent == "LMB");
+
+    std::cout << "PASSED\n";
+}
+
+void test_inventory_grid_pattern() {
+    std::cout << "Testing: Inventory grid pattern... ";
+
+    // Grid layout using imperative TableNextColumn (no TableRow)
+    std::vector<WidgetNode> cells;
+    for (int i = 0; i < 8; i++) {
+        cells.push_back(WidgetNode::tableNextColumn());
+        cells.push_back(WidgetNode::button("Slot " + std::to_string(i)));
+    }
+
+    auto grid = WidgetNode::table("##inv", 4, {}, std::move(cells));
+    assert(grid.type == WidgetNode::Type::Table);
+    assert(grid.columnCount == 4);
+    assert(grid.items.empty());
+    assert(grid.children.size() == 16);  // 8 * (column + button)
+    assert(grid.children[0].type == WidgetNode::Type::TableColumn);
+    assert(grid.children[1].type == WidgetNode::Type::Button);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -496,6 +1083,51 @@ int main() {
 
         // Design doc pattern
         test_settings_panel_pattern();
+
+        // Phase 3 builders
+        test_same_line_builder();
+        test_spacing_builder();
+        test_text_colored_builder();
+        test_text_wrapped_builder();
+        test_text_disabled_builder();
+        test_progress_bar_builder();
+        test_collapsing_header_builder();
+        test_phase3_type_names();
+
+        // Phase 3 design doc patterns
+        test_debug_overlay_pattern();
+        test_hud_pattern();
+
+        // Phase 4 builders
+        test_tab_bar_builder();
+        test_tab_item_builder();
+        test_tree_node_builder();
+        test_child_builder();
+        test_menu_bar_builder();
+        test_menu_builder();
+        test_menu_item_builder();
+        test_phase4_type_names();
+
+        // Phase 4 design doc patterns
+        test_settings_panel_with_tabs();
+        test_scene_hierarchy_pattern();
+
+        // Phase 6 builders
+        test_color_edit_builder();
+        test_color_picker_builder();
+        test_drag_float_builder();
+        test_drag_int_builder();
+        test_phase6_type_names();
+
+        // Phase 5 builders
+        test_table_builder();
+        test_table_row_builder();
+        test_table_next_column_builder();
+        test_phase5_type_names();
+
+        // Phase 5 design doc patterns
+        test_data_table_pattern();
+        test_inventory_grid_pattern();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

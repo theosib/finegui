@@ -22,3 +22,14 @@ if(FINEGUI_BUILD_RETAINED)
         add_dependencies(retained_demo finegui_shaders)
     endif()
 endif()
+
+# Script demo - script + retained-mode combined
+if(FINEGUI_BUILD_SCRIPT)
+    add_executable(script_demo
+        script_demo.cpp
+    )
+    target_link_libraries(script_demo PRIVATE finegui-script)
+    if(TARGET finegui_shaders)
+        add_dependencies(script_demo finegui_shaders)
+    endif()
+endif()

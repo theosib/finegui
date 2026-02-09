@@ -1,6 +1,6 @@
 #include <finegui/script_gui.hpp>
-#include <finegui/gui_renderer.hpp>
-#include <finegui/widget_converter.hpp>
+#include <finegui/map_renderer.hpp>
+#include <finescript/map_data.h>
 #include <mutex>
 #include <unordered_map>
 #include <vector>
@@ -11,8 +11,7 @@ namespace finegui {
 
 struct ScriptGui::Impl {
     finescript::ScriptEngine& engine;
-    GuiRenderer& renderer;
-    ConverterSymbols syms;
+    MapRenderer& renderer;
     std::unique_ptr<finescript::ExecutionContext> ctx;
     int guiId = -1;
     std::string lastError;
@@ -28,15 +27,14 @@ struct ScriptGui::Impl {
     std::mutex messageMutex;
     std::vector<PendingMessage> pendingMessages;
 
-    Impl(finescript::ScriptEngine& e, GuiRenderer& r)
+    Impl(finescript::ScriptEngine& e, MapRenderer& r)
         : engine(e), renderer(r) {
-        syms.intern(e);
     }
 };
 
 // -- Construction / destruction -----------------------------------------------
 
-ScriptGui::ScriptGui(finescript::ScriptEngine& engine, GuiRenderer& renderer)
+ScriptGui::ScriptGui(finescript::ScriptEngine& engine, MapRenderer& renderer)
     : impl_(std::make_unique<Impl>(engine, renderer)) {
 }
 
@@ -149,9 +147,40 @@ int ScriptGui::guiId() const {
     return impl_->guiId;
 }
 
-WidgetNode* ScriptGui::widgetTree() {
+finescript::Value* ScriptGui::mapTree() {
     if (impl_->guiId < 0) return nullptr;
     return impl_->renderer.get(impl_->guiId);
+}
+
+finescript::Value ScriptGui::navigateMap(int guiId, const finescript::Value& path) {
+    auto* root = impl_->renderer.get(guiId);
+    if (!root || !root->isMap()) return finescript::Value::nil();
+
+    // Helper to get a child from a map's :children array by index
+    auto getChild = [this](finescript::Value& parent, int idx) -> finescript::Value {
+        if (!parent.isMap()) return finescript::Value::nil();
+        auto children = parent.asMap().get(impl_->renderer.syms().children);
+        if (!children.isArray()) return finescript::Value::nil();
+        auto& arr = children.asArrayMut();
+        if (idx < 0 || idx >= static_cast<int>(arr.size())) return finescript::Value::nil();
+        return arr[static_cast<size_t>(idx)];
+    };
+
+    if (path.isInt()) {
+        return getChild(*root, static_cast<int>(path.asInt()));
+    }
+
+    if (path.isArray()) {
+        finescript::Value node = *root;
+        for (const auto& elem : path.asArray()) {
+            if (!elem.isInt()) return finescript::Value::nil();
+            node = getChild(node, static_cast<int>(elem.asInt()));
+            if (node.isNil()) return finescript::Value::nil();
+        }
+        return node;
+    }
+
+    return finescript::Value::nil();
 }
 
 finescript::ExecutionContext* ScriptGui::context() {
@@ -164,30 +193,19 @@ const std::string& ScriptGui::lastError() const {
 
 // -- Script binding helpers ---------------------------------------------------
 
-finescript::Value ScriptGui::scriptShow(const finescript::Value& map,
-                                        finescript::ScriptEngine& engine,
-                                        finescript::ExecutionContext& ctx) {
-    auto widgetTree = convertToWidget(map, engine, ctx, impl_->syms);
+finescript::Value ScriptGui::scriptShow(const finescript::Value& map) {
     if (impl_->guiId < 0) {
-        impl_->guiId = impl_->renderer.show(std::move(widgetTree));
+        impl_->guiId = impl_->renderer.show(map, *impl_->ctx);
     } else {
-        impl_->renderer.update(impl_->guiId, std::move(widgetTree));
+        // Replace the existing tree
+        impl_->renderer.hide(impl_->guiId);
+        impl_->guiId = impl_->renderer.show(map, *impl_->ctx);
     }
     return finescript::Value::integer(impl_->guiId);
 }
 
-void ScriptGui::scriptUpdate(int id, const finescript::Value& map,
-                              finescript::ScriptEngine& engine,
-                              finescript::ExecutionContext& ctx) {
-    auto widgetTree = convertToWidget(map, engine, ctx, impl_->syms);
-    impl_->renderer.update(id, std::move(widgetTree));
-}
-
-void ScriptGui::scriptHide(int id) {
-    impl_->renderer.hide(id);
-    if (id == impl_->guiId) {
-        impl_->guiId = -1;
-    }
+void ScriptGui::scriptHide() {
+    close();
 }
 
 void ScriptGui::registerMessageHandler(uint32_t messageType, finescript::Value handler) {

@@ -21,16 +21,22 @@ struct WidgetNode {
         Window, Text, Button, Checkbox, Slider, SliderInt,
         InputText, InputInt, InputFloat,
         Combo, Separator, Group, Columns, Image,
-        // Phase 2 - Layout & Navigation
-        TabBar, TabItem, TreeNode, CollapsingHeader,
+        // Phase 3 - Layout & Display
+        SameLine, Spacing,
+        TextColored, TextWrapped, TextDisabled,
+        ProgressBar, CollapsingHeader,
+        // Phase 4 - Containers & Menus
+        TabBar, TabItem, TreeNode, Child,
         MenuBar, Menu, MenuItem,
-        // Phase 3 - Advanced
+        // Phase 5 - Tables
         Table, TableColumn, TableRow,
+        // Phase 6 - Advanced Input
         ColorEdit, ColorPicker,
         DragFloat, DragInt,
+        // Phase 7 - Misc
         ListBox, Popup, Modal,
-        // Phase 4 - Custom
-        Canvas, ProgressBar, Tooltip
+        // Phase 8 - Custom
+        Canvas, Tooltip
     };
 
     Type type;
@@ -77,6 +83,35 @@ struct WidgetNode {
     float imageWidth = 0.0f;
     float imageHeight = 0.0f;
 
+    /// Color (for TextColored, ProgressBar overlay, etc.) - RGBA 0-1.
+    float colorR = 1.0f, colorG = 1.0f, colorB = 1.0f, colorA = 1.0f;
+
+    /// Overlay text (for ProgressBar).
+    std::string overlayText;
+
+    /// Offset (for SameLine).
+    float offsetX = 0.0f;
+
+    /// Default-open state (for CollapsingHeader, TreeNode).
+    bool defaultOpen = false;
+
+    /// Child window properties.
+    bool border = false;
+    bool autoScroll = false;
+
+    /// TreeNode properties.
+    bool leaf = false;
+
+    /// MenuItem properties.
+    std::string shortcutText;
+    bool checked = false;
+
+    /// Table properties.
+    int tableFlags = 0;        // ImGuiTableFlags bitmask
+
+    /// Drag widget properties.
+    float dragSpeed = 1.0f;
+
     // -- Convenience builders ------------------------------------------------
 
     static WidgetNode window(std::string title, std::vector<WidgetNode> children = {});
@@ -97,6 +132,52 @@ struct WidgetNode {
     static WidgetNode group(std::vector<WidgetNode> children);
     static WidgetNode columns(int count, std::vector<WidgetNode> children);
     static WidgetNode image(TextureHandle texture, float width, float height);
+
+    // Phase 3 builders
+    static WidgetNode sameLine(float offset = 0.0f);
+    static WidgetNode spacing();
+    static WidgetNode textColored(float r, float g, float b, float a, std::string content);
+    static WidgetNode textWrapped(std::string content);
+    static WidgetNode textDisabled(std::string content);
+    static WidgetNode progressBar(float fraction, float width = 0.0f, float height = 0.0f,
+                                  std::string overlay = "");
+    static WidgetNode collapsingHeader(std::string label, std::vector<WidgetNode> children = {},
+                                       bool defaultOpen = false);
+
+    // Phase 4 builders
+    static WidgetNode tabBar(std::string id, std::vector<WidgetNode> children = {});
+    static WidgetNode tabItem(std::string label, std::vector<WidgetNode> children = {});
+    static WidgetNode treeNode(std::string label, std::vector<WidgetNode> children = {},
+                               bool defaultOpen = false, bool leaf = false);
+    static WidgetNode child(std::string id, float width = 0.0f, float height = 0.0f,
+                            bool border = false, bool autoScroll = false,
+                            std::vector<WidgetNode> children = {});
+    static WidgetNode menuBar(std::vector<WidgetNode> children = {});
+    static WidgetNode menu(std::string label, std::vector<WidgetNode> children = {});
+    static WidgetNode menuItem(std::string label, WidgetCallback onClick = {},
+                               std::string shortcut = "", bool checked = false);
+
+    // Phase 6 builders
+    static WidgetNode colorEdit(std::string label, float r = 1.0f, float g = 1.0f,
+                                float b = 1.0f, float a = 1.0f,
+                                WidgetCallback onChange = {});
+    static WidgetNode colorPicker(std::string label, float r = 1.0f, float g = 1.0f,
+                                  float b = 1.0f, float a = 1.0f,
+                                  WidgetCallback onChange = {});
+    static WidgetNode dragFloat(std::string label, float value, float speed = 1.0f,
+                                float min = 0.0f, float max = 0.0f,
+                                WidgetCallback onChange = {});
+    static WidgetNode dragInt(std::string label, int value, float speed = 1.0f,
+                              int min = 0, int max = 0,
+                              WidgetCallback onChange = {});
+
+    // Phase 5 builders
+    static WidgetNode table(std::string id, int numColumns,
+                            std::vector<std::string> headers = {},
+                            std::vector<WidgetNode> children = {},
+                            int flags = 0);
+    static WidgetNode tableRow(std::vector<WidgetNode> children = {});
+    static WidgetNode tableNextColumn();
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

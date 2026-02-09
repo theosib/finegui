@@ -1,10 +1,10 @@
 #include <finegui/script_gui_manager.hpp>
-#include <finegui/gui_renderer.hpp>
+#include <finegui/map_renderer.hpp>
 #include <algorithm>
 
 namespace finegui {
 
-ScriptGuiManager::ScriptGuiManager(finescript::ScriptEngine& engine, GuiRenderer& renderer)
+ScriptGuiManager::ScriptGuiManager(finescript::ScriptEngine& engine, MapRenderer& renderer)
     : engine_(engine), renderer_(renderer) {
 }
 

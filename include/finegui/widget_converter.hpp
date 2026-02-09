@@ -19,15 +19,54 @@ struct ConverterSymbols {
     uint32_t visible = 0, enabled = 0;
     uint32_t selected = 0;
 
+    // Phase 3 field keys
+    uint32_t color = 0, overlay = 0, size = 0;
+    uint32_t offset = 0, default_open = 0;
+    uint32_t format = 0;
+
+    // Phase 4 field keys
+    uint32_t border = 0, auto_scroll = 0;
+    uint32_t shortcut = 0, checked = 0, leaf = 0;
+
+    // Phase 5 field keys
+    uint32_t num_columns = 0, headers = 0, flags = 0;
+
+    // Phase 6 field keys
+    uint32_t speed = 0;
+
+    // Table flag value symbols (for :flags array parsing)
+    uint32_t sym_flag_row_bg = 0, sym_flag_borders = 0;
+    uint32_t sym_flag_borders_h = 0, sym_flag_borders_v = 0;
+    uint32_t sym_flag_borders_inner = 0, sym_flag_borders_outer = 0;
+    uint32_t sym_flag_resizable = 0, sym_flag_sortable = 0;
+    uint32_t sym_flag_scroll_x = 0, sym_flag_scroll_y = 0;
+
     // Callback keys
     uint32_t on_click = 0, on_change = 0, on_submit = 0, on_close = 0;
+    uint32_t on_select = 0;
 
-    // Type name symbols
+    // Type name symbols - Phase 1
     uint32_t sym_window = 0, sym_text = 0, sym_button = 0;
     uint32_t sym_checkbox = 0, sym_slider = 0, sym_slider_int = 0;
     uint32_t sym_input_text = 0, sym_input_int = 0, sym_input_float = 0;
     uint32_t sym_combo = 0, sym_separator = 0, sym_group = 0;
     uint32_t sym_columns = 0, sym_image = 0;
+
+    // Type name symbols - Phase 3 (Layout & Display)
+    uint32_t sym_same_line = 0, sym_spacing = 0;
+    uint32_t sym_text_colored = 0, sym_text_wrapped = 0, sym_text_disabled = 0;
+    uint32_t sym_progress_bar = 0, sym_collapsing_header = 0;
+
+    // Type name symbols - Phase 4 (Containers & Menus)
+    uint32_t sym_tab_bar = 0, sym_tab = 0, sym_tree_node = 0, sym_child = 0;
+    uint32_t sym_menu_bar = 0, sym_menu = 0, sym_menu_item = 0;
+
+    // Type name symbols - Phase 5 (Tables)
+    uint32_t sym_table = 0, sym_table_row = 0, sym_table_next_column = 0;
+
+    // Type name symbols - Phase 6 (Advanced Input)
+    uint32_t sym_color_edit = 0, sym_color_picker = 0;
+    uint32_t sym_drag_float = 0, sym_drag_int = 0;
 
     void intern(finescript::ScriptEngine& engine);
 };

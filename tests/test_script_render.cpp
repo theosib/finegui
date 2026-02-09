@@ -2,27 +2,30 @@
  * @file test_script_render.cpp
  * @brief Integration tests for script-driven GUI rendering (requires Vulkan)
  *
- * Resources are created inline to avoid finevk smart pointer move issues.
+ * Tests the map-based rendering path where finescript maps ARE the widget data.
  * Uses a single Vulkan context for all tests.
  */
 
 #include <finegui/finegui.hpp>
 #include <finegui/gui_renderer.hpp>
+#include <finegui/map_renderer.hpp>
 #include <finegui/script_gui.hpp>
 #include <finegui/script_gui_manager.hpp>
 #include <finegui/script_bindings.hpp>
 
 #include <finevk/finevk.hpp>
 #include <finescript/script_engine.h>
+#include <finescript/map_data.h>
 
 #include <iostream>
 #include <cassert>
 
 using namespace finegui;
 
-// Helper: run N frames
+// Helper: run N frames with both renderers
 static void runFrames(finevk::Window* window, finevk::SimpleRenderer* renderer,
                       GuiSystem& gui, GuiRenderer& guiRenderer,
+                      MapRenderer& mapRenderer,
                       ScriptGuiManager* mgr, int count) {
     for (int i = 0; i < count && window->isOpen(); i++) {
         window->pollEvents();
@@ -30,6 +33,7 @@ static void runFrames(finevk::Window* window, finevk::SimpleRenderer* renderer,
             gui.beginFrame();
             if (mgr) mgr->processPendingMessages();
             guiRenderer.renderAll();
+            mapRenderer.renderAll();
             gui.endFrame();
 
             frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
@@ -68,14 +72,16 @@ void test_script_rendering() {
     GuiSystem gui(renderer->device(), guiConfig);
     gui.initialize(renderer.get());
 
+    // Create both renderers
     GuiRenderer guiRenderer(gui);
+    MapRenderer mapRenderer(engine);
 
-    ScriptGuiManager mgr(engine, guiRenderer);
+    ScriptGuiManager mgr(engine, mapRenderer);
 
     // --- Test 1: Basic ScriptGui ---
     std::cout << "\n  1. Basic ScriptGui... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
             ui.show {ui.window "Script Window" [
                 {ui.text "Hello from script!"}
@@ -85,7 +91,7 @@ void test_script_rendering() {
         assert(ok);
         assert(scriptGui.isActive());
         assert(scriptGui.guiId() >= 0);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, nullptr, 3);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
         scriptGui.close();
         assert(!scriptGui.isActive());
     }
@@ -102,7 +108,7 @@ void test_script_rendering() {
         assert(sg != nullptr);
         assert(sg->isActive());
         assert(mgr.activeCount() == 1);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, &mgr, 3);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, &mgr, 3);
         mgr.closeAll();
         assert(mgr.activeCount() == 0);
         mgr.cleanup();
@@ -121,7 +127,7 @@ void test_script_rendering() {
         assert(sg1 != nullptr && sg2 != nullptr);
         assert(sg1->guiId() != sg2->guiId());
         assert(mgr.activeCount() == 2);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, &mgr, 3);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, &mgr, 3);
         mgr.closeAll();
         mgr.cleanup();
     }
@@ -130,7 +136,7 @@ void test_script_rendering() {
     // --- Test 4: Message delivery ---
     std::cout << "\n  4. Message delivery... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
             set received false
             set msg_data nil
@@ -154,7 +160,7 @@ void test_script_rendering() {
         auto dataVal = scriptGui.context()->get("msg_data");
         assert(dataVal.isString() && dataVal.asString() == "hello");
 
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, nullptr, 2);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 2);
         scriptGui.close();
     }
     std::cout << "ok";
@@ -162,7 +168,7 @@ void test_script_rendering() {
     // --- Test 5: Queued messages ---
     std::cout << "\n  5. Queued messages... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         scriptGui.loadAndRun(R"(
             set count 0
             ui.show {ui.window "Queue" [{ui.text "..."}]}
@@ -189,7 +195,7 @@ void test_script_rendering() {
     // --- Test 6: Script with all Phase 1 widgets ---
     std::cout << "\n  6. All Phase 1 widgets from script... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
             ui.show {ui.window "All Widgets" [
                 {ui.text "Static text"}
@@ -207,7 +213,7 @@ void test_script_rendering() {
             ]}
         )", "test6");
         assert(ok);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, nullptr, 5);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
         scriptGui.close();
     }
     std::cout << "ok";
@@ -215,41 +221,150 @@ void test_script_rendering() {
     // --- Test 7: Script error handling ---
     std::cout << "\n  7. Script error handling... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun("this_is_invalid_syntax !!@#$", "test7");
         // Should fail gracefully
         assert(!ok || !scriptGui.isActive());
     }
     std::cout << "ok";
 
-    // --- Test 8: Callback with ui.update ---
-    std::cout << "\n  8. Script callback with ui.update... ";
+    // --- Test 8: Map-based direct mutation ---
+    std::cout << "\n  8. Direct map mutation (map-IS-widget-data)... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
+            set text_widget {ui.text "Initial"}
             set gui_id {ui.show {ui.window "Dynamic" [
-                {ui.text "Initial"}
+                text_widget
                 {ui.button "Update" fn [] do
-                    ui.update gui_id {ui.window "Dynamic" [
-                        {ui.text "Updated!"}
-                    ]}
+                    set text_widget.text "Updated!"
                 end}
             ]}}
         )", "test8");
         assert(ok);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, nullptr, 3);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
 
-        // Verify tree exists
-        auto* tree = scriptGui.widgetTree();
+        // Verify map tree exists and is accessible
+        auto* tree = scriptGui.mapTree();
         assert(tree != nullptr);
-        assert(tree->children.size() == 2);
+        assert(tree->isMap());
+
+        // Verify children via map API
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 2);
+
+        // Verify text content
+        auto& child0 = children.asArray()[0];
+        assert(child0.isMap());
+        auto textVal = child0.asMap().get(mapRenderer.syms().text);
+        assert(textVal.isString());
+        // Text should still be "Initial" since we didn't click the button
 
         scriptGui.close();
     }
     std::cout << "ok";
 
-    // --- Test 9: Broadcast via manager ---
-    std::cout << "\n  9. Broadcast messages... ";
+    // --- Test 9: Callback with direct map mutation ---
+    std::cout << "\n  9. Callback-driven map mutation... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            set count 0
+            set text_widget {ui.text "Count: 0"}
+            set gui_id {ui.show {ui.window "Mutation" [
+                text_widget
+                {ui.button "Inc" fn [] do
+                    set count (count + 1)
+                    set text_widget.text ("Count: " + {to_str count})
+                end}
+                {ui.checkbox "Flag" false fn [v] do
+                    # onChange still works
+                end}
+            ]}}
+        )", "test9_mut");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify initial state via map API
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 3);
+
+        // Check initial text
+        auto& textChild = children.asArray()[0];
+        assert(textChild.isMap());
+        auto textVal = textChild.asMap().get(mapRenderer.syms().text);
+        assert(textVal.isString() && textVal.asString() == "Count: 0");
+
+        // Simulate button click via script callback
+        auto& btnChild = children.asArray()[1];
+        assert(btnChild.isMap());
+        auto onClickVal = btnChild.asMap().get(mapRenderer.syms().on_click);
+        assert(onClickVal.isCallable());
+
+        // Invoke the callback
+        engine.callFunction(onClickVal, {}, *scriptGui.context());
+
+        // Verify text was mutated via shared_ptr semantics
+        textVal = textChild.asMap().get(mapRenderer.syms().text);
+        assert(textVal.isString() && textVal.asString() == "Count: 1");
+
+        // Click again
+        engine.callFunction(onClickVal, {}, *scriptGui.context());
+        textVal = textChild.asMap().get(mapRenderer.syms().text);
+        assert(textVal.isString() && textVal.asString() == "Count: 2");
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 10: ui.node navigation ---
+    std::cout << "\n  10. ui.node map navigation... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            set gui_id {ui.show {ui.window "Nav Test" [
+                {ui.text "Child 0"}
+                {ui.text "Child 1"}
+                {ui.group [{ui.text "Nested"}]}
+            ]}}
+
+            # Navigate to child 0
+            set child0 {ui.node gui_id 0}
+
+            # Navigate to nested child via array path
+            set nested {ui.node gui_id [2 0]}
+        )", "test10_nav");
+        assert(ok);
+
+        // Verify child0 was retrieved
+        auto child0 = scriptGui.context()->get("child0");
+        assert(child0.isMap());
+        assert(child0.asMap().get(mapRenderer.syms().text).asString() == "Child 0");
+
+        // Verify nested navigation
+        auto nested = scriptGui.context()->get("nested");
+        assert(nested.isMap());
+        assert(nested.asMap().get(mapRenderer.syms().text).asString() == "Nested");
+
+        // Mutate via navigated reference and verify it's visible in the tree
+        child0.asMap().set(mapRenderer.syms().text, finescript::Value::string("Modified!"));
+        auto* tree = scriptGui.mapTree();
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        auto updatedText = children.asArray()[0].asMap().get(mapRenderer.syms().text);
+        assert(updatedText.asString() == "Modified!");
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 2);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 11: Broadcast via manager ---
+    std::cout << "\n  11. Broadcast messages... ";
     {
         auto* sg1 = mgr.showFromSource(R"(
             set got_it false
@@ -271,27 +386,292 @@ void test_script_rendering() {
         assert(sg1->context()->get("got_it").asBool() == true);
         assert(sg2->context()->get("got_it").asBool() == true);
 
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, &mgr, 2);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, &mgr, 2);
         mgr.closeAll();
         mgr.cleanup();
     }
     std::cout << "ok";
 
-    // --- Test 10: Variable bindings ---
-    std::cout << "\n  10. Variable bindings... ";
+    // --- Test 12: Variable bindings ---
+    std::cout << "\n  12. Variable bindings... ";
     {
-        ScriptGui scriptGui(engine, guiRenderer);
+        ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
             ui.show {ui.window "Bindings" [
                 {ui.text player_name}
-                {ui.text "Gold: {gold}"}
+                {ui.text ("Gold: " + {to_str gold})}
             ]}
-        )", "test10", {
+        )", "test12", {
             {"player_name", finescript::Value::string("Alice")},
             {"gold", finescript::Value::integer(100)},
         });
         assert(ok);
-        runFrames(window.get(), renderer.get(), gui, guiRenderer, nullptr, 3);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 13: ImGui writeback to map ---
+    std::cout << "\n  13. ImGui writeback to map... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            set slider_widget {ui.slider "Test" 0.0 1.0 0.5}
+            set gui_id {ui.show {ui.window "Writeback" [
+                slider_widget
+            ]}}
+        )", "test13");
+        assert(ok);
+
+        // Render a few frames - ImGui will read the slider value
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // The slider value should still be readable from the map
+        auto sliderWidget = scriptGui.context()->get("slider_widget");
+        assert(sliderWidget.isMap());
+        auto val = sliderWidget.asMap().get(mapRenderer.syms().value);
+        assert(val.isNumeric());
+        // Value should be 0.5 (no user interaction)
+        assert(static_cast<float>(val.asNumber()) == 0.5f);
+
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 14: Phase 3 widgets from script ---
+    std::cout << "\n  14. Phase 3 widgets from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 3" [
+                {ui.text "Before"}
+                {ui.same_line}
+                {ui.text "After"}
+                {ui.spacing}
+                {ui.text_colored [1.0 0.3 0.3 1.0] "Red text"}
+                {ui.text_wrapped "This is a long text that wraps."}
+                {ui.text_disabled "Grayed out text"}
+                {ui.progress_bar 0.75}
+                {ui.separator}
+                {ui.collapsing_header "Details" [
+                    {ui.text "Hidden content"}
+                    {ui.text "More hidden content"}
+                ]}
+            ]}
+        )", "test14");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 10);
+
+        // Verify same_line type (index 1)
+        auto& sameLine = children.asArray()[1];
+        assert(sameLine.isMap());
+        assert(sameLine.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_same_line);
+
+        // Verify text_colored has color array (index 4)
+        auto& textColored = children.asArray()[4];
+        assert(textColored.isMap());
+        auto color = textColored.asMap().get(mapRenderer.syms().color);
+        assert(color.isArray());
+        assert(color.asArray().size() == 4);
+
+        // Verify progress_bar has value (index 7)
+        auto& progressBar = children.asArray()[7];
+        assert(progressBar.isMap());
+        auto val = progressBar.asMap().get(mapRenderer.syms().value);
+        assert(val.isNumeric());
+        assert(val.asNumber() == 0.75);
+
+        // Verify collapsing_header has children (index 9)
+        auto& header = children.asArray()[9];
+        assert(header.isMap());
+        auto headerChildren = header.asMap().get(mapRenderer.syms().children);
+        assert(headerChildren.isArray());
+        assert(headerChildren.asArray().size() == 2);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 15: Phase 4 widgets from script ---
+    std::cout << "\n  15. Phase 4 widgets from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 4 Test" [
+                {ui.tab_bar "tabs" [
+                    {ui.tab "First" [
+                        {ui.text "Tab 1 content"}
+                        {ui.tree_node "Root" [
+                            {ui.tree_node "Leaf"}
+                        ]}
+                    ]}
+                    {ui.tab "Second" [
+                        {ui.text "Tab 2 content"}
+                    ]}
+                ]}
+                {ui.child "##scroll" [
+                    {ui.text "Scrollable"}
+                ]}
+                {ui.menu "Edit" [
+                    {ui.menu_item "Undo"}
+                    {ui.menu_item "Redo"}
+                ]}
+            ]}
+        )", "test15");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 3);
+
+        // Verify tab_bar (index 0)
+        auto& tabBar = children.asArray()[0];
+        assert(tabBar.isMap());
+        assert(tabBar.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_tab_bar);
+        auto tabBarChildren = tabBar.asMap().get(mapRenderer.syms().children);
+        assert(tabBarChildren.isArray());
+        assert(tabBarChildren.asArray().size() == 2);
+
+        // Verify first tab has tree_node
+        auto& firstTab = tabBarChildren.asArray()[0];
+        assert(firstTab.isMap());
+        assert(firstTab.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_tab);
+        auto tabChildren = firstTab.asMap().get(mapRenderer.syms().children);
+        assert(tabChildren.isArray());
+        assert(tabChildren.asArray().size() == 2);
+        assert(tabChildren.asArray()[1].asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_tree_node);
+
+        // Verify child (index 1)
+        auto& childWidget = children.asArray()[1];
+        assert(childWidget.isMap());
+        assert(childWidget.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_child);
+
+        // Verify menu (index 2) has 2 menu_items
+        auto& menu = children.asArray()[2];
+        assert(menu.isMap());
+        assert(menu.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_menu);
+        auto menuChildren = menu.asMap().get(mapRenderer.syms().children);
+        assert(menuChildren.isArray());
+        assert(menuChildren.asArray().size() == 2);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 16: Phase 5 table widgets from script ---
+    std::cout << "\n  16. Phase 5 table widgets from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 5 Test" [
+                {ui.table "stats" 2 [
+                    {ui.table_row [{ui.text "HP"} {ui.text "100"}]}
+                    {ui.table_row [{ui.text "MP"} {ui.text "50"}]}
+                ]}
+                {ui.table "grid" 3 [
+                    {ui.table_next_column}
+                    {ui.text "A"}
+                    {ui.table_next_column}
+                    {ui.text "B"}
+                    {ui.table_next_column}
+                    {ui.text "C"}
+                ]}
+            ]}
+        )", "test16");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 2);
+
+        // Verify first table
+        auto& table1 = children.asArray()[0];
+        assert(table1.isMap());
+        assert(table1.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_table);
+        assert(table1.asMap().get(mapRenderer.syms().num_columns).asInt() == 2);
+        auto t1children = table1.asMap().get(mapRenderer.syms().children);
+        assert(t1children.isArray());
+        assert(t1children.asArray().size() == 2);
+        // Each child should be a table_row
+        assert(t1children.asArray()[0].asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_table_row);
+
+        // Verify second table (imperative style)
+        auto& table2 = children.asArray()[1];
+        assert(table2.isMap());
+        assert(table2.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_table);
+        assert(table2.asMap().get(mapRenderer.syms().num_columns).asInt() == 3);
+        auto t2children = table2.asMap().get(mapRenderer.syms().children);
+        assert(t2children.isArray());
+        assert(t2children.asArray().size() == 6);  // 3 next_column + 3 text
+        assert(t2children.asArray()[0].asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_table_next_column);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 17: Phase 6 advanced input widgets from script ---
+    std::cout << "\n  17. Phase 6 advanced input widgets from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 6 Test" [
+                {ui.color_edit "Accent" [0.2 0.4 0.8 1.0]}
+                {ui.color_picker "Background" [0.1 0.1 0.15 1.0]}
+                {ui.drag_float "Speed" 1.5 0.1 0.0 10.0}
+                {ui.drag_int "Count" 50 1.0 0 100}
+            ]}
+        )", "test17");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 4);
+
+        // Verify color_edit
+        auto& ce = children.asArray()[0];
+        assert(ce.isMap());
+        assert(ce.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_color_edit);
+
+        // Verify drag_float
+        auto& df = children.asArray()[2];
+        assert(df.isMap());
+        assert(df.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_drag_float);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
         scriptGui.close();
     }
     std::cout << "ok";

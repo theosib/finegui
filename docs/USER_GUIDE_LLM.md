@@ -4,25 +4,43 @@ Dense API reference for finegui (Dear ImGui + finevk Vulkan backend). Optimized 
 
 ## Build
 
-Builds both static (`libfinegui.a`) and shared (`libfinegui.dylib`) libraries. Tests link against the shared library. Examples link against the static library.
+Three layered libraries, each static + shared:
+- `finegui` — Core (immediate mode, finevk backend)
+- `finegui-retained` — Retained-mode widgets (`FINEGUI_BUILD_RETAINED=ON`)
+- `finegui-script` — Script integration (`FINEGUI_BUILD_SCRIPT=ON`, requires finescript)
+
+Tests link shared. Examples link static.
 
 ## Architecture
 
-finegui wraps Dear ImGui with a Vulkan backend using finevk. Immediate-mode GUI: call widget functions each frame, no persistent widget objects. Renders as the last step in a render pass (on top of 3D content).
+finegui wraps Dear ImGui with a Vulkan backend using finevk. Three levels:
+1. **Core**: Immediate-mode — call ImGui widget functions each frame
+2. **Retained**: Declarative `WidgetNode` trees rendered by `GuiRenderer`
+3. **Script**: finescript scripts build widget trees via `ui.*` functions
 
 Backend handles ImGui 1.92+ texture lifecycle (`ImGuiBackendFlags_RendererHasTextures`): `WantCreate`, `WantUpdates` (lazy glyph rasterization), `WantDestroy`. Uses `RenderSurface::deferDelete()` for GPU-safe resource cleanup without stalling.
 
 ## Headers
 
 ```cpp
-#include <finegui/finegui.hpp>  // Umbrella: all public headers
-// Individual:
+// Core
+#include <finegui/finegui.hpp>       // Umbrella: all core headers
 #include <finegui/gui_system.hpp>    // GuiSystem class
 #include <finegui/gui_config.hpp>    // GuiConfig struct
 #include <finegui/input_adapter.hpp> // InputEvent, InputAdapter
 #include <finegui/texture_handle.hpp>// TextureHandle
 #include <finegui/gui_draw_data.hpp> // GuiDrawData, DrawCommand
 #include <finegui/gui_state.hpp>     // TypedStateUpdate<T>
+
+// Retained mode
+#include <finegui/widget_node.hpp>   // WidgetNode struct + builders
+#include <finegui/gui_renderer.hpp>  // GuiRenderer class
+
+// Script integration
+#include <finegui/script_gui.hpp>           // ScriptGui
+#include <finegui/script_gui_manager.hpp>   // ScriptGuiManager
+#include <finegui/script_bindings.hpp>      // registerGuiBindings()
+#include <finegui/widget_converter.hpp>     // convertToWidget(), ConverterSymbols
 ```
 
 ## GuiConfig
@@ -388,4 +406,271 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `registerTexture()` requires `initialize()` first
 - Backend uses `surface->deferDelete()` -- no `waitIdle()` in render path
 - `waitIdle()` only in destructor (shutdown, acceptable)
-- Pool must outlive all deferred DescriptorSetPtr objects (naturally satisfied)
+- ScriptEngine must outlive Vulkan resources (declare it first)
+- ScriptGui::close() removes tree before destroying context (closure safety)
+
+## WidgetNode (Retained Mode)
+
+```cpp
+using WidgetCallback = std::function<void(WidgetNode& widget)>;
+
+struct WidgetNode {
+    enum class Type {
+        Window, Text, Button, Checkbox, Slider, SliderInt,
+        InputText, InputInt, InputFloat, Combo, Separator,
+        Group, Columns, Image,
+        // Future: TabBar, TreeNode, MenuBar, Table, etc.
+    };
+
+    Type type;
+    std::string label, textContent, id;
+    float floatValue = 0.0f;
+    int intValue = 0;
+    bool boolValue = false;
+    std::string stringValue;
+    int selectedIndex = -1;
+    float minFloat = 0.0f, maxFloat = 1.0f;
+    int minInt = 0, maxInt = 100;
+    float width = 0.0f, height = 0.0f;
+    int columnCount = 1;
+    std::vector<std::string> items;
+    std::vector<WidgetNode> children;
+    bool visible = true, enabled = true;
+    WidgetCallback onClick, onChange, onSubmit, onClose;
+    TextureHandle texture{};
+    float imageWidth = 0.0f, imageHeight = 0.0f;
+
+    // Static builders
+    static WidgetNode window(string title, vector<WidgetNode> children = {});
+    static WidgetNode text(string content);
+    static WidgetNode button(string label, WidgetCallback onClick = {});
+    static WidgetNode checkbox(string label, bool value, WidgetCallback onChange = {});
+    static WidgetNode slider(string label, float value, float min, float max, WidgetCallback onChange = {});
+    static WidgetNode sliderInt(string label, int value, int min, int max, WidgetCallback onChange = {});
+    static WidgetNode inputText(string label, string value, WidgetCallback onChange = {}, WidgetCallback onSubmit = {});
+    static WidgetNode inputInt(string label, int value, WidgetCallback onChange = {});
+    static WidgetNode inputFloat(string label, float value, WidgetCallback onChange = {});
+    static WidgetNode combo(string label, vector<string> items, int selected, WidgetCallback onChange = {});
+    static WidgetNode separator();
+    static WidgetNode group(vector<WidgetNode> children);
+    static WidgetNode columns(int count, vector<WidgetNode> children);
+    static WidgetNode image(TextureHandle texture, float width, float height);
+};
+```
+
+## GuiRenderer (Retained Mode)
+
+```cpp
+class GuiRenderer {
+    explicit GuiRenderer(GuiSystem& gui);
+
+    int show(WidgetNode tree);              // Register tree, returns ID
+    void update(int guiId, WidgetNode tree); // Replace tree
+    void hide(int guiId);                    // Remove tree
+    void hideAll();                          // Remove all
+    WidgetNode* get(int guiId);              // Get for direct mutation (nullptr if not found)
+    void renderAll();                        // Call between beginFrame/endFrame
+};
+```
+
+Usage:
+```cpp
+GuiRenderer renderer(gui);
+int id = renderer.show(WidgetNode::window("Title", { WidgetNode::text("Hello") }));
+
+// Each frame:
+gui.beginFrame();
+renderer.renderAll();
+gui.endFrame();
+
+// Mutate:
+auto* tree = renderer.get(id);
+tree->children[0].textContent = "Updated";
+
+// Remove:
+renderer.hide(id);
+```
+
+## ScriptGui (Script Integration)
+
+```cpp
+class ScriptGui {
+    ScriptGui(finescript::ScriptEngine& engine, GuiRenderer& renderer);
+    ~ScriptGui();
+    ScriptGui(ScriptGui&&) noexcept;
+
+    // Load and run script. Pre-binds variables. Returns true on success.
+    bool loadAndRun(string_view source, string_view name = "<gui>",
+                    const vector<pair<string, Value>>& bindings = {});
+
+    // Run pre-compiled script
+    bool run(const CompiledScript& script, const vector<pair<string, Value>>& bindings = {});
+
+    // Message delivery (synchronous, GUI thread)
+    bool deliverMessage(uint32_t messageType, Value data);
+
+    // Thread-safe queue
+    void queueMessage(uint32_t messageType, Value data);
+
+    // Drain queue (call once/frame on GUI thread)
+    void processPendingMessages();
+
+    void close();                    // Remove tree, deactivate
+    bool isActive() const;
+    int guiId() const;               // GuiRenderer ID (-1 if not showing)
+    WidgetNode* widgetTree();        // Direct access to tree
+    ExecutionContext* context();      // Script variable access
+    const string& lastError() const;
+
+    // Internal (called by script bindings via ctx.userData())
+    Value scriptShow(const Value& map, ScriptEngine& engine, ExecutionContext& ctx);
+    void scriptUpdate(int id, const Value& map, ScriptEngine& engine, ExecutionContext& ctx);
+    bool scriptSetText(int id, const Value& path, const string& text);
+    bool scriptSetValue(int id, const Value& path, const Value& value);
+    bool scriptSetLabel(int id, const Value& path, const string& label);
+    void scriptHide(int id);
+    void registerMessageHandler(uint32_t messageType, Value handler);
+};
+```
+
+## ScriptGuiManager
+
+```cpp
+class ScriptGuiManager {
+    ScriptGuiManager(ScriptEngine& engine, GuiRenderer& renderer);
+    ~ScriptGuiManager(); // Calls closeAll()
+
+    // Create and run. Returns nullptr on failure.
+    ScriptGui* showFromSource(string_view source, string_view name = "<gui>",
+                              const vector<pair<string, Value>>& bindings = {});
+
+    bool deliverMessage(int guiId, uint32_t messageType, Value data);
+    void broadcastMessage(uint32_t messageType, Value data);  // All active GUIs
+    void queueBroadcast(uint32_t messageType, Value data);    // Thread-safe
+
+    void processPendingMessages(); // Drains broadcast queue + per-GUI queues
+    void close(int guiId);
+    void closeAll();
+    void cleanup();                // Remove inactive GUIs from list
+    ScriptGui* findByGuiId(int guiId);
+    size_t activeCount() const;
+};
+```
+
+## Script Bindings
+
+```cpp
+void registerGuiBindings(ScriptEngine& engine);
+```
+
+Registers `ui` and `gui` as constant map objects on the engine.
+
+### ui.* Builder Functions (return widget maps)
+
+| Function | Script Syntax | Notes |
+|----------|---------------|-------|
+| `ui.window` | `ui.window "Title" [children]` | |
+| `ui.text` | `ui.text "content"` | |
+| `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end` |
+| `ui.checkbox` | `ui.checkbox "label" value [on_change]` | on_change receives bool |
+| `ui.slider` | `ui.slider "label" min max value [on_change]` | on_change receives float |
+| `ui.slider_int` | `ui.slider_int "label" min max value [on_change]` | on_change receives int |
+| `ui.input` | `ui.input "label" value [on_change] [on_submit]` | |
+| `ui.input_int` | `ui.input_int "label" value [on_change]` | |
+| `ui.input_float` | `ui.input_float "label" value [on_change]` | |
+| `ui.combo` | `ui.combo "label" [items] selected [on_change]` | on_change receives int index |
+| `ui.separator` | `ui.separator` | Zero-arg call in `{}` |
+| `ui.group` | `ui.group [children]` | |
+| `ui.columns` | `ui.columns count [children]` | |
+
+### ui.* Action Functions (require ScriptGui context)
+
+| Function | Script Syntax | Description |
+|----------|---------------|-------------|
+| `ui.show` | `ui.show widget_map` | Convert map→tree, show, return ID |
+| `ui.update` | `ui.update id widget_map` | Replace existing tree (loses callbacks) |
+| `ui.set_text` | `ui.set_text id child_idx text` | Mutate textContent of child node |
+| `ui.set_value` | `ui.set_value id child_idx value` | Mutate value (bool/int/float/string) |
+| `ui.set_label` | `ui.set_label id child_idx label` | Mutate label of child node |
+| `ui.hide` | `ui.hide [id]` | Hide tree (or close GUI if no ID) |
+
+`child_idx` can be an integer (direct child) or array of integers (nested path, e.g., `[0 1]`).
+
+### gui.* Functions
+
+| Function | Script Syntax | Description |
+|----------|---------------|-------------|
+| `gui.on_message` | `gui.on_message :symbol handler` | Register message handler |
+
+## Script Example
+
+```
+set count 0
+set gui_id {ui.show {ui.window "Counter" [
+    {ui.text "Count: 0"}
+    {ui.button "Increment" fn [] do
+        set count (count + 1)
+        ui.set_text gui_id 0 ("Count: " + {to_str count})
+    end}
+    {ui.button "Reset" fn [] do
+        set count 0
+        ui.set_text gui_id 0 "Count: 0"
+    end}
+]}}
+
+gui.on_message :reset fn [data] do
+    set count 0
+    ui.set_text gui_id 0 "Count: 0"
+end
+```
+
+Uses `ui.set_text` to mutate the text node (child 0) directly, preserving button callbacks.
+
+## Script + C++ Integration Pattern
+
+```cpp
+// Setup
+finescript::ScriptEngine engine;
+finegui::registerGuiBindings(engine);
+finegui::GuiRenderer guiRenderer(gui);
+finegui::ScriptGuiManager mgr(engine, guiRenderer);
+
+// Launch scripts
+auto* scriptGui = mgr.showFromSource(source, "name");
+
+// C++ retained-mode alongside scripts
+guiRenderer.show(WidgetNode::window("C++ Panel", { ... }));
+
+// Frame loop
+gui.beginFrame();
+mgr.processPendingMessages();
+guiRenderer.renderAll();  // Renders both C++ and script trees
+gui.endFrame();
+
+// C++ → script messaging
+scriptGui->deliverMessage(engine.intern("event_name"), Value::string("data"));
+
+// Read script state
+auto val = scriptGui->context()->get("variable_name");
+
+// Thread-safe messaging
+scriptGui->queueMessage(engine.intern("event"), Value::nil());
+mgr.queueBroadcast(engine.intern("global_event"), Value::nil());
+```
+
+## Widget Converter (Advanced)
+
+For direct use outside of ScriptGui (e.g., custom script integration):
+
+```cpp
+ConverterSymbols syms;
+syms.intern(engine);
+
+// Convert finescript map → WidgetNode
+WidgetNode tree = convertToWidget(scriptMap, engine, ctx, syms);
+
+// Get widget's current value as finescript Value
+Value val = widgetValueToScriptValue(widgetNode);
+// Checkbox → bool, Slider → float, SliderInt/InputInt → int,
+// InputText → string, Combo → int (selectedIndex)
+```

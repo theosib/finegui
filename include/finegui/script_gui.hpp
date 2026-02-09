@@ -1,10 +1,8 @@
 #pragma once
 
-#include <finegui/widget_node.hpp>
-#include <finegui/widget_converter.hpp>
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
-#include <functional>
+#include <finescript/value.h>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -13,24 +11,25 @@
 
 namespace finegui {
 
-class GuiRenderer;
+class MapRenderer;
 
 /// A single GUI driven by a finescript script.
 ///
 /// Owns the ExecutionContext (keeping closures alive), the widget tree
-/// (via a GuiRenderer ID), and message handlers registered by the script.
+/// (via a MapRenderer ID), and message handlers registered by the script.
+/// The widget tree is stored as finescript maps — script mutations to maps
+/// are automatically visible to the renderer via shared_ptr semantics.
 ///
 /// Usage:
-///   ScriptGui gui(engine, renderer);
+///   MapRenderer mapRenderer(engine);
+///   ScriptGui gui(engine, mapRenderer);
 ///   gui.loadAndRun(R"(
 ///       ui.show {ui.window "Hello" [{ui.text "World"}]}
 ///   )");
-///   // Each frame: gui.processPendingMessages(); renderer.renderAll();
-///   // Deliver messages: gui.deliverMessage(sym, data);
-///   // Close: gui.close();
+///   // Each frame: gui.processPendingMessages(); mapRenderer.renderAll();
 class ScriptGui {
 public:
-    ScriptGui(finescript::ScriptEngine& engine, GuiRenderer& renderer);
+    ScriptGui(finescript::ScriptEngine& engine, MapRenderer& renderer);
     ~ScriptGui();
 
     ScriptGui(const ScriptGui&) = delete;
@@ -65,11 +64,17 @@ public:
     /// Check if this GUI is currently active.
     bool isActive() const;
 
-    /// Get the GuiRenderer ID for this GUI's widget tree (-1 if not showing).
+    /// Get the MapRenderer ID for this GUI's widget tree (-1 if not showing).
     int guiId() const;
 
-    /// Access the underlying widget tree (for direct mutation from C++).
-    WidgetNode* widgetTree();
+    /// Access the root map tree (for direct access from C++).
+    /// Returns nullptr if not showing.
+    finescript::Value* mapTree();
+
+    /// Navigate the map tree to a child node.
+    /// path: int (single child index) or array of ints (nested path).
+    /// Returns the child map, or nil if not found.
+    finescript::Value navigateMap(int guiId, const finescript::Value& path);
 
     /// Get the execution context (for advanced usage).
     finescript::ExecutionContext* context();
@@ -80,18 +85,11 @@ public:
     // -- Internal methods called by script bindings ---------------------------
     // These are public so script_bindings.cpp can call them via ctx.userData().
 
-    /// Called by ui.show binding: convert map→WidgetNode, register with renderer.
-    finescript::Value scriptShow(const finescript::Value& map,
-                                 finescript::ScriptEngine& engine,
-                                 finescript::ExecutionContext& ctx);
+    /// Called by ui.show binding: store map in MapRenderer, returns GUI ID.
+    finescript::Value scriptShow(const finescript::Value& map);
 
-    /// Called by ui.update binding: re-convert and replace tree.
-    void scriptUpdate(int id, const finescript::Value& map,
-                      finescript::ScriptEngine& engine,
-                      finescript::ExecutionContext& ctx);
-
-    /// Called by ui.hide binding: remove specific tree.
-    void scriptHide(int id);
+    /// Called by ui.hide binding: remove tree.
+    void scriptHide();
 
     /// Called by gui.on_message binding: register a message handler.
     void registerMessageHandler(uint32_t messageType, finescript::Value handler);

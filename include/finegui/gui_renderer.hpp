@@ -64,6 +64,35 @@ private:
     void renderGroup(WidgetNode& node);
     void renderColumns(WidgetNode& node);
     void renderImage(WidgetNode& node);
+
+    // Phase 3
+    void renderSameLine(WidgetNode& node);
+    void renderSpacing(WidgetNode& node);
+    void renderTextColored(WidgetNode& node);
+    void renderTextWrapped(WidgetNode& node);
+    void renderTextDisabled(WidgetNode& node);
+    void renderProgressBar(WidgetNode& node);
+    void renderCollapsingHeader(WidgetNode& node);
+
+    // Phase 4
+    void renderTabBar(WidgetNode& node);
+    void renderTabItem(WidgetNode& node);
+    void renderTreeNode(WidgetNode& node);
+    void renderChild(WidgetNode& node);
+    void renderMenuBar(WidgetNode& node);
+    void renderMenu(WidgetNode& node);
+    void renderMenuItem(WidgetNode& node);
+
+    // Phase 5
+    void renderTable(WidgetNode& node);
+    void renderTableRow(WidgetNode& node);
+    void renderTableColumn(WidgetNode& node);
+
+    // Phase 6
+    void renderColorEdit(WidgetNode& node);
+    void renderColorPicker(WidgetNode& node);
+    void renderDragFloat(WidgetNode& node);
+    void renderDragInt(WidgetNode& node);
 };
 
 } // namespace finegui

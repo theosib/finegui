@@ -91,6 +91,31 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         case WidgetNode::Type::Group:      renderGroup(node); break;
         case WidgetNode::Type::Columns:    renderColumns(node); break;
         case WidgetNode::Type::Image:      renderImage(node); break;
+        // Phase 3
+        case WidgetNode::Type::SameLine:          renderSameLine(node); break;
+        case WidgetNode::Type::Spacing:           renderSpacing(node); break;
+        case WidgetNode::Type::TextColored:       renderTextColored(node); break;
+        case WidgetNode::Type::TextWrapped:       renderTextWrapped(node); break;
+        case WidgetNode::Type::TextDisabled:      renderTextDisabled(node); break;
+        case WidgetNode::Type::ProgressBar:       renderProgressBar(node); break;
+        case WidgetNode::Type::CollapsingHeader:  renderCollapsingHeader(node); break;
+        // Phase 4
+        case WidgetNode::Type::TabBar:            renderTabBar(node); break;
+        case WidgetNode::Type::TabItem:           renderTabItem(node); break;
+        case WidgetNode::Type::TreeNode:          renderTreeNode(node); break;
+        case WidgetNode::Type::Child:             renderChild(node); break;
+        case WidgetNode::Type::MenuBar:           renderMenuBar(node); break;
+        case WidgetNode::Type::Menu:              renderMenu(node); break;
+        case WidgetNode::Type::MenuItem:          renderMenuItem(node); break;
+        // Phase 5
+        case WidgetNode::Type::Table:             renderTable(node); break;
+        case WidgetNode::Type::TableRow:          renderTableRow(node); break;
+        case WidgetNode::Type::TableColumn:       renderTableColumn(node); break;
+        // Phase 6
+        case WidgetNode::Type::ColorEdit:         renderColorEdit(node); break;
+        case WidgetNode::Type::ColorPicker:       renderColorPicker(node); break;
+        case WidgetNode::Type::DragFloat:         renderDragFloat(node); break;
+        case WidgetNode::Type::DragInt:           renderDragInt(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -264,6 +289,205 @@ void GuiRenderer::renderImage(WidgetNode& node) {
         if (node.onClick && ImGui::IsItemClicked()) {
             node.onClick(node);
         }
+    }
+}
+
+// -- Phase 3: Layout & Display ------------------------------------------------
+
+void GuiRenderer::renderSameLine(WidgetNode& node) {
+    if (node.offsetX > 0) {
+        ImGui::SameLine(node.offsetX);
+    } else {
+        ImGui::SameLine();
+    }
+}
+
+void GuiRenderer::renderSpacing(WidgetNode& /*node*/) {
+    ImGui::Spacing();
+}
+
+void GuiRenderer::renderTextColored(WidgetNode& node) {
+    ImGui::TextColored({node.colorR, node.colorG, node.colorB, node.colorA},
+                       "%s", node.textContent.c_str());
+}
+
+void GuiRenderer::renderTextWrapped(WidgetNode& node) {
+    ImGui::TextWrapped("%s", node.textContent.c_str());
+}
+
+void GuiRenderer::renderTextDisabled(WidgetNode& node) {
+    ImGui::TextDisabled("%s", node.textContent.c_str());
+}
+
+void GuiRenderer::renderProgressBar(WidgetNode& node) {
+    float w = (node.width > 0) ? node.width : -FLT_MIN;
+    float h = node.height;
+    const char* overlay = node.overlayText.empty() ? nullptr : node.overlayText.c_str();
+    ImGui::ProgressBar(node.floatValue, {w, h}, overlay);
+}
+
+void GuiRenderer::renderCollapsingHeader(WidgetNode& node) {
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None;
+    if (node.defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+    if (ImGui::CollapsingHeader(node.label.c_str(), flags)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+    }
+}
+
+// -- Phase 4: Containers & Menus ----------------------------------------------
+
+void GuiRenderer::renderTabBar(WidgetNode& node) {
+    const char* id = node.id.empty() ? "##tabbar" : node.id.c_str();
+    if (ImGui::BeginTabBar(id)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndTabBar();
+    }
+}
+
+void GuiRenderer::renderTabItem(WidgetNode& node) {
+    if (ImGui::BeginTabItem(node.label.c_str())) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndTabItem();
+    }
+}
+
+void GuiRenderer::renderTreeNode(WidgetNode& node) {
+    ImGuiTreeNodeFlags flags = ImGuiTreeNodeFlags_None;
+    if (node.leaf) flags |= ImGuiTreeNodeFlags_Leaf | ImGuiTreeNodeFlags_NoTreePushOnOpen;
+    if (node.defaultOpen) flags |= ImGuiTreeNodeFlags_DefaultOpen;
+
+    bool open = ImGui::TreeNodeEx(node.label.c_str(), flags);
+
+    if (ImGui::IsItemClicked() && node.onClick) {
+        node.onClick(node);
+    }
+
+    if (open && !node.leaf) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::TreePop();
+    }
+}
+
+void GuiRenderer::renderChild(WidgetNode& node) {
+    const char* id = node.id.empty() ? "##child" : node.id.c_str();
+
+    ImGuiChildFlags childFlags = ImGuiChildFlags_None;
+    if (node.border) childFlags |= ImGuiChildFlags_Borders;
+
+    if (ImGui::BeginChild(id, {node.width, node.height}, childFlags)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        if (node.autoScroll && ImGui::GetScrollY() >= ImGui::GetScrollMaxY()) {
+            ImGui::SetScrollHereY(1.0f);
+        }
+    }
+    ImGui::EndChild();
+}
+
+void GuiRenderer::renderMenuBar(WidgetNode& node) {
+    if (ImGui::BeginMenuBar()) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndMenuBar();
+    }
+}
+
+void GuiRenderer::renderMenu(WidgetNode& node) {
+    if (ImGui::BeginMenu(node.label.c_str())) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndMenu();
+    }
+}
+
+void GuiRenderer::renderMenuItem(WidgetNode& node) {
+    const char* shortcut = node.shortcutText.empty() ? nullptr : node.shortcutText.c_str();
+
+    if (ImGui::MenuItem(node.label.c_str(), shortcut, node.checked)) {
+        if (node.onClick) node.onClick(node);
+    }
+}
+
+// -- Phase 5: Tables ----------------------------------------------------------
+
+void GuiRenderer::renderTable(WidgetNode& node) {
+    const char* id = node.id.empty() ? "##table" : node.id.c_str();
+    int numCols = node.columnCount > 0 ? node.columnCount : 1;
+
+    if (ImGui::BeginTable(id, numCols, static_cast<ImGuiTableFlags>(node.tableFlags))) {
+        // Setup column headers if provided (stored in items)
+        if (!node.items.empty()) {
+            for (const auto& header : node.items) {
+                ImGui::TableSetupColumn(header.c_str());
+            }
+            ImGui::TableHeadersRow();
+        }
+
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndTable();
+    }
+}
+
+void GuiRenderer::renderTableRow(WidgetNode& node) {
+    ImGui::TableNextRow();
+    if (!node.children.empty()) {
+        // Container mode: each child goes into the next column
+        for (auto& child : node.children) {
+            ImGui::TableNextColumn();
+            renderNode(child);
+        }
+    }
+}
+
+void GuiRenderer::renderTableColumn(WidgetNode& /*node*/) {
+    ImGui::TableNextColumn();
+}
+
+// -- Phase 6: Advanced Input --------------------------------------------------
+
+void GuiRenderer::renderColorEdit(WidgetNode& node) {
+    float col[4] = {node.colorR, node.colorG, node.colorB, node.colorA};
+    if (ImGui::ColorEdit4(node.label.c_str(), col)) {
+        node.colorR = col[0]; node.colorG = col[1];
+        node.colorB = col[2]; node.colorA = col[3];
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderColorPicker(WidgetNode& node) {
+    float col[4] = {node.colorR, node.colorG, node.colorB, node.colorA};
+    if (ImGui::ColorPicker4(node.label.c_str(), col)) {
+        node.colorR = col[0]; node.colorG = col[1];
+        node.colorB = col[2]; node.colorA = col[3];
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderDragFloat(WidgetNode& node) {
+    if (ImGui::DragFloat(node.label.c_str(), &node.floatValue,
+                         node.dragSpeed, node.minFloat, node.maxFloat)) {
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderDragInt(WidgetNode& node) {
+    if (ImGui::DragInt(node.label.c_str(), &node.intValue,
+                       node.dragSpeed, node.minInt, node.maxInt)) {
+        if (node.onChange) node.onChange(node);
     }
 }
 

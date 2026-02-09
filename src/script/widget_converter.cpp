@@ -25,13 +25,46 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     enabled  = engine.intern("enabled");
     selected = engine.intern("selected");
 
+    // Phase 3 field keys
+    color        = engine.intern("color");
+    overlay      = engine.intern("overlay");
+    size         = engine.intern("size");
+    offset       = engine.intern("offset");
+    default_open = engine.intern("default_open");
+    format       = engine.intern("format");
+
+    // Phase 4 field keys
+    border      = engine.intern("border");
+    auto_scroll = engine.intern("auto_scroll");
+    shortcut    = engine.intern("shortcut");
+    checked     = engine.intern("checked");
+    leaf        = engine.intern("leaf");
+
+    // Phase 5 field keys
+    num_columns = engine.intern("num_columns");
+    headers     = engine.intern("headers");
+    flags       = engine.intern("flags");
+
+    // Table flag value symbols
+    sym_flag_row_bg        = engine.intern("row_bg");
+    sym_flag_borders       = engine.intern("borders");
+    sym_flag_borders_h     = engine.intern("borders_h");
+    sym_flag_borders_v     = engine.intern("borders_v");
+    sym_flag_borders_inner = engine.intern("borders_inner");
+    sym_flag_borders_outer = engine.intern("borders_outer");
+    sym_flag_resizable     = engine.intern("resizable");
+    sym_flag_sortable      = engine.intern("sortable");
+    sym_flag_scroll_x      = engine.intern("scroll_x");
+    sym_flag_scroll_y      = engine.intern("scroll_y");
+
     // Callback keys
     on_click  = engine.intern("on_click");
     on_change = engine.intern("on_change");
     on_submit = engine.intern("on_submit");
     on_close  = engine.intern("on_close");
+    on_select = engine.intern("on_select");
 
-    // Type name symbols
+    // Type name symbols - Phase 1
     sym_window     = engine.intern("window");
     sym_text       = engine.intern("text");
     sym_button     = engine.intern("button");
@@ -46,6 +79,38 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_group      = engine.intern("group");
     sym_columns    = engine.intern("columns");
     sym_image      = engine.intern("image");
+
+    // Type name symbols - Phase 3
+    sym_same_line          = engine.intern("same_line");
+    sym_spacing            = engine.intern("spacing");
+    sym_text_colored       = engine.intern("text_colored");
+    sym_text_wrapped       = engine.intern("text_wrapped");
+    sym_text_disabled      = engine.intern("text_disabled");
+    sym_progress_bar       = engine.intern("progress_bar");
+    sym_collapsing_header  = engine.intern("collapsing_header");
+
+    // Type name symbols - Phase 4
+    sym_tab_bar   = engine.intern("tab_bar");
+    sym_tab       = engine.intern("tab");
+    sym_tree_node = engine.intern("tree_node");
+    sym_child     = engine.intern("child");
+    sym_menu_bar  = engine.intern("menu_bar");
+    sym_menu      = engine.intern("menu");
+    sym_menu_item = engine.intern("menu_item");
+
+    // Type name symbols - Phase 5
+    sym_table             = engine.intern("table");
+    sym_table_row         = engine.intern("table_row");
+    sym_table_next_column = engine.intern("table_next_column");
+
+    // Phase 6 field keys
+    speed = engine.intern("speed");
+
+    // Type name symbols - Phase 6
+    sym_color_edit   = engine.intern("color_edit");
+    sym_color_picker = engine.intern("color_picker");
+    sym_drag_float   = engine.intern("drag_float");
+    sym_drag_int     = engine.intern("drag_int");
 }
 
 // -- Type mapping -------------------------------------------------------------

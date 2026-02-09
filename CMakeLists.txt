@@ -282,6 +282,7 @@ endif()
 if(FINEGUI_BUILD_SCRIPT)
     set(FINEGUI_SCRIPT_SOURCES
         src/script/widget_converter.cpp
+        src/script/map_renderer.cpp
         src/script/script_bindings.cpp
         src/script/script_gui.cpp
         src/script/script_gui_manager.cpp
@@ -289,6 +290,7 @@ if(FINEGUI_BUILD_SCRIPT)
 
     set(FINEGUI_SCRIPT_HEADERS
         include/finegui/widget_converter.hpp
+        include/finegui/map_renderer.hpp
         include/finegui/script_bindings.hpp
         include/finegui/script_gui.hpp
         include/finegui/script_gui_manager.hpp

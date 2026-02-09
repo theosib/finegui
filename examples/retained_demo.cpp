@@ -10,6 +10,7 @@
 #include <finegui/gui_renderer.hpp>
 
 #include <finevk/finevk.hpp>
+#include <imgui.h>
 
 #include <iostream>
 
@@ -101,6 +102,140 @@ int main() {
                     btn.label = slider.enabled ? "Toggle Disabled" : "Toggle Enabled";
                 }
             }),
+        }));
+
+        // Phase 3: Layout & Display showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 3: Layout & Display", {
+            finegui::WidgetNode::textColored(1.0f, 0.2f, 0.2f, 1.0f, "Colored text (red)"),
+            finegui::WidgetNode::textColored(0.2f, 1.0f, 0.2f, 1.0f, "Colored text (green)"),
+            finegui::WidgetNode::textColored(0.4f, 0.4f, 1.0f, 1.0f, "Colored text (blue)"),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::textWrapped(
+                "This is wrapped text that should flow across multiple lines "
+                "when the window is narrow enough. Resize this window to see it wrap."),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::textDisabled("This text is disabled/grayed out"),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("SameLine demo:"),
+            finegui::WidgetNode::button("A"),
+            finegui::WidgetNode::sameLine(),
+            finegui::WidgetNode::button("B"),
+            finegui::WidgetNode::sameLine(),
+            finegui::WidgetNode::button("C"),
+            finegui::WidgetNode::spacing(),
+            finegui::WidgetNode::progressBar(0.65f, 0.0f, 0.0f, "65%"),
+            finegui::WidgetNode::progressBar(0.3f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::collapsingHeader("Collapsing Section", {
+                finegui::WidgetNode::text("This content is inside a collapsing header."),
+                finegui::WidgetNode::slider("Hidden Slider", 0.5f, 0.0f, 1.0f),
+            }, true),
+            finegui::WidgetNode::collapsingHeader("Another Section (closed by default)", {
+                finegui::WidgetNode::text("You expanded this section!"),
+            }),
+        }));
+
+        // Phase 4: Containers & Menus showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 4: Containers & Menus", {
+            finegui::WidgetNode::tabBar("demo_tabs", {
+                finegui::WidgetNode::tabItem("Tab 1", {
+                    finegui::WidgetNode::text("Content of Tab 1"),
+                    finegui::WidgetNode::slider("Tab1 Slider", 0.5f, 0.0f, 1.0f),
+                }),
+                finegui::WidgetNode::tabItem("Tab 2", {
+                    finegui::WidgetNode::text("Content of Tab 2"),
+                    finegui::WidgetNode::checkbox("Tab2 Check", false),
+                }),
+                finegui::WidgetNode::tabItem("Tab 3", {
+                    finegui::WidgetNode::text("Content of Tab 3"),
+                    finegui::WidgetNode::button("Tab3 Button"),
+                }),
+            }),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Tree nodes:"),
+            finegui::WidgetNode::treeNode("Root Node", {
+                finegui::WidgetNode::treeNode("Child A", {
+                    finegui::WidgetNode::treeNode("Leaf 1", {}, true, true),
+                    finegui::WidgetNode::treeNode("Leaf 2", {}, true, true),
+                }),
+                finegui::WidgetNode::treeNode("Child B", {
+                    finegui::WidgetNode::text("Some content in B"),
+                }),
+            }, true),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Scrollable child region:"),
+            finegui::WidgetNode::child("scroll_child", 0, 100, true, false, {
+                finegui::WidgetNode::text("Line 1 inside child"),
+                finegui::WidgetNode::text("Line 2 inside child"),
+                finegui::WidgetNode::text("Line 3 inside child"),
+                finegui::WidgetNode::text("Line 4 inside child"),
+                finegui::WidgetNode::text("Line 5 inside child"),
+                finegui::WidgetNode::text("Line 6 inside child"),
+                finegui::WidgetNode::text("Line 7 inside child"),
+                finegui::WidgetNode::text("Line 8 inside child"),
+            }),
+        }));
+
+        // Phase 5: Tables showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 5: Tables", {
+            finegui::WidgetNode::text("Table with headers:"),
+            finegui::WidgetNode::table("demo_table", 3,
+                {"Name", "Value", "Status"},
+                {
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Alpha"),
+                        finegui::WidgetNode::text("100"),
+                        finegui::WidgetNode::textColored(0.2f, 1.0f, 0.2f, 1.0f, "OK"),
+                    }),
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Beta"),
+                        finegui::WidgetNode::text("200"),
+                        finegui::WidgetNode::textColored(1.0f, 1.0f, 0.2f, 1.0f, "Warning"),
+                    }),
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Gamma"),
+                        finegui::WidgetNode::text("300"),
+                        finegui::WidgetNode::textColored(1.0f, 0.2f, 0.2f, 1.0f, "Error"),
+                    }),
+                },
+                ImGuiTableFlags_Borders | ImGuiTableFlags_RowBg
+            ),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Table with interactive widgets:"),
+            finegui::WidgetNode::table("interactive_table", 2,
+                {"Setting", "Control"},
+                {
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Volume"),
+                        finegui::WidgetNode::slider("##vol", 0.75f, 0.0f, 1.0f),
+                    }),
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Enabled"),
+                        finegui::WidgetNode::checkbox("##en", true),
+                    }),
+                    finegui::WidgetNode::tableRow({
+                        finegui::WidgetNode::text("Quality"),
+                        finegui::WidgetNode::sliderInt("##q", 5, 1, 10),
+                    }),
+                },
+                ImGuiTableFlags_Borders | ImGuiTableFlags_Resizable
+            ),
+        }));
+
+        // Phase 6: Advanced Input showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 6: Advanced Input", {
+            finegui::WidgetNode::text("Color editors:"),
+            finegui::WidgetNode::colorEdit("Accent Color", 0.2f, 0.4f, 0.8f, 1.0f),
+            finegui::WidgetNode::colorEdit("Highlight", 1.0f, 0.8f, 0.0f, 1.0f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Color picker:"),
+            finegui::WidgetNode::colorPicker("Background", 0.1f, 0.1f, 0.15f, 1.0f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Drag inputs:"),
+            finegui::WidgetNode::dragFloat("Speed", 1.5f, 0.1f, 0.0f, 10.0f),
+            finegui::WidgetNode::dragFloat("Scale", 1.0f, 0.01f),
+            finegui::WidgetNode::dragInt("Count", 50, 1.0f, 0, 200),
+            finegui::WidgetNode::dragInt("Level", 1, 0.5f, 1, 99),
         }));
 
         std::cout << "Retained-mode demo started. Close window to exit.\n";

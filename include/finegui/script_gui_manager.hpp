@@ -11,13 +11,13 @@
 
 namespace finegui {
 
-class GuiRenderer;
+class MapRenderer;
 
 /// Manages multiple ScriptGui instances. Provides broadcast messaging,
 /// lifetime management, and a single processPendingMessages() call per frame.
 class ScriptGuiManager {
 public:
-    ScriptGuiManager(finescript::ScriptEngine& engine, GuiRenderer& renderer);
+    ScriptGuiManager(finescript::ScriptEngine& engine, MapRenderer& renderer);
     ~ScriptGuiManager();
 
     /// Create and run a new ScriptGui from source code.
@@ -55,7 +55,7 @@ public:
 
 private:
     finescript::ScriptEngine& engine_;
-    GuiRenderer& renderer_;
+    MapRenderer& renderer_;
     std::vector<std::unique_ptr<ScriptGui>> guis_;
 
     struct PendingBroadcast {

@@ -521,3 +521,389 @@ gui.applyState(stats);
 | `fromInputManager(manager)` | Extract all pending events from an InputManager |
 | `glfwKeyToImGui(key)` | Convert GLFW key code to ImGui key code |
 | `glfwMouseButtonToImGui(btn)` | Convert GLFW mouse button to ImGui button |
+
+---
+
+## Retained-Mode Widgets
+
+The retained-mode layer (`finegui-retained`) lets you build widget trees declaratively in C++ and render them each frame, without writing ImGui calls directly.
+
+### Setup
+
+```cpp
+#include <finegui/finegui.hpp>
+#include <finegui/gui_renderer.hpp>
+
+// After creating GuiSystem...
+finegui::GuiRenderer guiRenderer(gui);
+```
+
+### Building Widget Trees
+
+Use `WidgetNode` static builders to construct trees:
+
+```cpp
+int mainId = guiRenderer.show(finegui::WidgetNode::window("Settings", {
+    finegui::WidgetNode::text("Welcome!"),
+    finegui::WidgetNode::separator(),
+    finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
+        [](finegui::WidgetNode& w) {
+            setVolume(w.floatValue);
+        }),
+    finegui::WidgetNode::checkbox("Fullscreen", false),
+    finegui::WidgetNode::button("Apply", [](finegui::WidgetNode&) {
+        applySettings();
+    }),
+    finegui::WidgetNode::combo("Quality", {"Low", "Medium", "High"}, 1),
+    finegui::WidgetNode::inputText("Name", "Player"),
+}));
+```
+
+### Rendering
+
+Call `renderAll()` each frame between `beginFrame()` and `endFrame()`:
+
+```cpp
+gui.beginFrame();
+guiRenderer.renderAll();
+gui.endFrame();
+```
+
+### Updating Trees
+
+You can replace a tree wholesale or mutate nodes directly:
+
+```cpp
+// Replace entire tree
+guiRenderer.update(mainId, finegui::WidgetNode::window("Settings", { ... }));
+
+// Or mutate in place
+auto* tree = guiRenderer.get(mainId);
+if (tree) {
+    tree->children[2].floatValue = 0.8f;  // Update slider value
+    tree->children[3].enabled = false;     // Disable checkbox
+}
+
+// Remove a tree
+guiRenderer.hide(mainId);
+```
+
+### Available Widget Types
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::window(title, children)` | Top-level window |
+| `WidgetNode::text(content)` | Static text |
+| `WidgetNode::button(label, onClick)` | Click button |
+| `WidgetNode::checkbox(label, value, onChange)` | Boolean toggle |
+| `WidgetNode::slider(label, value, min, max, onChange)` | Float slider |
+| `WidgetNode::sliderInt(label, value, min, max, onChange)` | Integer slider |
+| `WidgetNode::inputText(label, value, onChange, onSubmit)` | Text input |
+| `WidgetNode::inputInt(label, value, onChange)` | Integer input |
+| `WidgetNode::inputFloat(label, value, onChange)` | Float input |
+| `WidgetNode::combo(label, items, selected, onChange)` | Dropdown combo |
+| `WidgetNode::separator()` | Horizontal line |
+| `WidgetNode::group(children)` | Group children |
+| `WidgetNode::columns(count, children)` | Multi-column layout |
+| `WidgetNode::image(texture, width, height)` | Texture image |
+
+### Callbacks
+
+Callbacks receive a reference to the widget node that triggered them:
+
+```cpp
+finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
+    [](finegui::WidgetNode& widget) {
+        // widget.floatValue is the current slider value
+        setVolume(widget.floatValue);
+    });
+```
+
+| Callback | Triggers on | Available fields |
+|----------|-------------|------------------|
+| `onClick` | Button click, Image click | - |
+| `onChange` | Value change | `floatValue`, `intValue`, `boolValue`, `stringValue`, `selectedIndex` |
+| `onSubmit` | Enter in InputText | `stringValue` |
+| `onClose` | Window close button | - |
+
+---
+
+## Script-Driven GUI
+
+The script layer (`finegui-script`) lets finescript scripts build and manage widget trees. Scripts use `ui.*` functions to create widget maps, which are converted to `WidgetNode` trees.
+
+Requires: `FINEGUI_BUILD_SCRIPT=ON` in CMake, plus a built finescript library.
+
+### Setup
+
+```cpp
+#include <finegui/finegui.hpp>
+#include <finegui/gui_renderer.hpp>
+#include <finegui/script_gui.hpp>
+#include <finegui/script_gui_manager.hpp>
+#include <finegui/script_bindings.hpp>
+
+#include <finescript/script_engine.h>
+
+// Create script engine (must outlive Vulkan resources)
+finescript::ScriptEngine engine;
+finegui::registerGuiBindings(engine);
+
+// After creating GuiSystem and GuiRenderer...
+finegui::GuiRenderer guiRenderer(gui);
+```
+
+### Single Script GUI
+
+`ScriptGui` is the single-object abstraction: it owns the script context, the widget tree, and message handlers.
+
+```cpp
+finegui::ScriptGui scriptGui(engine, guiRenderer);
+
+bool ok = scriptGui.loadAndRun(R"SCRIPT(
+    ui.show {ui.window "Hello" [
+        {ui.text "Hello from script!"}
+        {ui.button "Click me" fn [] do
+            print "Clicked!"
+        end}
+    ]}
+)SCRIPT");
+
+// Each frame:
+gui.beginFrame();
+scriptGui.processPendingMessages();
+guiRenderer.renderAll();
+gui.endFrame();
+
+// When done:
+scriptGui.close();
+```
+
+### Script GUI Manager
+
+`ScriptGuiManager` manages multiple `ScriptGui` instances with broadcast messaging:
+
+```cpp
+finegui::ScriptGuiManager mgr(engine, guiRenderer);
+
+auto* settings = mgr.showFromSource(settingsScript, "settings");
+auto* hud = mgr.showFromSource(hudScript, "hud");
+
+// Each frame:
+gui.beginFrame();
+mgr.processPendingMessages();  // Drains all queues
+guiRenderer.renderAll();
+gui.endFrame();
+
+// Clean up inactive GUIs periodically
+mgr.cleanup();
+
+// Close all on shutdown
+mgr.closeAll();
+```
+
+### Writing finegui Scripts
+
+Scripts use `ui.*` functions to build widget maps, and `ui.show` to display them:
+
+```
+# Variables
+set volume 0.5
+set name "Player"
+
+# Build and show a window
+ui.show {ui.window "Settings" [
+    {ui.text "Game Settings"}
+    {ui.separator}
+    {ui.slider "Volume" 0.0 1.0 volume fn [v] do
+        set volume v
+    end}
+    {ui.input "Name" name fn [v] do
+        set name v
+    end}
+    {ui.checkbox "Fullscreen" false}
+    {ui.combo "Quality" ["Low" "Medium" "High"] 1}
+    {ui.button "Apply" fn [] do
+        print "Applied!"
+    end}
+]}
+```
+
+### Script Widget Functions
+
+Builder functions (return widget maps):
+
+| Function | Arguments | Description |
+|----------|-----------|-------------|
+| `ui.window` | `title children` | Window with title and child array |
+| `ui.text` | `content` | Static text |
+| `ui.button` | `label [on_click]` | Button with optional callback |
+| `ui.checkbox` | `label value [on_change]` | Boolean toggle |
+| `ui.slider` | `label min max value [on_change]` | Float slider |
+| `ui.slider_int` | `label min max value [on_change]` | Integer slider |
+| `ui.input` | `label value [on_change] [on_submit]` | Text input |
+| `ui.input_int` | `label value [on_change]` | Integer input |
+| `ui.input_float` | `label value [on_change]` | Float input |
+| `ui.combo` | `label items selected [on_change]` | Dropdown combo |
+| `ui.separator` | *(none)* | Horizontal separator |
+| `ui.group` | `children` | Group of children |
+| `ui.columns` | `count children` | Multi-column layout |
+
+Action functions (require active ScriptGui context):
+
+| Function | Arguments | Description |
+|----------|-----------|-------------|
+| `ui.show` | `widget_map` | Convert map to widget tree, show it, return ID |
+| `ui.update` | `id widget_map` | Replace an existing tree |
+| `ui.set_text` | `id child_index text` | Mutate text content of a child node |
+| `ui.set_value` | `id child_index value` | Mutate value field of a child node |
+| `ui.set_label` | `id child_index label` | Mutate label of a child node |
+| `ui.hide` | `[id]` | Hide a tree (or close this GUI if no ID) |
+| `gui.on_message` | `:symbol handler` | Register a message handler |
+
+### Dynamic Updates from Scripts
+
+**Preferred: Node mutation.** Use `ui.set_text`, `ui.set_value`, or `ui.set_label` to change individual widget fields without rebuilding the tree. This preserves callbacks and is more efficient:
+
+```
+set count 0
+set gui_id {ui.show {ui.window "Counter" [
+    {ui.text "Count: 0"}
+    {ui.button "Increment" fn [] do
+        set count (count + 1)
+        ui.set_text gui_id 0 ("Count: " + {to_str count})
+    end}
+]}}
+```
+
+The second argument is the child index (0 = first child of the window). For nested trees, pass an array of indices: `ui.set_text gui_id [0 1] "text"`.
+
+Mutation functions:
+
+| Function | Arguments | Description |
+|----------|-----------|-------------|
+| `ui.set_text` | `id child_index text` | Set text content of a child node |
+| `ui.set_value` | `id child_index value` | Set value (bool/int/float/string) of a child node |
+| `ui.set_label` | `id child_index label` | Set label of a child node |
+
+**Alternative: Full tree rebuild.** Use `ui.update` to replace an entire tree. This is simpler for major layout changes but loses callbacks on the rebuilt nodes:
+
+```
+ui.update gui_id {ui.window "Counter" [
+    {ui.text ("Count: " + {to_str count})}
+    {ui.button "Increment" fn [] do ... end}
+]}
+```
+
+### Message Passing
+
+Scripts register message handlers with `gui.on_message`. C++ delivers messages:
+
+**Script side:**
+```
+gui.on_message :player_died fn [data] do
+    ui.update gui_id {ui.window "Game Over" [
+        {ui.text "You died!"}
+        {ui.button "Respawn"}
+    ]}
+end
+```
+
+**C++ side:**
+```cpp
+// Direct delivery (synchronous, on GUI thread)
+scriptGui.deliverMessage(engine.intern("player_died"), Value::nil());
+
+// Queued delivery (thread-safe, from any thread)
+scriptGui.queueMessage(engine.intern("player_died"), Value::nil());
+
+// Broadcast to all GUIs
+mgr.broadcastMessage(engine.intern("player_died"), Value::nil());
+```
+
+### Pre-binding Variables
+
+Pass initial values from C++ into the script context:
+
+```cpp
+scriptGui.loadAndRun(source, "hud", {
+    {"player_name", finescript::Value::string("Alice")},
+    {"gold", finescript::Value::integer(100)},
+});
+```
+
+The script can then use `player_name` and `gold` as variables.
+
+### Reading Script State from C++
+
+Access script variables through the execution context:
+
+```cpp
+auto* ctx = scriptGui.context();
+auto val = ctx->get("volume");
+if (val.isNumeric()) {
+    float volume = static_cast<float>(val.asFloat());
+}
+```
+
+### Mixing C++ and Script GUIs
+
+Both C++ retained-mode widgets and script-driven widgets share the same `GuiRenderer`, so they coexist naturally:
+
+```cpp
+// C++ retained-mode window
+guiRenderer.show(finegui::WidgetNode::window("Control Panel", {
+    finegui::WidgetNode::button("Reset", [&](finegui::WidgetNode&) {
+        scriptGui.deliverMessage(engine.intern("reset"), Value::nil());
+    }),
+}));
+
+// Script-driven window
+mgr.showFromSource(R"SCRIPT(
+    ui.show {ui.window "Settings" [{ui.slider "Volume" 0.0 1.0 0.5}]}
+)SCRIPT", "settings");
+
+// Both render together
+gui.beginFrame();
+mgr.processPendingMessages();
+guiRenderer.renderAll();  // Renders all trees: C++ and script
+gui.endFrame();
+```
+
+---
+
+## Build System
+
+finegui is organized as layered libraries:
+
+| Library | CMake Target | Depends On | Description |
+|---------|-------------|------------|-------------|
+| `finegui` | `finegui` / `finegui-shared` | finevk, imgui | Core (immediate mode) |
+| `finegui-retained` | `finegui-retained` / `finegui-retained-shared` | finegui | Retained-mode widgets |
+| `finegui-script` | `finegui-script` / `finegui-script-shared` | finegui-retained, finescript | Script engine integration |
+
+CMake options:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `FINEGUI_BUILD_RETAINED` | `OFF` | Build the retained-mode layer |
+| `FINEGUI_BUILD_SCRIPT` | `OFF` | Build the script layer (requires retained + finescript) |
+
+```bash
+# Build everything
+cmake -DFINEGUI_BUILD_SCRIPT=ON ..
+make -j$(nproc)
+```
+
+### Linking
+
+```cmake
+# Core only (immediate mode)
+target_link_libraries(myapp PRIVATE finegui)
+
+# Retained mode
+target_link_libraries(myapp PRIVATE finegui-retained)
+
+# Script integration
+target_link_libraries(myapp PRIVATE finegui-script)
+```
