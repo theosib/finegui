@@ -104,6 +104,16 @@ private:
     void renderDragFloat(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderDragInt(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
+    // Phase 7 - Misc
+    void renderListBox(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderPopup(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderModal(finescript::MapData& m, finescript::ExecutionContext& ctx);
+
+    // Phase 8 - Custom
+    void renderCanvas(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderTooltip(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderDrawCommands(finescript::Value& commandsVal, float originX, float originY);
+
     // Helpers
     std::string getStringField(finescript::MapData& m, uint32_t key, const char* def = "");
     double getNumericField(finescript::MapData& m, uint32_t key, double def = 0.0);

@@ -238,6 +238,96 @@ int main() {
             finegui::WidgetNode::dragInt("Level", 1, 0.5f, 1, 99),
         }));
 
+        // Phase 7: ListBox, Popup, Modal showcase
+        int phase7Id = guiRenderer.show(finegui::WidgetNode::window("Phase 7: ListBox, Popup, Modal", {
+            finegui::WidgetNode::text("ListBox:"),
+            finegui::WidgetNode::listBox("Fruits", {"Apple", "Banana", "Cherry", "Date", "Elderberry"}, 0, 4),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Popup (right-click or use button):"),
+            finegui::WidgetNode::button("Open Context Menu"),
+            finegui::WidgetNode::popup("context_popup", {
+                finegui::WidgetNode::text("Context Menu"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::button("Cut"),
+                finegui::WidgetNode::button("Copy"),
+                finegui::WidgetNode::button("Paste"),
+            }),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Modal dialog:"),
+            finegui::WidgetNode::button("Open Modal"),
+            finegui::WidgetNode::modal("Confirm Action", {
+                finegui::WidgetNode::text("Are you sure you want to proceed?"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::button("OK"),
+                finegui::WidgetNode::button("Cancel"),
+            }),
+        }));
+
+        // Wire up popup/modal open buttons
+        {
+            auto* p7 = guiRenderer.get(phase7Id);
+            if (p7 && p7->children.size() >= 10) {
+                // "Open Context Menu" button (index 4) opens popup (index 5)
+                p7->children[4].onClick = [p7](finegui::WidgetNode&) {
+                    p7->children[5].boolValue = true;
+                };
+                // "Open Modal" button (index 8) opens modal (index 9)
+                p7->children[8].onClick = [p7](finegui::WidgetNode&) {
+                    p7->children[9].boolValue = true;
+                };
+                // OK button inside modal closes it
+                p7->children[9].children[2].onClick = [](finegui::WidgetNode&) {
+                    ImGui::CloseCurrentPopup();
+                };
+                // Cancel button inside modal closes it
+                p7->children[9].children[3].onClick = [](finegui::WidgetNode&) {
+                    ImGui::CloseCurrentPopup();
+                };
+            }
+        }
+
+        // Phase 8: Canvas & Tooltip showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 8: Canvas & Tooltip", {
+            finegui::WidgetNode::text("Canvas with custom drawing:"),
+            finegui::WidgetNode::canvas("##demo_canvas", 300.0f, 200.0f,
+                [](finegui::WidgetNode& node) {
+                    ImVec2 pos = ImGui::GetItemRectMin();
+                    ImDrawList* dl = ImGui::GetWindowDrawList();
+                    // Draw a grid
+                    for (int i = 0; i <= 6; i++) {
+                        float x = pos.x + i * 50.0f;
+                        dl->AddLine({x, pos.y}, {x, pos.y + 200.0f},
+                                    IM_COL32(60, 60, 60, 255));
+                    }
+                    for (int i = 0; i <= 4; i++) {
+                        float y = pos.y + i * 50.0f;
+                        dl->AddLine({pos.x, y}, {pos.x + 300.0f, y},
+                                    IM_COL32(60, 60, 60, 255));
+                    }
+                    // Draw some shapes
+                    dl->AddCircleFilled({pos.x + 150.0f, pos.y + 100.0f}, 40.0f,
+                                        IM_COL32(80, 120, 200, 200));
+                    dl->AddTriangle({pos.x + 50.0f, pos.y + 160.0f},
+                                    {pos.x + 100.0f, pos.y + 40.0f},
+                                    {pos.x + 150.0f, pos.y + 160.0f},
+                                    IM_COL32(200, 80, 80, 255), 2.0f);
+                    dl->AddText({pos.x + 200.0f, pos.y + 30.0f},
+                                IM_COL32(255, 255, 255, 255), "Canvas!");
+                }),
+            finegui::WidgetNode::tooltip("Custom drawing area using ImDrawList"),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Tooltips:"),
+            finegui::WidgetNode::button("Hover me!"),
+            finegui::WidgetNode::tooltip("Simple text tooltip"),
+            finegui::WidgetNode::button("Rich tooltip"),
+            finegui::WidgetNode::tooltip({
+                finegui::WidgetNode::text("Rich tooltip content:"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::textColored(0.3f, 1.0f, 0.3f, 1.0f, "Status: OK"),
+                finegui::WidgetNode::progressBar(0.8f, 150.0f, 0.0f, "80%"),
+            }),
+        }));
+
         std::cout << "Retained-mode demo started. Close window to exit.\n";
         if (window->isHighDPI()) {
             std::cout << "High-DPI display detected (scale: " << contentScale.x << "x)\n";

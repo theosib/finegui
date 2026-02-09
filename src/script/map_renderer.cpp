@@ -154,6 +154,13 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else if (sym == syms_.sym_color_picker)  renderColorPicker(m, ctx);
         else if (sym == syms_.sym_drag_float)    renderDragFloat(m, ctx);
         else if (sym == syms_.sym_drag_int)      renderDragInt(m, ctx);
+        // Phase 7
+        else if (sym == syms_.sym_listbox)   renderListBox(m, ctx);
+        else if (sym == syms_.sym_popup)     renderPopup(m, ctx);
+        else if (sym == syms_.sym_modal)     renderModal(m, ctx);
+        // Phase 8
+        else if (sym == syms_.sym_canvas)    renderCanvas(m, ctx);
+        else if (sym == syms_.sym_tooltip)   renderTooltip(m, ctx);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -773,6 +780,260 @@ void MapRenderer::renderDragInt(MapData& m, ExecutionContext& ctx) {
         m.set(syms_.value, Value::integer(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::integer(value)});
     }
+}
+
+// -- Phase 7: Misc ------------------------------------------------------------
+
+void MapRenderer::renderListBox(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "ListBox");
+    int selected = static_cast<int>(getNumericField(m, syms_.selected, 0));
+
+    auto itemsVal = m.get(syms_.items);
+    if (!itemsVal.isArray()) return;
+
+    const auto& items = itemsVal.asArray();
+
+    // Calculate height from height_in_items (-1 = auto)
+    int heightItems = static_cast<int>(getNumericField(m, syms_.height_in_items, -1));
+    float heightPx = 0.0f;
+    if (heightItems > 0) {
+        heightPx = ImGui::GetTextLineHeightWithSpacing() * heightItems
+                   + ImGui::GetStyle().FramePadding.y * 2.0f;
+    }
+
+    if (ImGui::BeginListBox(label.c_str(), {0.0f, heightPx})) {
+        for (int i = 0; i < static_cast<int>(items.size()); i++) {
+            if (!items[static_cast<size_t>(i)].isString()) continue;
+            bool isSelected = (i == selected);
+            if (ImGui::Selectable(items[static_cast<size_t>(i)].asString().c_str(), isSelected)) {
+                selected = i;
+                m.set(syms_.selected, Value::integer(selected));
+                invokeCallback(m, syms_.on_change, ctx, {Value::integer(selected)});
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndListBox();
+    }
+}
+
+void MapRenderer::renderPopup(MapData& m, ExecutionContext& ctx) {
+    auto id = getStringField(m, syms_.id, "##popup");
+
+    // :value = true means "request open this frame"
+    auto openVal = m.get(syms_.value);
+    if (openVal.isBool() && openVal.asBool()) {
+        ImGui::OpenPopup(id.c_str());
+        m.set(syms_.value, Value::boolean(false));
+    }
+
+    if (ImGui::BeginPopup(id.c_str())) {
+        auto childrenVal = m.get(syms_.children);
+        if (childrenVal.isArray()) {
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void MapRenderer::renderModal(MapData& m, ExecutionContext& ctx) {
+    auto title = getStringField(m, syms_.title, "Modal");
+    if (title.empty()) title = getStringField(m, syms_.label, "Modal");
+
+    // :value = true means "request open this frame"
+    auto openVal = m.get(syms_.value);
+    if (openVal.isBool() && openVal.asBool()) {
+        ImGui::OpenPopup(title.c_str());
+        m.set(syms_.value, Value::boolean(false));
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal(title.c_str(), &open)) {
+        auto childrenVal = m.get(syms_.children);
+        if (childrenVal.isArray()) {
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+        }
+        ImGui::EndPopup();
+    }
+
+    if (!open) {
+        invokeCallback(m, syms_.on_close, ctx);
+    }
+}
+
+// -- Phase 8: Custom ----------------------------------------------------------
+
+// Helper: read a 2-element array into two floats
+static bool readVec2(const Value& val, float& x, float& y) {
+    if (!val.isArray()) return false;
+    const auto& arr = val.asArray();
+    if (arr.size() < 2) return false;
+    x = static_cast<float>(arr[0].isNumeric() ? arr[0].asNumber() : 0.0);
+    y = static_cast<float>(arr[1].isNumeric() ? arr[1].asNumber() : 0.0);
+    return true;
+}
+
+// Helper: read a color array into ImU32
+static ImU32 readColorU32(const Value& val, ImU32 def = IM_COL32_WHITE) {
+    if (!val.isArray()) return def;
+    const auto& arr = val.asArray();
+    if (arr.size() < 3) return def;
+    float r = static_cast<float>(arr[0].isNumeric() ? arr[0].asNumber() : 1.0);
+    float g = static_cast<float>(arr[1].isNumeric() ? arr[1].asNumber() : 1.0);
+    float b = static_cast<float>(arr[2].isNumeric() ? arr[2].asNumber() : 1.0);
+    float a = arr.size() >= 4 ? static_cast<float>(arr[3].isNumeric() ? arr[3].asNumber() : 1.0) : 1.0f;
+    return ImGui::ColorConvertFloat4ToU32({r, g, b, a});
+}
+
+void MapRenderer::renderDrawCommands(Value& commandsVal, float originX, float originY) {
+    if (!commandsVal.isArray()) return;
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    for (auto& cmd : commandsVal.asArrayMut()) {
+        if (!cmd.isMap()) continue;
+        auto& cm = cmd.asMap();
+
+        auto typeVal = cm.get(syms_.type);
+        if (!typeVal.isSymbol()) continue;
+        uint32_t sym = typeVal.asSymbol();
+
+        ImU32 col = readColorU32(cm.get(syms_.color));
+        float thick = static_cast<float>(getNumericField(cm, syms_.thickness, 1.0));
+        bool isFilled = getBoolField(cm, syms_.filled, false);
+
+        if (sym == syms_.sym_draw_line) {
+            float x1, y1, x2, y2;
+            if (readVec2(cm.get(syms_.p1), x1, y1) && readVec2(cm.get(syms_.p2), x2, y2)) {
+                drawList->AddLine({originX + x1, originY + y1},
+                                  {originX + x2, originY + y2}, col, thick);
+            }
+        } else if (sym == syms_.sym_draw_rect) {
+            float x1, y1, x2, y2;
+            if (readVec2(cm.get(syms_.p1), x1, y1) && readVec2(cm.get(syms_.p2), x2, y2)) {
+                if (isFilled) {
+                    drawList->AddRectFilled({originX + x1, originY + y1},
+                                            {originX + x2, originY + y2}, col);
+                } else {
+                    drawList->AddRect({originX + x1, originY + y1},
+                                      {originX + x2, originY + y2}, col, 0.0f, 0, thick);
+                }
+            }
+        } else if (sym == syms_.sym_draw_circle) {
+            float cx, cy;
+            if (readVec2(cm.get(syms_.center), cx, cy)) {
+                float r = static_cast<float>(getNumericField(cm, syms_.radius, 10.0));
+                if (isFilled) {
+                    drawList->AddCircleFilled({originX + cx, originY + cy}, r, col);
+                } else {
+                    drawList->AddCircle({originX + cx, originY + cy}, r, col, 0, thick);
+                }
+            }
+        } else if (sym == syms_.sym_draw_text) {
+            float px, py;
+            if (readVec2(cm.get(syms_.pos), px, py)) {
+                auto text = getStringField(cm, syms_.text, "");
+                if (!text.empty()) {
+                    drawList->AddText({originX + px, originY + py}, col, text.c_str());
+                }
+            }
+        } else if (sym == syms_.sym_draw_triangle) {
+            float x1, y1, x2, y2;
+            // Triangle uses p1, p2, and center as the third point
+            float x3, y3;
+            if (readVec2(cm.get(syms_.p1), x1, y1) &&
+                readVec2(cm.get(syms_.p2), x2, y2) &&
+                readVec2(cm.get(syms_.center), x3, y3)) {
+                if (isFilled) {
+                    drawList->AddTriangleFilled(
+                        {originX + x1, originY + y1},
+                        {originX + x2, originY + y2},
+                        {originX + x3, originY + y3}, col);
+                } else {
+                    drawList->AddTriangle(
+                        {originX + x1, originY + y1},
+                        {originX + x2, originY + y2},
+                        {originX + x3, originY + y3}, col, thick);
+                }
+            }
+        }
+    }
+}
+
+void MapRenderer::renderCanvas(MapData& m, ExecutionContext& ctx) {
+    auto id = getStringField(m, syms_.id, "##canvas");
+    float w = static_cast<float>(getNumericField(m, syms_.width, 200.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 200.0));
+    if (w <= 0) w = 200.0f;
+    if (h <= 0) h = 200.0f;
+
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+
+    // Reserve space
+    ImGui::InvisibleButton(id.c_str(), {w, h});
+    bool isClicked = ImGui::IsItemClicked();
+
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+
+    // Background color
+    auto bgVal = m.get(syms_.bg_color);
+    if (bgVal.isArray()) {
+        ImU32 bgCol = readColorU32(bgVal);
+        drawList->AddRectFilled(canvasPos, {canvasPos.x + w, canvasPos.y + h}, bgCol);
+    }
+
+    // Border
+    auto borderVal = m.get(syms_.border);
+    if (borderVal.isBool() && borderVal.asBool()) {
+        ImU32 borderCol = ImGui::ColorConvertFloat4ToU32({0.5f, 0.5f, 0.5f, 1.0f});
+        drawList->AddRect(canvasPos, {canvasPos.x + w, canvasPos.y + h}, borderCol);
+    }
+
+    // Render draw commands from :commands array
+    auto cmdsVal = m.get(syms_.commands);
+    if (cmdsVal.isArray()) {
+        renderDrawCommands(cmdsVal, canvasPos.x, canvasPos.y);
+    }
+
+    if (isClicked) {
+        invokeCallback(m, syms_.on_click, ctx);
+    }
+}
+
+void MapRenderer::renderTooltip(MapData& m, ExecutionContext& ctx) {
+    if (!ImGui::IsItemHovered()) return;
+
+    auto text = getStringField(m, syms_.text, "");
+    auto childrenVal = m.get(syms_.children);
+    bool hasChildren = childrenVal.isArray() && !childrenVal.asArray().empty();
+
+    if (!text.empty() && !hasChildren) {
+        // Simple text tooltip
+        ImGui::SetItemTooltip("%s", text.c_str());
+    } else if (hasChildren) {
+        // Rich tooltip
+        if (ImGui::BeginTooltip()) {
+            if (!text.empty()) {
+                ImGui::TextUnformatted(text.c_str());
+            }
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+            ImGui::EndTooltip();
+        }
+    }
+
+    (void)ctx;
 }
 
 } // namespace finegui

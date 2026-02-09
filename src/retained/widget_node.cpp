@@ -306,6 +306,67 @@ WidgetNode WidgetNode::dragInt(std::string label, int value, float speed,
     return n;
 }
 
+// Phase 7 builders
+
+WidgetNode WidgetNode::listBox(std::string label, std::vector<std::string> items,
+                                int selected, int heightInItems,
+                                WidgetCallback onChange) {
+    WidgetNode n;
+    n.type = Type::ListBox;
+    n.label = std::move(label);
+    n.items = std::move(items);
+    n.selectedIndex = selected;
+    n.heightInItems = heightInItems;
+    n.onChange = std::move(onChange);
+    return n;
+}
+
+WidgetNode WidgetNode::popup(std::string id, std::vector<WidgetNode> children) {
+    WidgetNode n;
+    n.type = Type::Popup;
+    n.id = std::move(id);
+    n.children = std::move(children);
+    return n;
+}
+
+WidgetNode WidgetNode::modal(std::string title, std::vector<WidgetNode> children,
+                              WidgetCallback onClose) {
+    WidgetNode n;
+    n.type = Type::Modal;
+    n.label = std::move(title);
+    n.children = std::move(children);
+    n.onClose = std::move(onClose);
+    return n;
+}
+
+// Phase 8 builders
+
+WidgetNode WidgetNode::canvas(std::string id, float width, float height,
+                               WidgetCallback onDraw, WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::Canvas;
+    n.id = std::move(id);
+    n.width = width;
+    n.height = height;
+    n.onDraw = std::move(onDraw);
+    n.onClick = std::move(onClick);
+    return n;
+}
+
+WidgetNode WidgetNode::tooltip(std::string text) {
+    WidgetNode n;
+    n.type = Type::Tooltip;
+    n.textContent = std::move(text);
+    return n;
+}
+
+WidgetNode WidgetNode::tooltip(std::vector<WidgetNode> children) {
+    WidgetNode n;
+    n.type = Type::Tooltip;
+    n.children = std::move(children);
+    return n;
+}
+
 // Phase 5 builders
 
 WidgetNode WidgetNode::table(std::string id, int numColumns,

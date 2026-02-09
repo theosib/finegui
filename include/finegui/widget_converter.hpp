@@ -34,6 +34,15 @@ struct ConverterSymbols {
     // Phase 6 field keys
     uint32_t speed = 0;
 
+    // Phase 7 field keys
+    uint32_t height_in_items = 0;
+
+    // Phase 8 field keys (Canvas draw commands)
+    uint32_t p1 = 0, p2 = 0, center = 0, pos = 0;
+    uint32_t radius = 0, thickness = 0, filled = 0;
+    uint32_t commands = 0;
+    uint32_t bg_color = 0;
+
     // Table flag value symbols (for :flags array parsing)
     uint32_t sym_flag_row_bg = 0, sym_flag_borders = 0;
     uint32_t sym_flag_borders_h = 0, sym_flag_borders_v = 0;
@@ -67,6 +76,16 @@ struct ConverterSymbols {
     // Type name symbols - Phase 6 (Advanced Input)
     uint32_t sym_color_edit = 0, sym_color_picker = 0;
     uint32_t sym_drag_float = 0, sym_drag_int = 0;
+
+    // Type name symbols - Phase 7 (Misc)
+    uint32_t sym_listbox = 0, sym_popup = 0, sym_modal = 0;
+
+    // Type name symbols - Phase 8 (Custom)
+    uint32_t sym_canvas = 0, sym_tooltip = 0;
+    // Canvas draw command type symbols
+    uint32_t sym_draw_line = 0, sym_draw_rect = 0;
+    uint32_t sym_draw_circle = 0, sym_draw_text = 0;
+    uint32_t sym_draw_triangle = 0;
 
     void intern(finescript::ScriptEngine& engine);
 };

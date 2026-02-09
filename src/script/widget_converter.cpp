@@ -106,11 +106,41 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     // Phase 6 field keys
     speed = engine.intern("speed");
 
+    // Phase 7 field keys
+    height_in_items = engine.intern("height_in_items");
+
     // Type name symbols - Phase 6
     sym_color_edit   = engine.intern("color_edit");
     sym_color_picker = engine.intern("color_picker");
     sym_drag_float   = engine.intern("drag_float");
     sym_drag_int     = engine.intern("drag_int");
+
+    // Phase 8 field keys
+    p1        = engine.intern("p1");
+    p2        = engine.intern("p2");
+    center    = engine.intern("center");
+    pos       = engine.intern("pos");
+    radius    = engine.intern("radius");
+    thickness = engine.intern("thickness");
+    filled    = engine.intern("filled");
+    commands  = engine.intern("commands");
+    bg_color  = engine.intern("bg_color");
+
+    // Type name symbols - Phase 7
+    sym_listbox = engine.intern("listbox");
+    sym_popup   = engine.intern("popup");
+    sym_modal   = engine.intern("modal");
+
+    // Type name symbols - Phase 8
+    sym_canvas  = engine.intern("canvas");
+    sym_tooltip = engine.intern("tooltip");
+
+    // Canvas draw command type symbols
+    sym_draw_line     = engine.intern("draw_line");
+    sym_draw_rect     = engine.intern("draw_rect");
+    sym_draw_circle   = engine.intern("draw_circle");
+    sym_draw_text     = engine.intern("draw_text");
+    sym_draw_triangle = engine.intern("draw_triangle");
 }
 
 // -- Type mapping -------------------------------------------------------------

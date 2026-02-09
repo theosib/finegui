@@ -676,6 +676,139 @@ void test_script_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 18: Phase 7 listbox, popup, modal from script ---
+    std::cout << "\n  18. Phase 7 listbox, popup, modal from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            set popup_widget {ui.popup "ctx_menu" [
+                {ui.text "Cut"}
+                {ui.text "Copy"}
+                {ui.text "Paste"}
+            ]}
+            set modal_widget {ui.modal "Confirm Delete" [
+                {ui.text "Are you sure?"}
+                {ui.button "OK"}
+            ]}
+            ui.show {ui.window "Phase 7 Test" [
+                {ui.listbox "Fruits" ["Apple" "Banana" "Cherry" "Date"] 1 4}
+                {ui.separator}
+                {ui.button "Show Popup" fn [] do
+                    ui.open_popup popup_widget
+                end}
+                popup_widget
+                {ui.separator}
+                {ui.button "Show Modal" fn [] do
+                    ui.open_popup modal_widget
+                end}
+                modal_widget
+            ]}
+        )", "test18");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+
+        // Find the listbox
+        auto& lb = children.asArray()[0];
+        assert(lb.isMap());
+        assert(lb.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_listbox);
+        assert(lb.asMap().get(mapRenderer.syms().items).isArray());
+        assert(lb.asMap().get(mapRenderer.syms().items).asArray().size() == 4);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 19: Phase 8 canvas and tooltip from script ---
+    std::cout << "\n  19. Phase 8 canvas and tooltip from script... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 8 Test" [
+                {ui.canvas "##drawing" 200 150 [
+                    {ui.draw_line [10 10] [190 140] [1.0 0.0 0.0 1.0] 2.0}
+                    {ui.draw_rect [20 20] [80 60] [0.0 1.0 0.0 1.0] true}
+                    {ui.draw_circle [100 75] 30 [0.0 0.0 1.0 1.0] false 1.5}
+                    {ui.draw_text [10 130] "Hello Canvas" [1.0 1.0 1.0 1.0]}
+                    {ui.draw_triangle [150 20] [120 80] [180 80] [1.0 1.0 0.0 1.0] true}
+                ]}
+                {ui.tooltip "Drawing area - click to interact"}
+                {ui.separator}
+                {ui.button "Hover me"}
+                {ui.tooltip [{ui.text "Rich tooltip"} {ui.text_colored [1.0 0.3 0.3 1.0] "Warning!"}]}
+            ]}
+        )", "test19");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree = scriptGui.mapTree();
+        assert(tree != nullptr);
+        auto children = tree->asMap().get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 5);
+
+        // Verify canvas (index 0)
+        auto& canvas = children.asArray()[0];
+        assert(canvas.isMap());
+        assert(canvas.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_canvas);
+        assert(canvas.asMap().get(mapRenderer.syms().id).asString() == "##drawing");
+        auto cmds = canvas.asMap().get(mapRenderer.syms().commands);
+        assert(cmds.isArray());
+        assert(cmds.asArray().size() == 5);
+
+        // Verify draw_line command
+        auto& line = cmds.asArray()[0];
+        assert(line.isMap());
+        assert(line.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_draw_line);
+        assert(line.asMap().get(mapRenderer.syms().p1).isArray());
+        assert(line.asMap().get(mapRenderer.syms().p2).isArray());
+
+        // Verify draw_circle command
+        auto& circle = cmds.asArray()[2];
+        assert(circle.isMap());
+        assert(circle.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_draw_circle);
+        assert(circle.asMap().get(mapRenderer.syms().center).isArray());
+        assert(circle.asMap().get(mapRenderer.syms().radius).asNumber() == 30.0);
+
+        // Verify draw_triangle command
+        auto& tri = cmds.asArray()[4];
+        assert(tri.isMap());
+        assert(tri.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_draw_triangle);
+
+        // Verify text tooltip (index 1)
+        auto& textTip = children.asArray()[1];
+        assert(textTip.isMap());
+        assert(textTip.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_tooltip);
+        assert(textTip.asMap().get(mapRenderer.syms().text).asString()
+               == "Drawing area - click to interact");
+
+        // Verify rich tooltip (index 4)
+        auto& richTip = children.asArray()[4];
+        assert(richTip.isMap());
+        assert(richTip.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_tooltip);
+        auto tipChildren = richTip.asMap().get(mapRenderer.syms().children);
+        assert(tipChildren.isArray());
+        assert(tipChildren.asArray().size() == 2);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 

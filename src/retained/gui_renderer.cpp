@@ -116,6 +116,13 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         case WidgetNode::Type::ColorPicker:       renderColorPicker(node); break;
         case WidgetNode::Type::DragFloat:         renderDragFloat(node); break;
         case WidgetNode::Type::DragInt:           renderDragInt(node); break;
+        // Phase 7
+        case WidgetNode::Type::ListBox:          renderListBox(node); break;
+        case WidgetNode::Type::Popup:            renderPopup(node); break;
+        case WidgetNode::Type::Modal:            renderModal(node); break;
+        // Phase 8
+        case WidgetNode::Type::Canvas:           renderCanvas(node); break;
+        case WidgetNode::Type::Tooltip:          renderTooltip(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -488,6 +495,137 @@ void GuiRenderer::renderDragInt(WidgetNode& node) {
     if (ImGui::DragInt(node.label.c_str(), &node.intValue,
                        node.dragSpeed, node.minInt, node.maxInt)) {
         if (node.onChange) node.onChange(node);
+    }
+}
+
+// -- Phase 7: Misc ------------------------------------------------------------
+
+void GuiRenderer::renderListBox(WidgetNode& node) {
+    // Calculate size based on heightInItems (-1 = auto)
+    int heightItems = node.heightInItems;
+    float heightPx = 0.0f;
+    if (heightItems > 0) {
+        heightPx = ImGui::GetTextLineHeightWithSpacing() * heightItems
+                   + ImGui::GetStyle().FramePadding.y * 2.0f;
+    }
+
+    if (ImGui::BeginListBox(node.label.c_str(), {0.0f, heightPx})) {
+        for (int i = 0; i < static_cast<int>(node.items.size()); i++) {
+            bool isSelected = (i == node.selectedIndex);
+            if (ImGui::Selectable(node.items[static_cast<size_t>(i)].c_str(), isSelected)) {
+                node.selectedIndex = i;
+                if (node.onChange) node.onChange(node);
+            }
+            if (isSelected) {
+                ImGui::SetItemDefaultFocus();
+            }
+        }
+        ImGui::EndListBox();
+    }
+}
+
+void GuiRenderer::renderPopup(WidgetNode& node) {
+    const char* id = node.id.empty() ? "##popup" : node.id.c_str();
+
+    // boolValue = true means "request open this frame"
+    if (node.boolValue) {
+        ImGui::OpenPopup(id);
+        node.boolValue = false;
+    }
+
+    if (ImGui::BeginPopup(id)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void GuiRenderer::renderModal(WidgetNode& node) {
+    const char* title = node.label.empty() ? "##modal" : node.label.c_str();
+
+    // boolValue = true means "request open this frame"
+    if (node.boolValue) {
+        ImGui::OpenPopup(title);
+        node.boolValue = false;
+    }
+
+    bool open = true;
+    if (ImGui::BeginPopupModal(title, &open)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndPopup();
+    }
+
+    if (!open) {
+        if (node.onClose) node.onClose(node);
+    }
+}
+
+// -- Phase 8: Custom ----------------------------------------------------------
+
+void GuiRenderer::renderCanvas(WidgetNode& node) {
+    const char* id = node.id.empty() ? "##canvas" : node.id.c_str();
+    float w = node.width > 0 ? node.width : 200.0f;
+    float h = node.height > 0 ? node.height : 200.0f;
+
+    ImVec2 canvasPos = ImGui::GetCursorScreenPos();
+    ImVec2 canvasSize{w, h};
+
+    // Reserve the canvas area
+    ImGui::InvisibleButton(id, canvasSize);
+
+    bool isClicked = ImGui::IsItemClicked();
+    bool isHovered = ImGui::IsItemHovered();
+
+    // Draw background if color is not the default white
+    if (node.colorR < 1.0f || node.colorG < 1.0f || node.colorB < 1.0f || node.colorA < 1.0f) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImU32 bgCol = ImGui::ColorConvertFloat4ToU32(
+            {node.colorR, node.colorG, node.colorB, node.colorA});
+        drawList->AddRectFilled(canvasPos,
+            {canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y}, bgCol);
+    }
+
+    // Draw border
+    if (node.border) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        ImU32 borderCol = ImGui::ColorConvertFloat4ToU32({0.5f, 0.5f, 0.5f, 1.0f});
+        drawList->AddRect(canvasPos,
+            {canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y}, borderCol);
+    }
+
+    // Custom draw callback
+    if (node.onDraw) {
+        node.onDraw(node);
+    }
+
+    if (isClicked && node.onClick) {
+        node.onClick(node);
+    }
+
+    (void)isHovered; // available for future tooltip support
+}
+
+void GuiRenderer::renderTooltip(WidgetNode& node) {
+    // Tooltip applies to the previous widget
+    if (!ImGui::IsItemHovered()) return;
+
+    if (!node.textContent.empty() && node.children.empty()) {
+        // Simple text tooltip
+        ImGui::SetItemTooltip("%s", node.textContent.c_str());
+    } else if (!node.children.empty()) {
+        // Rich tooltip with child widgets
+        if (ImGui::BeginTooltip()) {
+            if (!node.textContent.empty()) {
+                ImGui::TextUnformatted(node.textContent.c_str());
+            }
+            for (auto& child : node.children) {
+                renderNode(child);
+            }
+            ImGui::EndTooltip();
+        }
     }
 }
 

@@ -949,6 +949,259 @@ void test_binding_ui_drag_int() {
 }
 
 // ============================================================================
+// Phase 7 Binding Tests
+// ============================================================================
+
+void test_binding_ui_listbox() {
+    std::cout << "Testing: ui.listbox binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.listbox "Fruits" ["Apple" "Banana" "Cherry"] 1 5})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("listbox"));
+    assert(m.get(engine.intern("label")).asString() == "Fruits");
+    assert(m.get(engine.intern("items")).isArray());
+    assert(m.get(engine.intern("items")).asArray().size() == 3);
+    assert(m.get(engine.intern("selected")).asInt() == 1);
+    assert(m.get(engine.intern("height_in_items")).asNumber() == 5.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_popup() {
+    std::cout << "Testing: ui.popup binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.popup "ctx_menu" [{ui.text "Cut"} {ui.text "Copy"}]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("popup"));
+    assert(m.get(engine.intern("id")).asString() == "ctx_menu");
+    assert(m.get(engine.intern("children")).isArray());
+    assert(m.get(engine.intern("children")).asArray().size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_modal() {
+    std::cout << "Testing: ui.modal binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.modal "Confirm" [{ui.text "Are you sure?"}]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("modal"));
+    assert(m.get(engine.intern("title")).asString() == "Confirm");
+    assert(m.get(engine.intern("children")).isArray());
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_open_popup() {
+    std::cout << "Testing: ui.open_popup binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Create a popup, then open it
+    auto result = engine.executeCommand(R"(
+        set p {ui.popup "test_popup" []}
+        ui.open_popup p
+        p
+    )", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    // After open_popup, :value should be true
+    assert(m.get(engine.intern("value")).isBool());
+    assert(m.get(engine.intern("value")).asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Phase 8 Binding Tests
+// ============================================================================
+
+void test_binding_ui_canvas() {
+    std::cout << "Testing: ui.canvas binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.canvas "##draw" 200 150})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("canvas"));
+    assert(m.get(engine.intern("id")).asString() == "##draw");
+    assert(m.get(engine.intern("width")).asNumber() == 200.0);
+    assert(m.get(engine.intern("height")).asNumber() == 150.0);
+
+    // Canvas with commands
+    auto result2 = engine.executeCommand(
+        R"({ui.canvas "##art" 100 100 [
+            {ui.draw_line [10 10] [90 90] [1.0 0.0 0.0 1.0]}
+        ]})", ctx);
+    assert(result2.success);
+    auto& m2 = result2.returnValue.asMap();
+    assert(m2.get(engine.intern("commands")).isArray());
+    assert(m2.get(engine.intern("commands")).asArray().size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_tooltip() {
+    std::cout << "Testing: ui.tooltip binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Text tooltip
+    auto result = engine.executeCommand(R"({ui.tooltip "Hover info"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("tooltip"));
+    assert(m.get(engine.intern("text")).asString() == "Hover info");
+
+    // Children tooltip
+    auto result2 = engine.executeCommand(
+        R"({ui.tooltip [{ui.text "Line 1"} {ui.text "Line 2"}]})", ctx);
+    assert(result2.success);
+    auto& m2 = result2.returnValue.asMap();
+    assert(m2.get(engine.intern("type")).asSymbol() == engine.intern("tooltip"));
+    assert(m2.get(engine.intern("children")).isArray());
+    assert(m2.get(engine.intern("children")).asArray().size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_draw_line() {
+    std::cout << "Testing: ui.draw_line binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.draw_line [10 20] [90 80] [1.0 0.0 0.0 1.0] 2.0})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("draw_line"));
+    assert(m.get(engine.intern("p1")).isArray());
+    assert(m.get(engine.intern("p2")).isArray());
+    assert(m.get(engine.intern("color")).isArray());
+    assert(m.get(engine.intern("thickness")).asNumber() == 2.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_draw_rect() {
+    std::cout << "Testing: ui.draw_rect binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.draw_rect [0 0] [100 50] [0.0 1.0 0.0 1.0] true})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("draw_rect"));
+    assert(m.get(engine.intern("p1")).isArray());
+    assert(m.get(engine.intern("p2")).isArray());
+    assert(m.get(engine.intern("filled")).asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_draw_circle() {
+    std::cout << "Testing: ui.draw_circle binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.draw_circle [50 50] 25 [0.0 0.0 1.0 1.0] false 2.0})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("draw_circle"));
+    assert(m.get(engine.intern("center")).isArray());
+    assert(m.get(engine.intern("radius")).asNumber() == 25.0);
+    assert(m.get(engine.intern("filled")).asBool() == false);
+    assert(m.get(engine.intern("thickness")).asNumber() == 2.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_draw_text() {
+    std::cout << "Testing: ui.draw_text binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.draw_text [10 10] "Hello" [1.0 1.0 1.0 1.0]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("draw_text"));
+    assert(m.get(engine.intern("pos")).isArray());
+    assert(m.get(engine.intern("text")).asString() == "Hello");
+    assert(m.get(engine.intern("color")).isArray());
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_draw_triangle() {
+    std::cout << "Testing: ui.draw_triangle binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.draw_triangle [50 10] [10 90] [90 90] [1.0 1.0 0.0 1.0] true})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("draw_triangle"));
+    assert(m.get(engine.intern("p1")).isArray());
+    assert(m.get(engine.intern("p2")).isArray());
+    assert(m.get(engine.intern("center")).isArray());  // p3 stored as "center"
+    assert(m.get(engine.intern("color")).isArray());
+    assert(m.get(engine.intern("filled")).asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1011,6 +1264,21 @@ int main() {
         test_binding_ui_color_picker();
         test_binding_ui_drag_float();
         test_binding_ui_drag_int();
+
+        // Phase 7 binding tests
+        test_binding_ui_listbox();
+        test_binding_ui_popup();
+        test_binding_ui_modal();
+        test_binding_ui_open_popup();
+
+        // Phase 8 binding tests
+        test_binding_ui_canvas();
+        test_binding_ui_tooltip();
+        test_binding_ui_draw_line();
+        test_binding_ui_draw_rect();
+        test_binding_ui_draw_circle();
+        test_binding_ui_draw_text();
+        test_binding_ui_draw_triangle();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

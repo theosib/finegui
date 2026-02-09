@@ -169,6 +169,69 @@ static const char* kWidgetShowcaseScript = R"SCRIPT(
     ]}
 )SCRIPT";
 
+static const char* kMiscWidgetsScript = R"SCRIPT(
+    set popup_widget {ui.popup "ctx_menu" [
+        {ui.text "Context Menu"}
+        {ui.separator}
+        {ui.button "Cut"}
+        {ui.button "Copy"}
+        {ui.button "Paste"}
+    ]}
+
+    set modal_widget {ui.modal "Confirm Action" [
+        {ui.text "Are you sure you want to proceed?"}
+        {ui.separator}
+        {ui.button "OK"}
+        {ui.button "Cancel"}
+    ]}
+
+    ui.show {ui.window "Phase 7: Misc Widgets (Script)" [
+        {ui.text "ListBox:"}
+        {ui.listbox "Fruits" ["Apple" "Banana" "Cherry" "Date" "Elderberry"] 0 4
+            fn [v] do set selected_fruit v end}
+        {ui.separator}
+        {ui.text "Popup (click button to open):"}
+        {ui.button "Open Popup" fn [] do
+            ui.open_popup popup_widget
+        end}
+        popup_widget
+        {ui.separator}
+        {ui.text "Modal dialog (click button to open):"}
+        {ui.button "Open Modal" fn [] do
+            ui.open_popup modal_widget
+        end}
+        modal_widget
+    ]}
+)SCRIPT";
+
+static const char* kCanvasTooltipScript = R"SCRIPT(
+    ui.show {ui.window "Phase 8: Canvas & Tooltip (Script)" [
+        {ui.text "Canvas with draw commands:"}
+        {ui.canvas "##script_canvas" 250 180 [
+            {ui.draw_rect [0 0] [250 180] [0.05 0.05 0.1 1.0] true}
+            {ui.draw_line [10 10] [240 170] [1.0 0.3 0.3 1.0] 2.0}
+            {ui.draw_line [240 10] [10 170] [0.3 1.0 0.3 1.0] 2.0}
+            {ui.draw_circle [125 90] 50 [0.3 0.5 1.0 0.8] false 2.0}
+            {ui.draw_circle [125 90] 20 [1.0 1.0 0.3 0.8] true}
+            {ui.draw_rect [30 30] [100 80] [0.8 0.4 0.0 0.6] true}
+            {ui.draw_triangle [180 30] [150 80] [210 80] [0.6 0.0 0.8 1.0] true}
+            {ui.draw_text [80 160] "Script Canvas" [1.0 1.0 1.0 1.0]}
+        ]}
+        {ui.tooltip "This canvas is rendered entirely from script draw commands"}
+        {ui.separator}
+        {ui.text "Tooltips:"}
+        {ui.button "Hover for text tooltip"}
+        {ui.tooltip "Simple tooltip from script"}
+        {ui.button "Hover for rich tooltip"}
+        {ui.tooltip [
+            {ui.text "Rich tooltip:"}
+            {ui.separator}
+            {ui.text_colored [0.3 1.0 0.3 1.0] "All systems operational"}
+            {ui.progress_bar 0.95}
+        ]}
+    ]}
+)SCRIPT";
+
 static const char* kAdvancedInputScript = R"SCRIPT(
     ui.show {ui.window "Phase 6: Advanced Input (Script)" [
         {ui.text "Color editors:"}
@@ -243,6 +306,8 @@ int main() {
         auto* counterGui = mgr.showFromSource(kCounterScript, "counter");
         auto* showcaseGui = mgr.showFromSource(kWidgetShowcaseScript, "showcase");
         auto* advInputGui = mgr.showFromSource(kAdvancedInputScript, "adv_input");
+        auto* miscGui = mgr.showFromSource(kMiscWidgetsScript, "misc");
+        auto* canvasGui = mgr.showFromSource(kCanvasTooltipScript, "canvas");
 
         auto checkScript = [](const char* name, finegui::ScriptGui* sg) {
             if (!sg) {
@@ -254,7 +319,9 @@ int main() {
         bool allOk = checkScript("settings", settingsGui)
                     & checkScript("counter", counterGui)
                     & checkScript("showcase", showcaseGui)
-                    & checkScript("adv_input", advInputGui);
+                    & checkScript("adv_input", advInputGui)
+                    & checkScript("misc", miscGui)
+                    & checkScript("canvas", canvasGui);
         if (!allOk) return 1;
 
         // Build a C++ retained-mode control panel
@@ -268,7 +335,7 @@ int main() {
                     engine.intern("reset"), finescript::Value::nil());
             }),
             finegui::WidgetNode::separator(),
-            finegui::WidgetNode::text("Active script GUIs: 4"),
+            finegui::WidgetNode::text("Active script GUIs: 6"),
             finegui::WidgetNode::button("Close Showcase", [&](finegui::WidgetNode& btn) {
                 if (showcaseGui && showcaseGui->isActive()) {
                     showcaseGui->close();
@@ -296,6 +363,8 @@ int main() {
         std::cout << "  - Counter window: script-driven with direct map mutation\n";
         std::cout << "  - Widget showcase: all widget types from script\n";
         std::cout << "  - Advanced input: Phase 6 color/drag widgets\n";
+        std::cout << "  - Misc widgets: Phase 7 listbox/popup/modal\n";
+        std::cout << "  - Canvas/tooltip: Phase 8 custom drawing and tooltips\n";
         std::cout << "  - Control panel: C++ retained-mode with cross-GUI messaging\n";
 
         // Main loop

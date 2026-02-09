@@ -93,6 +93,15 @@ private:
     void renderColorPicker(WidgetNode& node);
     void renderDragFloat(WidgetNode& node);
     void renderDragInt(WidgetNode& node);
+
+    // Phase 7
+    void renderListBox(WidgetNode& node);
+    void renderPopup(WidgetNode& node);
+    void renderModal(WidgetNode& node);
+
+    // Phase 8
+    void renderCanvas(WidgetNode& node);
+    void renderTooltip(WidgetNode& node);
 };
 
 } // namespace finegui

@@ -1045,6 +1045,210 @@ void test_inventory_grid_pattern() {
 }
 
 // ============================================================================
+// Phase 7 Builder Tests
+// ============================================================================
+
+void test_listbox_builder() {
+    std::cout << "Testing: WidgetNode::listBox builder... ";
+
+    auto lb = WidgetNode::listBox("Fruits", {"Apple", "Banana", "Cherry"}, 1, 5);
+    assert(lb.type == WidgetNode::Type::ListBox);
+    assert(lb.label == "Fruits");
+    assert(lb.items.size() == 3);
+    assert(lb.items[0] == "Apple");
+    assert(lb.items[1] == "Banana");
+    assert(lb.items[2] == "Cherry");
+    assert(lb.selectedIndex == 1);
+    assert(lb.heightInItems == 5);
+
+    // Default height
+    auto lb2 = WidgetNode::listBox("Colors", {"Red", "Green", "Blue"});
+    assert(lb2.selectedIndex == 0);
+    assert(lb2.heightInItems == -1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_popup_builder() {
+    std::cout << "Testing: WidgetNode::popup builder... ";
+
+    auto p = WidgetNode::popup("my_popup", {
+        WidgetNode::text("Popup content"),
+        WidgetNode::button("Close"),
+    });
+    assert(p.type == WidgetNode::Type::Popup);
+    assert(p.id == "my_popup");
+    assert(p.children.size() == 2);
+    assert(p.children[0].type == WidgetNode::Type::Text);
+    assert(p.boolValue == false);  // not open by default
+
+    std::cout << "PASSED\n";
+}
+
+void test_modal_builder() {
+    std::cout << "Testing: WidgetNode::modal builder... ";
+
+    bool closeCalled = false;
+    auto m = WidgetNode::modal("Confirm Delete", {
+        WidgetNode::text("Are you sure?"),
+        WidgetNode::button("OK"),
+        WidgetNode::button("Cancel"),
+    }, [&closeCalled](WidgetNode&) { closeCalled = true; });
+
+    assert(m.type == WidgetNode::Type::Modal);
+    assert(m.label == "Confirm Delete");
+    assert(m.children.size() == 3);
+    assert(m.onClose);
+    assert(m.boolValue == false);  // not open by default
+
+    // Test callback
+    m.onClose(m);
+    assert(closeCalled);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase7_type_names() {
+    std::cout << "Testing: Phase 7 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::ListBox)) == "ListBox");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Popup)) == "Popup");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Modal)) == "Modal");
+
+    std::cout << "PASSED\n";
+}
+
+void test_listbox_callback_pattern() {
+    std::cout << "Testing: ListBox with onChange callback... ";
+
+    int selectedValue = -1;
+    auto lb = WidgetNode::listBox("Items", {"A", "B", "C"}, 0, -1,
+        [&selectedValue](WidgetNode& w) { selectedValue = w.selectedIndex; });
+
+    assert(lb.onChange);
+    // Simulate selection change
+    lb.selectedIndex = 2;
+    lb.onChange(lb);
+    assert(selectedValue == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_popup_open_pattern() {
+    std::cout << "Testing: Popup open pattern via boolValue... ";
+
+    auto popup = WidgetNode::popup("context_menu", {
+        WidgetNode::button("Cut"),
+        WidgetNode::button("Copy"),
+        WidgetNode::button("Paste"),
+    });
+
+    // Initially closed
+    assert(popup.boolValue == false);
+
+    // Simulate opening (button callback would set this)
+    popup.boolValue = true;
+    assert(popup.boolValue == true);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Phase 8 Builder Tests
+// ============================================================================
+
+void test_canvas_builder() {
+    std::cout << "Testing: WidgetNode::canvas builder... ";
+
+    bool drawn = false;
+    bool clicked = false;
+    auto c = WidgetNode::canvas("##mycanvas", 200.0f, 150.0f,
+        [&drawn](WidgetNode&) { drawn = true; },
+        [&clicked](WidgetNode&) { clicked = true; });
+    assert(c.type == WidgetNode::Type::Canvas);
+    assert(c.id == "##mycanvas");
+    assert(c.width == 200.0f);
+    assert(c.height == 150.0f);
+    assert(c.onDraw);
+    assert(c.onClick);
+
+    // Invoke callbacks
+    c.onDraw(c);
+    assert(drawn);
+    c.onClick(c);
+    assert(clicked);
+
+    // Canvas without callbacks
+    auto c2 = WidgetNode::canvas("##simple", 100.0f, 100.0f);
+    assert(!c2.onDraw);
+    assert(!c2.onClick);
+
+    std::cout << "PASSED\n";
+}
+
+void test_tooltip_text_builder() {
+    std::cout << "Testing: WidgetNode::tooltip (text) builder... ";
+
+    auto t = WidgetNode::tooltip("Hover info");
+    assert(t.type == WidgetNode::Type::Tooltip);
+    assert(t.textContent == "Hover info");
+    assert(t.children.empty());
+
+    std::cout << "PASSED\n";
+}
+
+void test_tooltip_children_builder() {
+    std::cout << "Testing: WidgetNode::tooltip (children) builder... ";
+
+    auto t = WidgetNode::tooltip({
+        WidgetNode::text("Line 1"),
+        WidgetNode::text("Line 2"),
+        WidgetNode::progressBar(0.5f),
+    });
+    assert(t.type == WidgetNode::Type::Tooltip);
+    assert(t.textContent.empty());
+    assert(t.children.size() == 3);
+    assert(t.children[0].type == WidgetNode::Type::Text);
+    assert(t.children[2].type == WidgetNode::Type::ProgressBar);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase8_type_names() {
+    std::cout << "Testing: Phase 8 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::Canvas)) == "Canvas");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Tooltip)) == "Tooltip");
+
+    std::cout << "PASSED\n";
+}
+
+void test_canvas_with_tooltip_pattern() {
+    std::cout << "Testing: Canvas with tooltip pattern... ";
+
+    auto tree = WidgetNode::window("Drawing", {
+        WidgetNode::canvas("##draw", 300.0f, 200.0f),
+        WidgetNode::tooltip("Click to draw"),
+        WidgetNode::separator(),
+        WidgetNode::button("Clear"),
+        WidgetNode::tooltip({
+            WidgetNode::text("Clears the canvas"),
+            WidgetNode::textDisabled("(cannot undo)"),
+        }),
+    });
+
+    assert(tree.children.size() == 5);
+    assert(tree.children[0].type == WidgetNode::Type::Canvas);
+    assert(tree.children[0].width == 300.0f);
+    assert(tree.children[1].type == WidgetNode::Type::Tooltip);
+    assert(tree.children[1].textContent == "Click to draw");
+    assert(tree.children[4].type == WidgetNode::Type::Tooltip);
+    assert(tree.children[4].children.size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1128,6 +1332,21 @@ int main() {
         // Phase 5 design doc patterns
         test_data_table_pattern();
         test_inventory_grid_pattern();
+
+        // Phase 7 builders
+        test_listbox_builder();
+        test_popup_builder();
+        test_modal_builder();
+        test_phase7_type_names();
+        test_listbox_callback_pattern();
+        test_popup_open_pattern();
+
+        // Phase 8 builders
+        test_canvas_builder();
+        test_tooltip_text_builder();
+        test_tooltip_children_builder();
+        test_phase8_type_names();
+        test_canvas_with_tooltip_pattern();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

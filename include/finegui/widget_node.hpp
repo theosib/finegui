@@ -112,6 +112,13 @@ struct WidgetNode {
     /// Drag widget properties.
     float dragSpeed = 1.0f;
 
+    /// ListBox properties.
+    int heightInItems = -1;   // -1 = auto height
+
+    /// Canvas callback - called each frame to do custom drawing.
+    /// User can call ImGui::GetWindowDrawList() in the callback.
+    WidgetCallback onDraw;
+
     // -- Convenience builders ------------------------------------------------
 
     static WidgetNode window(std::string title, std::vector<WidgetNode> children = {});
@@ -170,6 +177,21 @@ struct WidgetNode {
     static WidgetNode dragInt(std::string label, int value, float speed = 1.0f,
                               int min = 0, int max = 0,
                               WidgetCallback onChange = {});
+
+    // Phase 7 builders
+    static WidgetNode listBox(std::string label, std::vector<std::string> items,
+                              int selected = 0, int heightInItems = -1,
+                              WidgetCallback onChange = {});
+    static WidgetNode popup(std::string id, std::vector<WidgetNode> children = {});
+    static WidgetNode modal(std::string title, std::vector<WidgetNode> children = {},
+                            WidgetCallback onClose = {});
+
+    // Phase 8 builders
+    static WidgetNode canvas(std::string id, float width, float height,
+                             WidgetCallback onDraw = {},
+                             WidgetCallback onClick = {});
+    static WidgetNode tooltip(std::string text);
+    static WidgetNode tooltip(std::vector<WidgetNode> children);
 
     // Phase 5 builders
     static WidgetNode table(std::string id, int numColumns,

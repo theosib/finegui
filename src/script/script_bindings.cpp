@@ -505,6 +505,197 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // =========================================================================
+    // Phase 7 - Misc
+    // =========================================================================
+
+    // ui.listbox "label" items [selected] [height_in_items] [on_change]
+    uiMap.set(engine.intern("listbox"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "listbox");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("items"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("selected"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("height_in_items"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isCallable()) {
+                m.set(engine.intern("on_change"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.popup "id" [children]
+    uiMap.set(engine.intern("popup"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "popup");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("id"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("children"), args[1]);
+            }
+            return w;
+        }));
+
+    // ui.modal "title" [children] [on_close]
+    uiMap.set(engine.intern("modal"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "modal");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("title"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("children"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isCallable()) {
+                m.set(engine.intern("on_close"), args[2]);
+            }
+            return w;
+        }));
+
+    // ui.open_popup popup_map  ->  sets :value to true on a popup/modal map
+    uiMap.set(engine.intern("open_popup"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            if (args.size() > 0 && args[0].isMap()) {
+                // Copy the Value to get mutable access (shares the same MapData via shared_ptr)
+                Value mapCopy = args[0];
+                mapCopy.asMap().set(engine.intern("value"), Value::boolean(true));
+            }
+            return Value::nil();
+        }));
+
+    // =========================================================================
+    // Phase 8 - Custom
+    // =========================================================================
+
+    // ui.canvas "id" width height [commands]
+    uiMap.set(engine.intern("canvas"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "canvas");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("id"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isNumeric()) {
+                m.set(engine.intern("width"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("height"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isArray()) {
+                m.set(engine.intern("commands"), args[3]);
+            }
+            return w;
+        }));
+
+    // ui.tooltip "text"  OR  ui.tooltip [children]
+    uiMap.set(engine.intern("tooltip"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "tooltip");
+            auto& m = w.asMap();
+            if (args.size() > 0) {
+                if (args[0].isString()) {
+                    m.set(engine.intern("text"), args[0]);
+                } else if (args[0].isArray()) {
+                    m.set(engine.intern("children"), args[0]);
+                }
+            }
+            return w;
+        }));
+
+    // Draw command constructors for Canvas
+
+    // ui.draw_line [x1 y1] [x2 y2] [r g b a] [thickness]
+    uiMap.set(engine.intern("draw_line"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "draw_line");
+            auto& m = w.asMap();
+            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
+            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
+            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("thickness"), args[3]);
+            }
+            return w;
+        }));
+
+    // ui.draw_rect [x1 y1] [x2 y2] [r g b a] [filled] [thickness]
+    uiMap.set(engine.intern("draw_rect"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "draw_rect");
+            auto& m = w.asMap();
+            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
+            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
+            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 3 && args[3].isBool()) {
+                m.set(engine.intern("filled"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isNumeric()) {
+                m.set(engine.intern("thickness"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.draw_circle [cx cy] radius [r g b a] [filled] [thickness]
+    uiMap.set(engine.intern("draw_circle"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "draw_circle");
+            auto& m = w.asMap();
+            if (args.size() > 0) m.set(engine.intern("center"), args[0]);
+            if (args.size() > 1 && args[1].isNumeric()) {
+                m.set(engine.intern("radius"), args[1]);
+            }
+            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 3 && args[3].isBool()) {
+                m.set(engine.intern("filled"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isNumeric()) {
+                m.set(engine.intern("thickness"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.draw_text [x y] "text" [r g b a]
+    uiMap.set(engine.intern("draw_text"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "draw_text");
+            auto& m = w.asMap();
+            if (args.size() > 0) m.set(engine.intern("pos"), args[0]);
+            if (args.size() > 1 && args[1].isString()) {
+                m.set(engine.intern("text"), args[1]);
+            }
+            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            return w;
+        }));
+
+    // ui.draw_triangle [x1 y1] [x2 y2] [x3 y3] [r g b a] [filled] [thickness]
+    uiMap.set(engine.intern("draw_triangle"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "draw_triangle");
+            auto& m = w.asMap();
+            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
+            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
+            if (args.size() > 2) m.set(engine.intern("center"), args[2]);
+            if (args.size() > 3) m.set(engine.intern("color"), args[3]);
+            if (args.size() > 4 && args[4].isBool()) {
+                m.set(engine.intern("filled"), args[4]);
+            }
+            if (args.size() > 5 && args[5].isNumeric()) {
+                m.set(engine.intern("thickness"), args[5]);
+            }
+            return w;
+        }));
+
+    // =========================================================================
     // Phase 5 - Tables
     // =========================================================================
 
