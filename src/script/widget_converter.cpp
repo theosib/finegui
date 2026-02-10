@@ -141,6 +141,40 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_draw_circle   = engine.intern("draw_circle");
     sym_draw_text     = engine.intern("draw_text");
     sym_draw_triangle = engine.intern("draw_triangle");
+
+    // Type name symbols - Phase 9
+    sym_radio_button   = engine.intern("radio_button");
+    sym_selectable     = engine.intern("selectable");
+    sym_input_multiline = engine.intern("input_multiline");
+    sym_bullet_text    = engine.intern("bullet_text");
+    sym_separator_text = engine.intern("separator_text");
+    sym_indent         = engine.intern("indent");
+    sym_unindent       = engine.intern("unindent");
+
+    // Phase 9 field keys
+    my_value = engine.intern("my_value");
+
+    // Image field keys
+    texture = engine.intern("texture");
+
+    // DnD field keys
+    drag_type   = engine.intern("drag_type");
+    drag_data   = engine.intern("drag_data");
+    drop_accept = engine.intern("drop_accept");
+    on_drop     = engine.intern("on_drop");
+    on_drag     = engine.intern("on_drag");
+    drag_mode   = engine.intern("drag_mode");
+
+    // Window flag symbols
+    window_flags              = engine.intern("window_flags");
+    sym_flag_no_title_bar     = engine.intern("no_title_bar");
+    sym_flag_no_resize        = engine.intern("no_resize");
+    sym_flag_no_move          = engine.intern("no_move");
+    sym_flag_no_scrollbar     = engine.intern("no_scrollbar");
+    sym_flag_no_collapse      = engine.intern("no_collapse");
+    sym_flag_always_auto_resize = engine.intern("always_auto_resize");
+    sym_flag_no_background    = engine.intern("no_background");
+    sym_flag_menu_bar         = engine.intern("menu_bar");
 }
 
 // -- Type mapping -------------------------------------------------------------
@@ -305,6 +339,36 @@ WidgetNode convertToWidget(const finescript::Value& map,
     auto onCloseVal = m.get(syms.on_close);
     if (onCloseVal.isCallable()) {
         node.onClose = [&engine, &ctx, closure = onCloseVal](WidgetNode&) {
+            engine.callFunction(closure, {}, ctx);
+        };
+    }
+
+    // DnD fields
+    auto dragTypeVal = m.get(syms.drag_type);
+    if (dragTypeVal.isString()) {
+        node.dragType = std::string(dragTypeVal.asString());
+    }
+    auto dragDataVal = m.get(syms.drag_data);
+    if (dragDataVal.isString()) {
+        node.dragData = std::string(dragDataVal.asString());
+    }
+    auto dropAcceptVal = m.get(syms.drop_accept);
+    if (dropAcceptVal.isString()) {
+        node.dropAcceptType = std::string(dropAcceptVal.asString());
+    }
+    auto dragModeVal = m.get(syms.drag_mode);
+    if (dragModeVal.isInt()) {
+        node.dragMode = static_cast<int>(dragModeVal.asInt());
+    }
+    auto onDropVal = m.get(syms.on_drop);
+    if (onDropVal.isCallable()) {
+        node.onDrop = [&engine, &ctx, closure = onDropVal](WidgetNode& w) {
+            engine.callFunction(closure, {finescript::Value::string(w.dragData)}, ctx);
+        };
+    }
+    auto onDragVal = m.get(syms.on_drag);
+    if (onDragVal.isCallable()) {
+        node.onDragBegin = [&engine, &ctx, closure = onDragVal](WidgetNode&) {
             engine.callFunction(closure, {}, ctx);
         };
     }

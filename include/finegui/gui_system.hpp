@@ -120,6 +120,18 @@ public:
                                   finevk::Sampler* sampler = nullptr);
 
     /**
+     * @brief Register an image view for use in GUI (e.g. offscreen render result)
+     * @param imageView The image view to sample from
+     * @param sampler The sampler to use (uses default if null)
+     * @param width Texture width in pixels
+     * @param height Texture height in pixels
+     * @return Handle for use with ImGui::Image()
+     */
+    TextureHandle registerTexture(finevk::ImageView* imageView,
+                                  finevk::Sampler* sampler,
+                                  uint32_t width, uint32_t height);
+
+    /**
      * @brief Unregister a texture
      * @param handle The texture handle to unregister
      */

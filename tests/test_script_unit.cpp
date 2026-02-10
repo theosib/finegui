@@ -1202,6 +1202,255 @@ void test_binding_ui_draw_triangle() {
 }
 
 // ============================================================================
+// Phase 9 binding tests
+// ============================================================================
+
+void test_binding_ui_radio_button() {
+    std::cout << "Testing: ui.radio_button binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.radio_button "Option A" 0 1})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("radio_button"));
+    assert(m.get(engine.intern("label")).asString() == "Option A");
+    assert(m.get(engine.intern("value")).asInt() == 0);
+    assert(m.get(engine.intern("my_value")).asInt() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_selectable() {
+    std::cout << "Testing: ui.selectable binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.selectable "Item 1" true})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("selectable"));
+    assert(m.get(engine.intern("label")).asString() == "Item 1");
+    assert(m.get(engine.intern("value")).asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_input_multiline() {
+    std::cout << "Testing: ui.input_multiline binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.input_multiline "Notes" "Hello" 400 300})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("input_multiline"));
+    assert(m.get(engine.intern("label")).asString() == "Notes");
+    assert(m.get(engine.intern("value")).asString() == "Hello");
+    assert(m.get(engine.intern("width")).asNumber() == 400.0);
+    assert(m.get(engine.intern("height")).asNumber() == 300.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_bullet_text() {
+    std::cout << "Testing: ui.bullet_text binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.bullet_text "Important point"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("bullet_text"));
+    assert(m.get(engine.intern("text")).asString() == "Important point");
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_separator_text() {
+    std::cout << "Testing: ui.separator_text binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.separator_text "Section A"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("separator_text"));
+    assert(m.get(engine.intern("label")).asString() == "Section A");
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_indent() {
+    std::cout << "Testing: ui.indent / ui.unindent binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"({ui.indent 20})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("indent"));
+    assert(m.get(engine.intern("width")).asNumber() == 20.0);
+
+    auto result2 = engine.executeCommand(R"({ui.unindent 20})", ctx);
+    assert(result2.success);
+    auto& m2 = result2.returnValue.asMap();
+    assert(m2.get(engine.intern("type")).asSymbol() == engine.intern("unindent"));
+    assert(m2.get(engine.intern("width")).asNumber() == 20.0);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Image Binding Tests
+// ============================================================================
+
+void test_binding_ui_image() {
+    std::cout << "Testing: ui.image binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Basic image with texture name
+    auto result = engine.executeCommand(
+        R"({ui.image "sword_icon" 48 32})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("image"));
+    assert(m.get(engine.intern("texture")).asString() == "sword_icon");
+    assert(m.get(engine.intern("width")).asNumber() == 48.0);
+    assert(m.get(engine.intern("height")).asNumber() == 32.0);
+
+    // Image with just texture name (no size)
+    auto result2 = engine.executeCommand(
+        R"({ui.image "shield_icon"})", ctx);
+    assert(result2.success);
+    auto& m2 = result2.returnValue.asMap();
+    assert(m2.get(engine.intern("type")).asSymbol() == engine.intern("image"));
+    assert(m2.get(engine.intern("texture")).asString() == "shield_icon");
+
+    std::cout << "PASSED\n";
+}
+
+void test_texture_symbol_interned() {
+    std::cout << "Testing: Texture symbol interning... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.texture != 0);
+    assert(syms.texture == engine.intern("texture"));
+    assert(syms.sym_image != 0);
+    assert(syms.sym_image == engine.intern("image"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// DnD Tests
+// ============================================================================
+
+void test_dnd_symbols_interned() {
+    std::cout << "Testing: DnD symbols interning... ";
+
+    auto& engine = testEngine();
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.drag_type != 0);
+    assert(syms.drag_data != 0);
+    assert(syms.drop_accept != 0);
+    assert(syms.on_drop != 0);
+    assert(syms.on_drag != 0);
+    assert(syms.drag_mode != 0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_map_fields() {
+    std::cout << "Testing: DnD map field round-trip... ";
+
+    auto& engine = testEngine();
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    auto w = Value::map();
+    w.asMap().set(syms.drag_type, Value::string("item"));
+    w.asMap().set(syms.drag_data, Value::string("sword"));
+    w.asMap().set(syms.drop_accept, Value::string("item"));
+    w.asMap().set(syms.drag_mode, Value::integer(2));
+
+    auto dt = w.asMap().get(syms.drag_type);
+    assert(dt.isString());
+    assert(std::string(dt.asString()) == "item");
+
+    auto dd = w.asMap().get(syms.drag_data);
+    assert(dd.isString());
+    assert(std::string(dd.asString()) == "sword");
+
+    auto da = w.asMap().get(syms.drop_accept);
+    assert(da.isString());
+    assert(std::string(da.asString()) == "item");
+
+    auto dm = w.asMap().get(syms.drag_mode);
+    assert(dm.isInt());
+    assert(dm.asInt() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_convert_to_widget() {
+    std::cout << "Testing: DnD convertToWidget fields... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    auto w = Value::map();
+    w.asMap().set(syms.type, Value::symbol(syms.sym_button));
+    w.asMap().set(syms.label, Value::string("Slot"));
+    w.asMap().set(syms.drag_type, Value::string("item"));
+    w.asMap().set(syms.drag_data, Value::string("sword_01"));
+    w.asMap().set(syms.drop_accept, Value::string("item"));
+    w.asMap().set(syms.drag_mode, Value::integer(1));
+
+    auto node = convertToWidget(w, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::Button);
+    assert(node.dragType == "item");
+    assert(node.dragData == "sword_01");
+    assert(node.dropAcceptType == "item");
+    assert(node.dragMode == 1);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1279,6 +1528,23 @@ int main() {
         test_binding_ui_draw_circle();
         test_binding_ui_draw_text();
         test_binding_ui_draw_triangle();
+
+        // Phase 9 binding tests
+        test_binding_ui_radio_button();
+        test_binding_ui_selectable();
+        test_binding_ui_input_multiline();
+        test_binding_ui_bullet_text();
+        test_binding_ui_separator_text();
+        test_binding_ui_indent();
+
+        // Image binding tests
+        test_binding_ui_image();
+        test_texture_symbol_interned();
+
+        // DnD tests
+        test_dnd_symbols_interned();
+        test_dnd_map_fields();
+        test_dnd_convert_to_widget();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

@@ -2,11 +2,12 @@
 
 namespace finegui {
 
-WidgetNode WidgetNode::window(std::string title, std::vector<WidgetNode> children) {
+WidgetNode WidgetNode::window(std::string title, std::vector<WidgetNode> children, int flags) {
     WidgetNode n;
     n.type = Type::Window;
     n.label = std::move(title);
     n.children = std::move(children);
+    n.windowFlags = flags;
     return n;
 }
 
@@ -396,6 +397,69 @@ WidgetNode WidgetNode::tableNextColumn() {
     return n;
 }
 
+// Phase 9 builders
+
+WidgetNode WidgetNode::radioButton(std::string label, int activeValue, int myValue,
+                                    WidgetCallback onChange) {
+    WidgetNode n;
+    n.type = Type::RadioButton;
+    n.label = std::move(label);
+    n.intValue = activeValue;
+    n.minInt = myValue;  // minInt stores this radio button's value
+    n.onChange = std::move(onChange);
+    return n;
+}
+
+WidgetNode WidgetNode::selectable(std::string label, bool selected, WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::Selectable;
+    n.label = std::move(label);
+    n.boolValue = selected;
+    n.onClick = std::move(onClick);
+    return n;
+}
+
+WidgetNode WidgetNode::inputTextMultiline(std::string label, std::string value,
+                                           float width, float height,
+                                           WidgetCallback onChange) {
+    WidgetNode n;
+    n.type = Type::InputTextMultiline;
+    n.label = std::move(label);
+    n.stringValue = std::move(value);
+    n.width = width;
+    n.height = height;
+    n.onChange = std::move(onChange);
+    return n;
+}
+
+WidgetNode WidgetNode::bulletText(std::string content) {
+    WidgetNode n;
+    n.type = Type::BulletText;
+    n.textContent = std::move(content);
+    return n;
+}
+
+WidgetNode WidgetNode::separatorText(std::string label) {
+    WidgetNode n;
+    n.type = Type::SeparatorText;
+    n.label = std::move(label);
+    return n;
+}
+
+WidgetNode WidgetNode::indent(float width) {
+    WidgetNode n;
+    n.type = Type::Indent;
+    n.width = width;
+    return n;
+}
+
+WidgetNode WidgetNode::unindent(float width) {
+    WidgetNode n;
+    n.type = Type::Indent;
+    n.width = -width;  // Negative width means unindent
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -438,6 +502,12 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::Modal:             return "Modal";
         case WidgetNode::Type::Canvas:            return "Canvas";
         case WidgetNode::Type::Tooltip:           return "Tooltip";
+        case WidgetNode::Type::RadioButton:       return "RadioButton";
+        case WidgetNode::Type::Selectable:        return "Selectable";
+        case WidgetNode::Type::InputTextMultiline:return "InputTextMultiline";
+        case WidgetNode::Type::BulletText:        return "BulletText";
+        case WidgetNode::Type::SeparatorText:     return "SeparatorText";
+        case WidgetNode::Type::Indent:            return "Indent";
         default:                                  return "Unknown";
     }
 }

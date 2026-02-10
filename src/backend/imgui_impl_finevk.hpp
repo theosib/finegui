@@ -90,6 +90,14 @@ public:
     uint64_t registerTexture(finevk::Texture* texture, finevk::Sampler* sampler);
 
     /**
+     * @brief Register an image view for use in GUI (e.g. offscreen render result)
+     * @param imageView The image view to sample from
+     * @param sampler The sampler to use (uses default if null)
+     * @return Unique texture ID
+     */
+    uint64_t registerTexture(finevk::ImageView* imageView, finevk::Sampler* sampler);
+
+    /**
      * @brief Unregister a texture
      */
     void unregisterTexture(uint64_t textureId);
@@ -152,9 +160,8 @@ private:
     // Per-frame data
     std::vector<FrameRenderData> frameData_;
 
-    // User-registered textures (separate from ImGui-managed textures)
+    // User-registered textures, keyed by VkDescriptorSet handle
     std::unordered_map<uint64_t, TextureEntry> textures_;
-    uint64_t nextTextureId_ = 1;
 
     // Shader paths
     std::string shaderDir_;

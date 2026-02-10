@@ -13,6 +13,8 @@
 
 #include <finegui/widget_node.hpp>
 #include <finegui/gui_renderer.hpp>
+#include <finegui/drag_drop_manager.hpp>
+#include <finegui/texture_registry.hpp>
 #include <imgui.h>
 
 #include <iostream>
@@ -1249,6 +1251,350 @@ void test_canvas_with_tooltip_pattern() {
 }
 
 // ============================================================================
+// Phase 9 builder tests
+// ============================================================================
+
+void test_radio_button_builder() {
+    std::cout << "Testing: RadioButton builder... ";
+
+    bool called = false;
+    auto rb = WidgetNode::radioButton("Option A", 0, 1, [&](WidgetNode& w) {
+        called = true;
+    });
+
+    assert(rb.type == WidgetNode::Type::RadioButton);
+    assert(rb.label == "Option A");
+    assert(rb.intValue == 0);   // active value
+    assert(rb.minInt == 1);     // this button's value
+    assert(rb.onChange);
+
+    std::cout << "PASSED\n";
+}
+
+void test_selectable_builder() {
+    std::cout << "Testing: Selectable builder... ";
+
+    auto sel = WidgetNode::selectable("Item 1", true);
+
+    assert(sel.type == WidgetNode::Type::Selectable);
+    assert(sel.label == "Item 1");
+    assert(sel.boolValue == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_input_text_multiline_builder() {
+    std::cout << "Testing: InputTextMultiline builder... ";
+
+    auto ml = WidgetNode::inputTextMultiline("Notes", "Hello world", 300.0f, 200.0f);
+
+    assert(ml.type == WidgetNode::Type::InputTextMultiline);
+    assert(ml.label == "Notes");
+    assert(ml.stringValue == "Hello world");
+    assert(ml.width == 300.0f);
+    assert(ml.height == 200.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_bullet_text_builder() {
+    std::cout << "Testing: BulletText builder... ";
+
+    auto bt = WidgetNode::bulletText("Important point");
+
+    assert(bt.type == WidgetNode::Type::BulletText);
+    assert(bt.textContent == "Important point");
+
+    std::cout << "PASSED\n";
+}
+
+void test_separator_text_builder() {
+    std::cout << "Testing: SeparatorText builder... ";
+
+    auto st = WidgetNode::separatorText("Section A");
+
+    assert(st.type == WidgetNode::Type::SeparatorText);
+    assert(st.label == "Section A");
+
+    std::cout << "PASSED\n";
+}
+
+void test_indent_builder() {
+    std::cout << "Testing: Indent/Unindent builder... ";
+
+    auto ind = WidgetNode::indent(20.0f);
+    assert(ind.type == WidgetNode::Type::Indent);
+    assert(ind.width == 20.0f);
+
+    auto unind = WidgetNode::unindent(20.0f);
+    assert(unind.type == WidgetNode::Type::Indent);
+    assert(unind.width == -20.0f);  // negative = unindent
+
+    auto defInd = WidgetNode::indent();
+    assert(defInd.width == 0.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_window_flags_builder() {
+    std::cout << "Testing: Window flags builder... ";
+
+    auto w = WidgetNode::window("Flagged", {}, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+    assert(w.type == WidgetNode::Type::Window);
+    assert(w.label == "Flagged");
+    assert(w.windowFlags == (ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize));
+
+    // Default: no flags
+    auto w2 = WidgetNode::window("Normal", {});
+    assert(w2.windowFlags == 0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase9_type_names() {
+    std::cout << "Testing: Phase 9 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::RadioButton)) == "RadioButton");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Selectable)) == "Selectable");
+    assert(std::string(widgetTypeName(WidgetNode::Type::InputTextMultiline)) == "InputTextMultiline");
+    assert(std::string(widgetTypeName(WidgetNode::Type::BulletText)) == "BulletText");
+    assert(std::string(widgetTypeName(WidgetNode::Type::SeparatorText)) == "SeparatorText");
+    assert(std::string(widgetTypeName(WidgetNode::Type::Indent)) == "Indent");
+
+    std::cout << "PASSED\n";
+}
+
+void test_radio_button_group_pattern() {
+    std::cout << "Testing: Radio button group pattern... ";
+
+    auto tree = WidgetNode::window("Settings", {
+        WidgetNode::separatorText("Theme"),
+        WidgetNode::radioButton("Light", 0, 0),
+        WidgetNode::radioButton("Dark", 0, 1),
+        WidgetNode::radioButton("System", 0, 2),
+        WidgetNode::separatorText("Details"),
+        WidgetNode::indent(20.0f),
+        WidgetNode::bulletText("Light: Bright theme"),
+        WidgetNode::bulletText("Dark: Dark theme"),
+        WidgetNode::bulletText("System: Follow OS"),
+        WidgetNode::unindent(20.0f),
+    });
+
+    assert(tree.children.size() == 10);
+    assert(tree.children[1].type == WidgetNode::Type::RadioButton);
+    assert(tree.children[1].minInt == 0);  // light = value 0
+    assert(tree.children[2].minInt == 1);  // dark = value 1
+    assert(tree.children[3].minInt == 2);  // system = value 2
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// DnD Tests
+// ============================================================================
+
+void test_dnd_field_defaults() {
+    std::cout << "Testing: DnD field defaults... ";
+
+    WidgetNode n;
+    n.type = WidgetNode::Type::Button;
+    assert(n.dragType.empty());
+    assert(n.dragData.empty());
+    assert(n.dropAcceptType.empty());
+    assert(!n.onDrop);
+    assert(!n.onDragBegin);
+    assert(n.dragMode == 0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_field_setting() {
+    std::cout << "Testing: DnD field setting... ";
+
+    auto img = WidgetNode::image({}, 48, 48);
+    img.dragType = "item";
+    img.dragData = "sword_01";
+    img.dropAcceptType = "item";
+
+    assert(img.dragType == "item");
+    assert(img.dragData == "sword_01");
+    assert(img.dropAcceptType == "item");
+
+    bool dropCalled = false;
+    img.onDrop = [&dropCalled](WidgetNode& w) {
+        dropCalled = true;
+        assert(w.dragData == "potion_02");
+    };
+
+    // Simulate drop delivery
+    img.dragData = "potion_02";
+    img.onDrop(img);
+    assert(dropCalled);
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_drag_mode() {
+    std::cout << "Testing: DnD drag mode... ";
+
+    auto slot = WidgetNode::button("Slot");
+    slot.dragType = "item";
+    slot.dragMode = 2; // click-only
+    assert(slot.dragMode == 2);
+
+    slot.dragMode = 1; // drag-only
+    assert(slot.dragMode == 1);
+
+    slot.dragMode = 0; // both (default)
+    assert(slot.dragMode == 0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_manager_basic() {
+    std::cout << "Testing: DragDropManager basic operations... ";
+
+    DragDropManager mgr;
+    assert(!mgr.isHolding());
+
+    DragDropManager::CursorItem item;
+    item.type = "item";
+    item.data = "sword";
+    item.fallbackText = "Sword";
+    mgr.pickUp(item);
+
+    assert(mgr.isHolding());
+    assert(mgr.isHolding("item"));
+    assert(!mgr.isHolding("spell"));
+    assert(mgr.cursorItem().data == "sword");
+    assert(mgr.cursorItem().fallbackText == "Sword");
+
+    auto delivered = mgr.dropItem();
+    assert(delivered.type == "item");
+    assert(delivered.data == "sword");
+    assert(!mgr.isHolding());
+
+    std::cout << "PASSED\n";
+}
+
+void test_dnd_manager_cancel() {
+    std::cout << "Testing: DragDropManager cancel... ";
+
+    DragDropManager mgr;
+    DragDropManager::CursorItem item;
+    item.type = "item";
+    item.data = "shield";
+    mgr.pickUp(item);
+    assert(mgr.isHolding());
+
+    mgr.cancel();
+    assert(!mgr.isHolding());
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// TextureRegistry Tests
+// ============================================================================
+
+void test_texture_registry_basic() {
+    std::cout << "Testing: TextureRegistry basic operations... ";
+
+    TextureRegistry registry;
+    assert(registry.size() == 0);
+    assert(!registry.has("sword"));
+
+    TextureHandle tex;
+    tex.id = 42;
+    tex.width = 64;
+    tex.height = 64;
+    registry.registerTexture("sword", tex);
+
+    assert(registry.size() == 1);
+    assert(registry.has("sword"));
+    assert(!registry.has("shield"));
+
+    auto retrieved = registry.get("sword");
+    assert(retrieved.valid());
+    assert(retrieved.id == 42);
+    assert(retrieved.width == 64);
+    assert(retrieved.height == 64);
+
+    // Not found returns invalid handle
+    auto missing = registry.get("shield");
+    assert(!missing.valid());
+
+    std::cout << "PASSED\n";
+}
+
+void test_texture_registry_unregister() {
+    std::cout << "Testing: TextureRegistry unregister... ";
+
+    TextureRegistry registry;
+    TextureHandle tex;
+    tex.id = 99;
+    tex.width = 32;
+    tex.height = 32;
+    registry.registerTexture("potion", tex);
+    assert(registry.has("potion"));
+
+    registry.unregisterTexture("potion");
+    assert(!registry.has("potion"));
+    assert(registry.size() == 0);
+
+    // Unregistering non-existent key is safe
+    registry.unregisterTexture("nonexistent");
+
+    std::cout << "PASSED\n";
+}
+
+void test_texture_registry_overwrite() {
+    std::cout << "Testing: TextureRegistry overwrite... ";
+
+    TextureRegistry registry;
+    TextureHandle tex1;
+    tex1.id = 1;
+    tex1.width = 16;
+    tex1.height = 16;
+    registry.registerTexture("icon", tex1);
+
+    TextureHandle tex2;
+    tex2.id = 2;
+    tex2.width = 32;
+    tex2.height = 32;
+    registry.registerTexture("icon", tex2);
+
+    assert(registry.size() == 1);
+    auto retrieved = registry.get("icon");
+    assert(retrieved.id == 2);
+    assert(retrieved.width == 32);
+
+    std::cout << "PASSED\n";
+}
+
+void test_texture_registry_clear() {
+    std::cout << "Testing: TextureRegistry clear... ";
+
+    TextureRegistry registry;
+    TextureHandle t;
+    t.id = 1; t.width = 8; t.height = 8;
+    registry.registerTexture("a", t);
+    t.id = 2;
+    registry.registerTexture("b", t);
+    t.id = 3;
+    registry.registerTexture("c", t);
+    assert(registry.size() == 3);
+
+    registry.clear();
+    assert(registry.size() == 0);
+    assert(!registry.has("a"));
+    assert(!registry.has("b"));
+    assert(!registry.has("c"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1347,6 +1693,30 @@ int main() {
         test_tooltip_children_builder();
         test_phase8_type_names();
         test_canvas_with_tooltip_pattern();
+
+        // Phase 9 builders
+        test_radio_button_builder();
+        test_selectable_builder();
+        test_input_text_multiline_builder();
+        test_bullet_text_builder();
+        test_separator_text_builder();
+        test_indent_builder();
+        test_window_flags_builder();
+        test_phase9_type_names();
+        test_radio_button_group_pattern();
+
+        // DnD tests
+        test_dnd_field_defaults();
+        test_dnd_field_setting();
+        test_dnd_drag_mode();
+        test_dnd_manager_basic();
+        test_dnd_manager_cancel();
+
+        // TextureRegistry tests
+        test_texture_registry_basic();
+        test_texture_registry_unregister();
+        test_texture_registry_overwrite();
+        test_texture_registry_clear();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

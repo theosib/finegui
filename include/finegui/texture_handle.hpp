@@ -24,8 +24,11 @@ struct TextureHandle {
     /// Check if handle is valid
     [[nodiscard]] bool valid() const { return id != 0; }
 
-    /// Implicit conversion to ImTextureID for ImGui::Image()
-    operator ImTextureID() const { return reinterpret_cast<ImTextureID>(id); }
+    /// Implicit conversion to ImTextureID
+    operator ImTextureID() const { return static_cast<ImTextureID>(id); }
+
+    /// Implicit conversion to ImTextureRef for ImGui::Image() (ImGui 1.92+)
+    operator ImTextureRef() const { return ImTextureRef(static_cast<ImTextureID>(id)); }
 
     bool operator==(const TextureHandle& other) const { return id == other.id; }
     bool operator!=(const TextureHandle& other) const { return id != other.id; }

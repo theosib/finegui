@@ -87,6 +87,29 @@ struct ConverterSymbols {
     uint32_t sym_draw_circle = 0, sym_draw_text = 0;
     uint32_t sym_draw_triangle = 0;
 
+    // Type name symbols - Phase 9
+    uint32_t sym_radio_button = 0, sym_selectable = 0;
+    uint32_t sym_input_multiline = 0;
+    uint32_t sym_bullet_text = 0, sym_separator_text = 0;
+    uint32_t sym_indent = 0, sym_unindent = 0;
+
+    // Phase 9 field keys
+    uint32_t my_value = 0;
+
+    // Image field keys
+    uint32_t texture = 0;
+
+    // DnD field keys
+    uint32_t drag_type = 0, drag_data = 0, drop_accept = 0;
+    uint32_t on_drop = 0, on_drag = 0, drag_mode = 0;
+
+    // Window flag value symbols (for :window_flags array parsing)
+    uint32_t window_flags = 0;
+    uint32_t sym_flag_no_title_bar = 0, sym_flag_no_resize = 0;
+    uint32_t sym_flag_no_move = 0, sym_flag_no_scrollbar = 0;
+    uint32_t sym_flag_no_collapse = 0, sym_flag_always_auto_resize = 0;
+    uint32_t sym_flag_no_background = 0, sym_flag_menu_bar = 0;
+
     void intern(finescript::ScriptEngine& engine);
 };
 

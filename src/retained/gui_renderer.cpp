@@ -54,6 +54,10 @@ WidgetNode* GuiRenderer::get(int guiId) {
     return it != trees_.end() ? &it->second : nullptr;
 }
 
+void GuiRenderer::setDragDropManager(DragDropManager* manager) {
+    dndManager_ = manager;
+}
+
 void GuiRenderer::renderAll() {
     for (auto& [id, tree] : trees_) {
         renderNode(tree);
@@ -123,10 +127,20 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         // Phase 8
         case WidgetNode::Type::Canvas:           renderCanvas(node); break;
         case WidgetNode::Type::Tooltip:          renderTooltip(node); break;
+        // Phase 9
+        case WidgetNode::Type::RadioButton:       renderRadioButton(node); break;
+        case WidgetNode::Type::Selectable:        renderSelectable(node); break;
+        case WidgetNode::Type::InputTextMultiline:renderInputTextMultiline(node); break;
+        case WidgetNode::Type::BulletText:        renderBulletText(node); break;
+        case WidgetNode::Type::SeparatorText:     renderSeparatorText(node); break;
+        case WidgetNode::Type::Indent:            renderIndent(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
     }
+
+    // DnD handling (after widget is rendered so ImGui has the item rect)
+    handleDragDrop(node);
 
     if (pushId) {
         ImGui::PopID();
@@ -141,7 +155,8 @@ void GuiRenderer::renderNode(WidgetNode& node) {
 
 void GuiRenderer::renderWindow(WidgetNode& node) {
     bool open = true;
-    if (ImGui::Begin(node.label.c_str(), &open)) {
+    if (ImGui::Begin(node.label.c_str(), &open,
+                     static_cast<ImGuiWindowFlags>(node.windowFlags))) {
         for (auto& child : node.children) {
             renderNode(child);
         }
@@ -625,6 +640,162 @@ void GuiRenderer::renderTooltip(WidgetNode& node) {
                 renderNode(child);
             }
             ImGui::EndTooltip();
+        }
+    }
+}
+
+// -- Phase 9: New Widgets -----------------------------------------------------
+
+void GuiRenderer::renderRadioButton(WidgetNode& node) {
+    // intValue = currently active value in the group
+    // minInt = this radio button's value
+    if (ImGui::RadioButton(node.label.c_str(), &node.intValue, node.minInt)) {
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderSelectable(WidgetNode& node) {
+    if (ImGui::Selectable(node.label.c_str(), &node.boolValue)) {
+        if (node.onClick) node.onClick(node);
+    }
+}
+
+void GuiRenderer::renderInputTextMultiline(WidgetNode& node) {
+    if (node.stringValue.capacity() < 1024) {
+        node.stringValue.reserve(1024);
+    }
+    size_t cap = node.stringValue.capacity();
+    node.stringValue.resize(cap);
+
+    InputTextCallbackData cbData{&node.stringValue};
+
+    ImGui::InputTextMultiline(
+        node.label.c_str(),
+        node.stringValue.data(),
+        node.stringValue.size() + 1,
+        {node.width, node.height},
+        ImGuiInputTextFlags_CallbackResize,
+        inputTextResizeCallback,
+        &cbData
+    );
+
+    node.stringValue.resize(std::strlen(node.stringValue.c_str()));
+
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderBulletText(WidgetNode& node) {
+    ImGui::BulletText("%s", node.textContent.c_str());
+}
+
+void GuiRenderer::renderSeparatorText(WidgetNode& node) {
+    ImGui::SeparatorText(node.label.c_str());
+}
+
+void GuiRenderer::renderIndent(WidgetNode& node) {
+    if (node.width < 0) {
+        ImGui::Unindent(-node.width > 0 ? -node.width : 0.0f);
+    } else {
+        ImGui::Indent(node.width > 0 ? node.width : 0.0f);
+    }
+}
+
+// -- Drag and Drop ------------------------------------------------------------
+
+void GuiRenderer::handleDragDrop(WidgetNode& node) {
+    bool isDragSource = !node.dragType.empty();
+    bool isDropTarget = !node.dropAcceptType.empty();
+    if (!isDragSource && !isDropTarget) return;
+
+    bool allowTraditional = (node.dragMode == 0 || node.dragMode == 1);
+    bool allowClickPickup = (node.dragMode == 0 || node.dragMode == 2);
+
+    // === DRAG SOURCE ===
+    if (isDragSource) {
+        // Traditional ImGui DnD
+        if (allowTraditional) {
+            ImGuiDragDropFlags srcFlags = ImGuiDragDropFlags_SourceAllowNullID;
+            if (ImGui::BeginDragDropSource(srcFlags)) {
+                ImGui::SetDragDropPayload(node.dragType.c_str(),
+                    node.dragData.data(), node.dragData.size());
+
+                // Preview: show image if Image widget, else show label/text
+                if (node.type == WidgetNode::Type::Image && node.texture.valid()) {
+                    ImGui::Image(static_cast<ImTextureID>(node.texture),
+                                 {node.imageWidth, node.imageHeight});
+                } else if (!node.label.empty()) {
+                    ImGui::TextUnformatted(node.label.c_str());
+                } else if (!node.textContent.empty()) {
+                    ImGui::TextUnformatted(node.textContent.c_str());
+                } else {
+                    ImGui::TextUnformatted(node.dragData.c_str());
+                }
+
+                ImGui::EndDragDropSource();
+            }
+        }
+
+        // Click-to-pick-up
+        if (allowClickPickup && dndManager_ && !dndManager_->isHolding()) {
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                // Only pick up if not in a traditional ImGui drag
+                if (!ImGui::GetDragDropPayload()) {
+                    DragDropManager::CursorItem item;
+                    item.type = node.dragType;
+                    item.data = node.dragData;
+                    if (node.type == WidgetNode::Type::Image && node.texture.valid()) {
+                        item.textureId = static_cast<ImTextureID>(node.texture);
+                        item.iconWidth = node.imageWidth;
+                        item.iconHeight = node.imageHeight;
+                    } else {
+                        item.fallbackText = !node.label.empty() ? node.label :
+                                            !node.textContent.empty() ? node.textContent :
+                                            node.dragData;
+                    }
+                    dndManager_->pickUp(item);
+                    if (node.onDragBegin) node.onDragBegin(node);
+                }
+            }
+        }
+    }
+
+    // === DROP TARGET ===
+    if (isDropTarget) {
+        // Traditional ImGui DnD
+        if (allowTraditional) {
+            if (ImGui::BeginDragDropTarget()) {
+                const ImGuiPayload* payload =
+                    ImGui::AcceptDragDropPayload(node.dropAcceptType.c_str());
+                if (payload) {
+                    node.dragData = std::string(
+                        static_cast<const char*>(payload->Data),
+                        static_cast<size_t>(payload->DataSize));
+                    if (node.onDrop) node.onDrop(node);
+                }
+                ImGui::EndDragDropTarget();
+            }
+        }
+
+        // Click-to-pick-up
+        if (dndManager_ && dndManager_->isHolding(node.dropAcceptType)) {
+            if (ImGui::IsItemHovered()) {
+                // Visual highlight: yellow border
+                ImVec2 rMin = ImGui::GetItemRectMin();
+                ImVec2 rMax = ImGui::GetItemRectMax();
+                ImGui::GetForegroundDrawList()->AddRect(
+                    rMin, rMax,
+                    ImGui::ColorConvertFloat4ToU32({1.0f, 1.0f, 0.0f, 0.8f}),
+                    0.0f, 0, 2.0f);
+
+                // Click to deliver
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                    auto delivered = dndManager_->dropItem();
+                    node.dragData = std::move(delivered.data);
+                    if (node.onDrop) node.onDrop(node);
+                }
+            }
         }
     }
 }

@@ -237,6 +237,26 @@ void registerGuiBindings(ScriptEngine& engine) {
             return w;
         }));
 
+    // ui.image "texture_name" [width] [height] [on_click]
+    uiMap.set(engine.intern("image"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "image");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("texture"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isNumeric()) {
+                m.set(engine.intern("width"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("height"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isCallable()) {
+                m.set(engine.intern("on_click"), args[3]);
+            }
+            return w;
+        }));
+
     // =========================================================================
     // Phase 3 - Layout & Display
     // =========================================================================
@@ -691,6 +711,110 @@ void registerGuiBindings(ScriptEngine& engine) {
             }
             if (args.size() > 5 && args[5].isNumeric()) {
                 m.set(engine.intern("thickness"), args[5]);
+            }
+            return w;
+        }));
+
+    // =========================================================================
+    // Phase 9 - New widgets
+    // =========================================================================
+
+    // ui.radio_button "label" active_value my_value [on_change]
+    uiMap.set(engine.intern("radio_button"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "radio_button");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isNumeric()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("my_value"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isCallable()) {
+                m.set(engine.intern("on_change"), args[3]);
+            }
+            return w;
+        }));
+
+    // ui.selectable "label" [selected] [on_click]
+    uiMap.set(engine.intern("selectable"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "selectable");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isBool()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isCallable()) {
+                m.set(engine.intern("on_click"), args[2]);
+            }
+            return w;
+        }));
+
+    // ui.input_multiline "label" value [width] [height] [on_change]
+    uiMap.set(engine.intern("input_multiline"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "input_multiline");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isString()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("width"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("height"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isCallable()) {
+                m.set(engine.intern("on_change"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.bullet_text "text"
+    uiMap.set(engine.intern("bullet_text"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "bullet_text");
+            if (args.size() > 0 && args[0].isString()) {
+                w.asMap().set(engine.intern("text"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.separator_text "label"
+    uiMap.set(engine.intern("separator_text"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "separator_text");
+            if (args.size() > 0 && args[0].isString()) {
+                w.asMap().set(engine.intern("label"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.indent [width]
+    uiMap.set(engine.intern("indent"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "indent");
+            if (args.size() > 0 && args[0].isNumeric()) {
+                w.asMap().set(engine.intern("width"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.unindent [width]
+    uiMap.set(engine.intern("unindent"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "unindent");
+            if (args.size() > 0 && args[0].isNumeric()) {
+                w.asMap().set(engine.intern("width"), args[0]);
             }
             return w;
         }));

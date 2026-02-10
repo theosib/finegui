@@ -1,17 +1,29 @@
-/**
- * @file texture_registry.cpp
- * @brief Texture registry implementation
- *
- * Currently empty - texture registration is handled directly in ImGuiBackend.
- * This file exists for potential future expansion (e.g., texture caching,
- * automatic descriptor management, reference counting).
- */
-
-#include <finegui/texture_handle.hpp>
+#include <finegui/texture_registry.hpp>
 
 namespace finegui {
 
-// Texture registry functionality is currently part of ImGuiBackend.
-// This file provides a compilation unit for potential future expansion.
+void TextureRegistry::registerTexture(const std::string& name, TextureHandle handle) {
+    textures_[name] = handle;
+}
+
+void TextureRegistry::unregisterTexture(const std::string& name) {
+    textures_.erase(name);
+}
+
+TextureHandle TextureRegistry::get(const std::string& name) const {
+    auto it = textures_.find(name);
+    if (it != textures_.end()) {
+        return it->second;
+    }
+    return TextureHandle{};
+}
+
+bool TextureRegistry::has(const std::string& name) const {
+    return textures_.find(name) != textures_.end();
+}
+
+void TextureRegistry::clear() {
+    textures_.clear();
+}
 
 } // namespace finegui

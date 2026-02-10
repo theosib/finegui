@@ -31,6 +31,14 @@ MapRenderer::MapRenderer(finescript::ScriptEngine& engine)
     syms_.intern(engine);
 }
 
+void MapRenderer::setDragDropManager(DragDropManager* manager) {
+    dndManager_ = manager;
+}
+
+void MapRenderer::setTextureRegistry(TextureRegistry* registry) {
+    textureRegistry_ = registry;
+}
+
 int MapRenderer::show(Value rootMap, ExecutionContext& ctx) {
     int id = nextId_++;
     trees_[id] = Entry{std::move(rootMap), &ctx};
@@ -129,6 +137,7 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else if (sym == syms_.sym_separator)  renderSeparator();
         else if (sym == syms_.sym_group)      renderGroup(m, ctx);
         else if (sym == syms_.sym_columns)    renderColumns(m, ctx);
+        else if (sym == syms_.sym_image)      renderImage(m, ctx);
         // Phase 3
         else if (sym == syms_.sym_same_line)         renderSameLine(m);
         else if (sym == syms_.sym_spacing)            renderSpacing();
@@ -161,10 +170,21 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         // Phase 8
         else if (sym == syms_.sym_canvas)    renderCanvas(m, ctx);
         else if (sym == syms_.sym_tooltip)   renderTooltip(m, ctx);
+        // Phase 9
+        else if (sym == syms_.sym_radio_button)    renderRadioButton(m, ctx);
+        else if (sym == syms_.sym_selectable)      renderSelectable(m, ctx);
+        else if (sym == syms_.sym_input_multiline) renderInputTextMultiline(m, ctx);
+        else if (sym == syms_.sym_bullet_text)     renderBulletText(m);
+        else if (sym == syms_.sym_separator_text)  renderSeparatorText(m);
+        else if (sym == syms_.sym_indent)          renderIndent(m);
+        else if (sym == syms_.sym_unindent)        renderUnindent(m);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
     }
+
+    // DnD handling (after widget is rendered so ImGui has the item rect)
+    handleDragDrop(m, ctx);
 
     if (pushId) ImGui::PopID();
     if (wasDisabled) ImGui::EndDisabled();
@@ -175,9 +195,10 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
 void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
     // Window uses :title for the window label
     auto title = getStringField(m, syms_.title, "Untitled");
+    int wflags = parseWindowFlags(m);
 
     bool open = true;
-    if (ImGui::Begin(title.c_str(), &open)) {
+    if (ImGui::Begin(title.c_str(), &open, static_cast<ImGuiWindowFlags>(wflags))) {
         auto childrenVal = m.get(syms_.children);
         if (childrenVal.isArray()) {
             for (auto& child : childrenVal.asArrayMut()) {
@@ -384,6 +405,34 @@ void MapRenderer::renderColumns(MapData& m, ExecutionContext& ctx) {
         }
     }
     ImGui::Columns(1);
+}
+
+void MapRenderer::renderImage(MapData& m, ExecutionContext& ctx) {
+    auto texName = getStringField(m, syms_.texture, "");
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+
+    if (texName.empty() || !textureRegistry_) {
+        ImGui::TextDisabled("[image: %s]",
+                            texName.empty() ? "no texture" : texName.c_str());
+        return;
+    }
+
+    auto handle = textureRegistry_->get(texName);
+    if (!handle.valid()) {
+        ImGui::TextDisabled("[image: %s not found]", texName.c_str());
+        return;
+    }
+
+    // Default to texture dimensions if width/height not specified
+    if (w <= 0) w = static_cast<float>(handle.width);
+    if (h <= 0) h = static_cast<float>(handle.height);
+
+    ImGui::Image(static_cast<ImTextureID>(handle), {w, h});
+
+    if (ImGui::IsItemClicked()) {
+        invokeCallback(m, syms_.on_click, ctx);
+    }
 }
 
 // -- Phase 3: Layout & Display ------------------------------------------------
@@ -1034,6 +1083,231 @@ void MapRenderer::renderTooltip(MapData& m, ExecutionContext& ctx) {
     }
 
     (void)ctx;
+}
+
+// -- Phase 9 ------------------------------------------------------------------
+
+void MapRenderer::renderRadioButton(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Radio");
+    int activeValue = static_cast<int>(getNumericField(m, syms_.value, 0));
+    int myValue = static_cast<int>(getNumericField(m, syms_.my_value, 0));
+
+    if (ImGui::RadioButton(label.c_str(), &activeValue, myValue)) {
+        m.set(syms_.value, Value::integer(activeValue));
+        invokeCallback(m, syms_.on_change, ctx, {Value::integer(activeValue)});
+    }
+}
+
+void MapRenderer::renderSelectable(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Selectable");
+    bool selected = getBoolField(m, syms_.value, false);
+
+    if (ImGui::Selectable(label.c_str(), &selected)) {
+        m.set(syms_.value, Value::boolean(selected));
+        invokeCallback(m, syms_.on_click, ctx);
+    }
+}
+
+void MapRenderer::renderInputTextMultiline(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Input");
+    auto valEntry = m.get(syms_.value);
+    if (!valEntry.isString()) {
+        m.set(syms_.value, Value::string(""));
+        valEntry = m.get(syms_.value);
+    }
+
+    auto& str = valEntry.asStringMut();
+    if (str.capacity() < 1024) str.reserve(1024);
+    size_t cap = str.capacity();
+    str.resize(cap);
+
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+
+    InputTextCallbackData cbData{&str};
+    ImGui::InputTextMultiline(
+        label.c_str(), str.data(), str.size() + 1,
+        {w, h},
+        ImGuiInputTextFlags_CallbackResize, inputTextResizeCallback, &cbData);
+
+    str.resize(std::strlen(str.c_str()));
+
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        invokeCallback(m, syms_.on_change, ctx, {Value::string(str)});
+    }
+}
+
+void MapRenderer::renderBulletText(MapData& m) {
+    auto text = getStringField(m, syms_.text);
+    ImGui::BulletText("%s", text.c_str());
+}
+
+void MapRenderer::renderSeparatorText(MapData& m) {
+    auto label = getStringField(m, syms_.label, "");
+    ImGui::SeparatorText(label.c_str());
+}
+
+void MapRenderer::renderIndent(MapData& m) {
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    ImGui::Indent(w > 0 ? w : 0.0f);
+}
+
+void MapRenderer::renderUnindent(MapData& m) {
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    ImGui::Unindent(w > 0 ? w : 0.0f);
+}
+
+int MapRenderer::parseWindowFlags(MapData& m) {
+    int result = 0;
+    auto flagsVal = m.get(syms_.window_flags);
+    if (flagsVal.isArray()) {
+        for (const auto& f : flagsVal.asArray()) {
+            if (!f.isSymbol()) continue;
+            uint32_t s = f.asSymbol();
+            if (s == syms_.sym_flag_no_title_bar)          result |= ImGuiWindowFlags_NoTitleBar;
+            else if (s == syms_.sym_flag_no_resize)        result |= ImGuiWindowFlags_NoResize;
+            else if (s == syms_.sym_flag_no_move)          result |= ImGuiWindowFlags_NoMove;
+            else if (s == syms_.sym_flag_no_scrollbar)     result |= ImGuiWindowFlags_NoScrollbar;
+            else if (s == syms_.sym_flag_no_collapse)      result |= ImGuiWindowFlags_NoCollapse;
+            else if (s == syms_.sym_flag_always_auto_resize) result |= ImGuiWindowFlags_AlwaysAutoResize;
+            else if (s == syms_.sym_flag_no_background)    result |= ImGuiWindowFlags_NoBackground;
+            else if (s == syms_.sym_flag_menu_bar)         result |= ImGuiWindowFlags_MenuBar;
+        }
+    } else if (flagsVal.isInt()) {
+        result = static_cast<int>(flagsVal.asInt());
+    }
+    return result;
+}
+
+// -- Drag and Drop ------------------------------------------------------------
+
+void MapRenderer::handleDragDrop(MapData& m, ExecutionContext& ctx) {
+    auto dragTypeStr = getStringField(m, syms_.drag_type, "");
+    auto dropAcceptStr = getStringField(m, syms_.drop_accept, "");
+
+    bool isDragSource = !dragTypeStr.empty();
+    bool isDropTarget = !dropAcceptStr.empty();
+    if (!isDragSource && !isDropTarget) return;
+
+    int mode = static_cast<int>(getNumericField(m, syms_.drag_mode, 0));
+    bool allowTraditional = (mode == 0 || mode == 1);
+    bool allowClickPickup = (mode == 0 || mode == 2);
+
+    // === DRAG SOURCE ===
+    if (isDragSource) {
+        auto dragDataStr = getStringField(m, syms_.drag_data, "");
+
+        // Traditional ImGui DnD
+        if (allowTraditional) {
+            ImGuiDragDropFlags srcFlags = ImGuiDragDropFlags_SourceAllowNullID;
+            if (ImGui::BeginDragDropSource(srcFlags)) {
+                ImGui::SetDragDropPayload(dragTypeStr.c_str(),
+                    dragDataStr.data(), dragDataStr.size());
+
+                // Preview: show image if available, otherwise text
+                bool previewShown = false;
+                auto typeVal = m.get(syms_.type);
+                if (typeVal.isSymbol() && typeVal.asSymbol() == syms_.sym_image
+                    && textureRegistry_) {
+                    auto texName = getStringField(m, syms_.texture, "");
+                    if (!texName.empty()) {
+                        auto handle = textureRegistry_->get(texName);
+                        if (handle.valid()) {
+                            float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+                            float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+                            if (w <= 0) w = static_cast<float>(handle.width);
+                            if (h <= 0) h = static_cast<float>(handle.height);
+                            ImGui::Image(static_cast<ImTextureID>(handle), {w, h});
+                            previewShown = true;
+                        }
+                    }
+                }
+                if (!previewShown) {
+                    auto label = getStringField(m, syms_.label, "");
+                    if (!label.empty()) {
+                        ImGui::TextUnformatted(label.c_str());
+                    } else if (!dragDataStr.empty()) {
+                        ImGui::TextUnformatted(dragDataStr.c_str());
+                    }
+                }
+
+                ImGui::EndDragDropSource();
+            }
+        }
+
+        // Click-to-pick-up
+        if (allowClickPickup && dndManager_ && !dndManager_->isHolding()) {
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                if (!ImGui::GetDragDropPayload()) {
+                    DragDropManager::CursorItem item;
+                    item.type = dragTypeStr;
+                    item.data = dragDataStr;
+                    item.fallbackText = getStringField(m, syms_.label, dragDataStr.c_str());
+
+                    // Resolve texture icon for image widgets
+                    auto typeVal2 = m.get(syms_.type);
+                    if (typeVal2.isSymbol() && typeVal2.asSymbol() == syms_.sym_image
+                        && textureRegistry_) {
+                        auto texName = getStringField(m, syms_.texture, "");
+                        if (!texName.empty()) {
+                            auto handle = textureRegistry_->get(texName);
+                            if (handle.valid()) {
+                                item.textureId = static_cast<ImTextureID>(handle);
+                                float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+                                float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+                                item.iconWidth = (w > 0) ? w : static_cast<float>(handle.width);
+                                item.iconHeight = (h > 0) ? h : static_cast<float>(handle.height);
+                            }
+                        }
+                    }
+
+                    dndManager_->pickUp(item);
+                    invokeCallback(m, syms_.on_drag, ctx);
+                }
+            }
+        }
+    }
+
+    // === DROP TARGET ===
+    if (isDropTarget) {
+        // Traditional ImGui DnD
+        if (allowTraditional) {
+            if (ImGui::BeginDragDropTarget()) {
+                const ImGuiPayload* payload =
+                    ImGui::AcceptDragDropPayload(dropAcceptStr.c_str());
+                if (payload) {
+                    auto deliveredData = std::string(
+                        static_cast<const char*>(payload->Data),
+                        static_cast<size_t>(payload->DataSize));
+                    m.set(syms_.drag_data, Value::string(deliveredData));
+                    invokeCallback(m, syms_.on_drop, ctx,
+                                   {Value::string(deliveredData)});
+                }
+                ImGui::EndDragDropTarget();
+            }
+        }
+
+        // Click-to-pick-up
+        if (dndManager_ && dndManager_->isHolding(dropAcceptStr)) {
+            if (ImGui::IsItemHovered()) {
+                // Visual highlight: yellow border
+                ImVec2 rMin = ImGui::GetItemRectMin();
+                ImVec2 rMax = ImGui::GetItemRectMax();
+                ImGui::GetForegroundDrawList()->AddRect(
+                    rMin, rMax,
+                    ImGui::ColorConvertFloat4ToU32({1.0f, 1.0f, 0.0f, 0.8f}),
+                    0.0f, 0, 2.0f);
+
+                // Click to deliver
+                if (ImGui::IsItemClicked(ImGuiMouseButton_Left)) {
+                    auto delivered = dndManager_->dropItem();
+                    m.set(syms_.drag_data, Value::string(delivered.data));
+                    invokeCallback(m, syms_.on_drop, ctx,
+                                   {Value::string(delivered.data)});
+                }
+            }
+        }
+    }
 }
 
 } // namespace finegui

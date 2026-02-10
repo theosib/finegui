@@ -189,6 +189,21 @@ TextureHandle GuiSystem::registerTexture(finevk::Texture* texture, finevk::Sampl
     return handle;
 }
 
+TextureHandle GuiSystem::registerTexture(finevk::ImageView* imageView,
+                                         finevk::Sampler* sampler,
+                                         uint32_t width, uint32_t height) {
+    if (!impl_->initialized) {
+        throw std::runtime_error("GuiSystem::registerTexture: must call initialize() first");
+    }
+
+    TextureHandle handle;
+    handle.id = impl_->backend->registerTexture(imageView, sampler);
+    handle.width = width;
+    handle.height = height;
+
+    return handle;
+}
+
 void GuiSystem::unregisterTexture(TextureHandle handle) {
     if (handle.valid() && impl_->backend) {
         impl_->backend->unregisterTexture(handle.id);

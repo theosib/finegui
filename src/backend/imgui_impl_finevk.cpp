@@ -248,12 +248,32 @@ uint64_t ImGuiBackend::registerTexture(finevk::Texture* texture, finevk::Sampler
     // Use default sampler if none provided
     finevk::Sampler* actualSampler = sampler ? sampler : defaultSampler_.get();
 
-    uint64_t id = nextTextureId_++;
-
     TextureEntry entry;
     entry.texture = texture;
     entry.sampler = actualSampler;
     entry.descriptorSet = allocateTextureDescriptor(texture, actualSampler);
+
+    // Use VkDescriptorSet handle as the ID — ImGui uses ImTextureID directly
+    // as the descriptor set during rendering, so our ID must be the actual handle.
+    uint64_t id = reinterpret_cast<uint64_t>(entry.descriptorSet->handle());
+
+    textures_[id] = std::move(entry);
+    return id;
+}
+
+uint64_t ImGuiBackend::registerTexture(finevk::ImageView* imageView, finevk::Sampler* sampler) {
+    if (!imageView) {
+        throw std::runtime_error("ImGuiBackend::registerTexture: imageView cannot be null");
+    }
+
+    finevk::Sampler* actualSampler = sampler ? sampler : defaultSampler_.get();
+
+    TextureEntry entry;
+    entry.texture = nullptr;
+    entry.sampler = actualSampler;
+    entry.descriptorSet = allocateTextureDescriptor(imageView->handle(), actualSampler->handle());
+
+    uint64_t id = reinterpret_cast<uint64_t>(entry.descriptorSet->handle());
 
     textures_[id] = std::move(entry);
     return id;

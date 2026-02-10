@@ -8,6 +8,7 @@
 
 #include <finegui/finegui.hpp>
 #include <finegui/gui_renderer.hpp>
+#include <finegui/drag_drop_manager.hpp>
 
 #include <finevk/finevk.hpp>
 
@@ -200,6 +201,89 @@ void test_retained_rendering() {
     std::cout << "\n  10. Render empty... ";
     guiRenderer.hideAll();
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 2);
+    std::cout << "ok";
+
+    // --- Test 11: Phase 9 widgets rendering ---
+    std::cout << "\n  11. Phase 9 widgets... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Phase 9 Test", {
+        WidgetNode::separatorText("Radio Group"),
+        WidgetNode::radioButton("Option A", 0, 0),
+        WidgetNode::radioButton("Option B", 0, 1),
+        WidgetNode::radioButton("Option C", 0, 2),
+        WidgetNode::separatorText("Selectable Items"),
+        WidgetNode::selectable("Item 1", false),
+        WidgetNode::selectable("Item 2", true),
+        WidgetNode::separator(),
+        WidgetNode::inputTextMultiline("Notes", "Some text\nLine 2", 0.0f, 100.0f),
+        WidgetNode::separatorText("Bullets"),
+        WidgetNode::indent(20.0f),
+        WidgetNode::bulletText("Point A"),
+        WidgetNode::bulletText("Point B"),
+        WidgetNode::unindent(20.0f),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
+    // --- Test 12: DnD widgets rendering ---
+    std::cout << "\n  12. DnD widgets... ";
+    guiRenderer.hideAll();
+
+    DragDropManager dndManager;
+    guiRenderer.setDragDropManager(&dndManager);
+
+    // Create inventory-style DnD widgets
+    auto slot1 = WidgetNode::button("Sword");
+    slot1.id = "slot1";
+    slot1.dragType = "item";
+    slot1.dragData = "sword_01";
+    slot1.dropAcceptType = "item";
+
+    auto slot2 = WidgetNode::button("Empty");
+    slot2.id = "slot2";
+    slot2.dragType = "item";
+    slot2.dragData = "";
+    slot2.dropAcceptType = "item";
+    std::string lastDroppedData;
+    slot2.onDrop = [&lastDroppedData](WidgetNode& w) {
+        lastDroppedData = w.dragData;
+    };
+
+    auto slot3 = WidgetNode::button("Click-only Slot");
+    slot3.id = "slot3";
+    slot3.dragType = "item";
+    slot3.dragData = "shield_01";
+    slot3.dragMode = 2;  // click-to-pick-up only
+
+    guiRenderer.show(WidgetNode::window("Inventory DnD", {
+        std::move(slot1),
+        WidgetNode::sameLine(),
+        std::move(slot2),
+        WidgetNode::sameLine(),
+        std::move(slot3),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+
+    // Render several frames (no actual mouse input, just verify no crashes)
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+
+    // Also test renderCursorItem when nothing is held
+    assert(!dndManager.isHolding());
+    dndManager.renderCursorItem();  // should be a no-op
+
+    // Test pick-up/drop cycle
+    DragDropManager::CursorItem testItem;
+    testItem.type = "item";
+    testItem.data = "potion_01";
+    testItem.fallbackText = "Potion";
+    dndManager.pickUp(testItem);
+    assert(dndManager.isHolding());
+    assert(dndManager.isHolding("item"));
+
+    auto dropped = dndManager.dropItem();
+    assert(dropped.data == "potion_01");
+    assert(!dndManager.isHolding());
+
+    guiRenderer.setDragDropManager(nullptr);  // cleanup
     std::cout << "ok";
 
     renderer->waitIdle();

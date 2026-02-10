@@ -9,6 +9,8 @@
 #include <finegui/finegui.hpp>
 #include <finegui/gui_renderer.hpp>
 #include <finegui/map_renderer.hpp>
+#include <finegui/drag_drop_manager.hpp>
+#include <finegui/texture_registry.hpp>
 #include <finegui/script_gui.hpp>
 #include <finegui/script_gui_manager.hpp>
 #include <finegui/script_bindings.hpp>
@@ -806,6 +808,164 @@ void test_script_rendering() {
 
         runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
         scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 20: Phase 9 script widgets rendering ---
+    std::cout << "\n  20. Phase 9 script widgets... ";
+    {
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Phase 9 Script" [
+                {ui.separator_text "Radio Group"}
+                {ui.radio_button "Light" 0 0}
+                {ui.radio_button "Dark" 0 1}
+                {ui.separator_text "Selectables"}
+                {ui.selectable "Item A" false}
+                {ui.selectable "Item B" true}
+                {ui.separator_text "Multiline"}
+                {ui.input_multiline "Notes" "Line 1" 300 100}
+                {ui.separator_text "Bullets"}
+                {ui.indent 20}
+                {ui.bullet_text "First point"}
+                {ui.bullet_text "Second point"}
+                {ui.unindent 20}
+            ]}
+        )", "test_phase9");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify the map tree was created correctly
+        auto* root = scriptGui.mapTree();
+        assert(root != nullptr);
+        assert(root->isMap());
+        auto& rootMap = root->asMap();
+        auto children = rootMap.get(mapRenderer.syms().children);
+        assert(children.isArray());
+        assert(children.asArray().size() == 13);
+
+        // Verify radio button map
+        auto& rb = children.asArray()[1];
+        assert(rb.isMap());
+        assert(rb.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_radio_button);
+        assert(rb.asMap().get(mapRenderer.syms().my_value).asInt() == 0);
+
+        // Verify bullet text map
+        auto& bt = children.asArray()[10];
+        assert(bt.isMap());
+        assert(bt.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_bullet_text);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
+    // --- Test 21: DnD script widgets rendering ---
+    std::cout << "\n  21. DnD script widgets... ";
+    {
+        DragDropManager dndManager;
+        mapRenderer.setDragDropManager(&dndManager);
+
+        // Create DnD-enabled widget maps directly
+        auto slot1 = finescript::Value::map();
+        slot1.asMap().set(engine.intern("type"), finescript::Value::symbol(engine.intern("button")));
+        slot1.asMap().set(engine.intern("label"), finescript::Value::string("Slot A"));
+        slot1.asMap().set(engine.intern("id"), finescript::Value::string("dnd_slot_a"));
+        slot1.asMap().set(engine.intern("drag_type"), finescript::Value::string("item"));
+        slot1.asMap().set(engine.intern("drag_data"), finescript::Value::string("sword"));
+        slot1.asMap().set(engine.intern("drop_accept"), finescript::Value::string("item"));
+
+        auto slot2 = finescript::Value::map();
+        slot2.asMap().set(engine.intern("type"), finescript::Value::symbol(engine.intern("button")));
+        slot2.asMap().set(engine.intern("label"), finescript::Value::string("Slot B"));
+        slot2.asMap().set(engine.intern("id"), finescript::Value::string("dnd_slot_b"));
+        slot2.asMap().set(engine.intern("drag_type"), finescript::Value::string("item"));
+        slot2.asMap().set(engine.intern("drag_data"), finescript::Value::string(""));
+        slot2.asMap().set(engine.intern("drop_accept"), finescript::Value::string("item"));
+        slot2.asMap().set(engine.intern("drag_mode"), finescript::Value::integer(2));
+
+        auto win = finescript::Value::map();
+        win.asMap().set(engine.intern("type"), finescript::Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), finescript::Value::string("DnD Script Test"));
+        win.asMap().set(engine.intern("children"), finescript::Value::array({slot1, slot2}));
+
+        finescript::ExecutionContext dndCtx(engine);
+        int dndId = mapRenderer.show(win, dndCtx);
+
+        // Verify map fields are readable
+        auto* root = mapRenderer.get(dndId);
+        assert(root != nullptr);
+        auto& rootMap = root->asMap();
+        auto childrenArr = rootMap.get(mapRenderer.syms().children);
+        assert(childrenArr.isArray());
+        assert(childrenArr.asArray().size() == 2);
+
+        auto& s1 = childrenArr.asArray()[0];
+        assert(s1.isMap());
+        auto dragType = s1.asMap().get(mapRenderer.syms().drag_type);
+        assert(dragType.isString());
+        assert(std::string(dragType.asString()) == "item");
+
+        auto& s2 = childrenArr.asArray()[1];
+        auto dragMode = s2.asMap().get(mapRenderer.syms().drag_mode);
+        assert(dragMode.isInt());
+        assert(dragMode.asInt() == 2);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+
+        mapRenderer.hide(dndId);
+        mapRenderer.setDragDropManager(nullptr);
+    }
+    std::cout << "ok";
+
+    // --- Test 22: Image widget from script (no texture registered = placeholder) ---
+    std::cout << "\n  22. Image widget (placeholder)... ";
+    {
+        TextureRegistry texRegistry;
+        mapRenderer.setTextureRegistry(&texRegistry);
+
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Image Test" [
+                {ui.image "sword_icon" 48 48}
+                {ui.image "missing_tex"}
+                {ui.text "Below images"}
+            ]}
+        )", "test22_img");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map tree structure
+        auto* tree22 = scriptGui.mapTree();
+        assert(tree22 != nullptr);
+        auto children22 = tree22->asMap().get(mapRenderer.syms().children);
+        assert(children22.isArray());
+        assert(children22.asArray().size() == 3);
+
+        // Verify image widget map
+        auto& imgWidget = children22.asArray()[0];
+        assert(imgWidget.isMap());
+        assert(imgWidget.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_image);
+        assert(imgWidget.asMap().get(mapRenderer.syms().texture).asString() == "sword_icon");
+        assert(imgWidget.asMap().get(mapRenderer.syms().width).asNumber() == 48.0);
+        assert(imgWidget.asMap().get(mapRenderer.syms().height).asNumber() == 48.0);
+
+        // Render frames - should show placeholder text since no texture registered
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // Now register a fake texture and render again
+        TextureHandle fakeTex;
+        fakeTex.id = 1;  // Non-zero = "valid" but won't be a real GPU texture
+        fakeTex.width = 48;
+        fakeTex.height = 48;
+        // Don't register a real texture to keep test safe (no GPU texture needed)
+        // Just verify the placeholder path works without crashes
+
+        scriptGui.close();
+        mapRenderer.setTextureRegistry(nullptr);
     }
     std::cout << "ok";
 

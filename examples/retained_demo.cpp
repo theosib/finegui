@@ -13,6 +13,7 @@
 #include <imgui.h>
 
 #include <iostream>
+#include <cmath>
 
 int main() {
     try {
@@ -328,6 +329,32 @@ int main() {
             }),
         }));
 
+        // Offscreen 3D Preview — renders to an offscreen surface and displays in GUI
+        auto offscreen = finevk::OffscreenSurface::create(device.get())
+            .extent(256, 256)
+            .enableDepth()
+            .build();
+
+        // Initial render so the texture has valid content
+        offscreen->beginFrame();
+        offscreen->beginRenderPass({0.2f, 0.4f, 0.8f, 1.0f});
+        offscreen->endRenderPass();
+        offscreen->endFrame();
+
+        auto texHandle = gui.registerTexture(
+            offscreen->colorImageView(),
+            offscreen->colorSampler(),
+            256, 256);
+
+        int previewId = guiRenderer.show(finegui::WidgetNode::window("Offscreen 3D Preview", {
+            finegui::WidgetNode::text("Offscreen render target displayed as texture:"),
+            finegui::WidgetNode::image(texHandle, 256.0f, 256.0f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Color cycles over time"),
+        }));
+
+        int frameCount = 0;
+
         std::cout << "Retained-mode demo started. Close window to exit.\n";
         if (window->isHighDPI()) {
             std::cout << "High-DPI display detected (scale: " << contentScale.x << "x)\n";
@@ -353,6 +380,19 @@ int main() {
                     main->children[6].textContent = "Count: " + std::to_string(counter);
                 }
 
+                // Re-render offscreen surface with animated colors
+                {
+                    float t = frameCount * 0.02f;
+                    float r = 0.5f + 0.5f * std::sin(t);
+                    float g = 0.5f + 0.5f * std::sin(t + 2.1f);
+                    float b = 0.5f + 0.5f * std::sin(t + 4.2f);
+                    offscreen->beginFrame();
+                    offscreen->beginRenderPass({r, g, b, 1.0f});
+                    offscreen->endRenderPass();
+                    offscreen->endFrame();
+                    frameCount++;
+                }
+
                 // Render all retained-mode widget trees
                 guiRenderer.renderAll();
 
@@ -366,6 +406,7 @@ int main() {
         }
 
         renderer->waitIdle();
+        gui.unregisterTexture(texHandle);
         std::cout << "Retained-mode demo finished.\n";
 
     } catch (const std::exception& e) {

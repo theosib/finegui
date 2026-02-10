@@ -1,6 +1,8 @@
 #pragma once
 
 #include <finegui/widget_converter.hpp>
+#include <finegui/drag_drop_manager.hpp>
+#include <finegui/texture_registry.hpp>
 #include <finescript/value.h>
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
@@ -43,10 +45,18 @@ public:
     /// Render all registered map trees. Call between beginFrame/endFrame.
     void renderAll();
 
+    /// Set the DragDropManager for click-to-pick-up mode.
+    void setDragDropManager(DragDropManager* manager);
+
+    /// Set the TextureRegistry for resolving texture names to handles.
+    void setTextureRegistry(TextureRegistry* registry);
+
     /// Access the pre-interned symbols (for navigation by other classes).
     const ConverterSymbols& syms() const { return syms_; }
 
 private:
+    DragDropManager* dndManager_ = nullptr;
+    TextureRegistry* textureRegistry_ = nullptr;
     struct Entry {
         finescript::Value rootMap;
         finescript::ExecutionContext* ctx;
@@ -73,6 +83,7 @@ private:
     void renderSeparator();
     void renderGroup(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderColumns(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderImage(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
     // Phase 3 - Layout & Display
     void renderSameLine(finescript::MapData& m);
@@ -113,6 +124,21 @@ private:
     void renderCanvas(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderTooltip(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderDrawCommands(finescript::Value& commandsVal, float originX, float originY);
+
+    // Phase 9
+    void renderRadioButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderSelectable(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderInputTextMultiline(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderBulletText(finescript::MapData& m);
+    void renderSeparatorText(finescript::MapData& m);
+    void renderIndent(finescript::MapData& m);
+    void renderUnindent(finescript::MapData& m);
+
+    // Window flags parsing
+    int parseWindowFlags(finescript::MapData& m);
+
+    // Drag-and-drop
+    void handleDragDrop(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
     // Helpers
     std::string getStringField(finescript::MapData& m, uint32_t key, const char* def = "");

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget_node.hpp"
+#include "drag_drop_manager.hpp"
 #include <map>
 
 namespace finegui {
@@ -44,7 +45,12 @@ public:
     /// Walks all active widget trees and issues ImGui calls.
     void renderAll();
 
+    /// Set the DragDropManager for click-to-pick-up mode.
+    /// Pass nullptr to disable click-to-pick-up (traditional DnD still works).
+    void setDragDropManager(DragDropManager* manager);
+
 private:
+    DragDropManager* dndManager_ = nullptr;
     GuiSystem& gui_;
     int nextId_ = 1;
     std::map<int, WidgetNode> trees_;
@@ -102,6 +108,17 @@ private:
     // Phase 8
     void renderCanvas(WidgetNode& node);
     void renderTooltip(WidgetNode& node);
+
+    // Phase 9
+    void renderRadioButton(WidgetNode& node);
+    void renderSelectable(WidgetNode& node);
+    void renderInputTextMultiline(WidgetNode& node);
+    void renderBulletText(WidgetNode& node);
+    void renderSeparatorText(WidgetNode& node);
+    void renderIndent(WidgetNode& node);
+
+    // Drag-and-drop
+    void handleDragDrop(WidgetNode& node);
 };
 
 } // namespace finegui

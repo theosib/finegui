@@ -207,6 +207,90 @@ void test_state_updates() {
     std::cout << "PASSED\n";
 }
 
+void test_offscreen_texture_in_gui() {
+    std::cout << "Testing: Offscreen render to GUI texture... ";
+
+    auto instance = finevk::Instance::create()
+        .applicationName("test_offscreen_texture")
+        .enableValidation(true)
+        .build();
+
+    auto window = finevk::Window::create(instance.get())
+        .title("test_offscreen_texture")
+        .size(800, 600)
+        .build();
+
+    auto physicalDevice = instance->selectPhysicalDevice(window.get());
+    auto device = physicalDevice.createLogicalDevice()
+        .surface(window->surface())
+        .build();
+
+    window->bindDevice(device.get());
+
+    finevk::RendererConfig config;
+    auto renderer = finevk::SimpleRenderer::create(window.get(), config);
+
+    GuiConfig guiConfig;
+    guiConfig.msaaSamples = renderer->msaaSamples();
+
+    GuiSystem gui(renderer->device(), guiConfig);
+    gui.initialize(renderer.get());
+
+    // Create offscreen surface — this is the "3D render target"
+    auto offscreen = finevk::OffscreenSurface::create(device.get())
+        .extent(128, 128)
+        .enableDepth()
+        .build();
+
+    // Render a solid color to the offscreen surface
+    offscreen->beginFrame();
+    offscreen->beginRenderPass({0.2f, 0.6f, 1.0f, 1.0f});  // Bright blue
+    offscreen->endRenderPass();
+    offscreen->endFrame();
+
+    // Register the offscreen result as a GUI texture
+    auto texHandle = gui.registerTexture(
+        offscreen->colorImageView(),
+        offscreen->colorSampler(),
+        128, 128);
+
+    assert(texHandle.valid());
+    assert(texHandle.width == 128);
+    assert(texHandle.height == 128);
+
+    // Render several frames with the offscreen texture displayed in GUI
+    for (int i = 0; i < 5 && window->isOpen(); i++) {
+        window->pollEvents();
+
+        // Re-render offscreen each frame (simulates animated 3D content)
+        offscreen->beginFrame();
+        float r = 0.2f + 0.1f * i;
+        offscreen->beginRenderPass({r, 0.6f, 1.0f, 1.0f});
+        offscreen->endRenderPass();
+        offscreen->endFrame();
+
+        if (auto frame = renderer->beginFrame()) {
+            gui.beginFrame();
+
+            ImGui::Begin("3D Preview Test");
+            ImGui::Text("Offscreen render result:");
+            ImGui::Image(texHandle, ImVec2(128, 128));
+            ImGui::End();
+
+            gui.endFrame();
+
+            renderer->beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+            gui.render(frame);
+            renderer->endRenderPass();
+            renderer->endFrame();
+        }
+    }
+
+    renderer->waitIdle();
+    gui.unregisterTexture(texHandle);
+    std::cout << "PASSED\n";
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -219,6 +303,7 @@ int main() {
         test_basic_frame();
         test_input_processing();
         test_state_updates();
+        test_offscreen_texture_in_gui();
 
         std::cout << "\n=== All Phase 2 tests PASSED ===\n";
     } catch (const std::exception& e) {

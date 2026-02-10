@@ -607,6 +607,75 @@ guiRenderer.hide(mainId);
 | `WidgetNode::columns(count, children)` | Multi-column layout |
 | `WidgetNode::image(texture, width, height)` | Texture image |
 
+**Phase 3 - Layout & Display:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::sameLine(offsetX)` | Put next widget on same line |
+| `WidgetNode::spacing()` | Vertical spacing |
+| `WidgetNode::textColored(r, g, b, a, content)` | Colored text |
+| `WidgetNode::textWrapped(content)` | Auto-wrapping text |
+| `WidgetNode::textDisabled(content)` | Grayed-out text |
+| `WidgetNode::progressBar(fraction, width, height, overlay)` | Progress bar |
+| `WidgetNode::collapsingHeader(label, children, defaultOpen)` | Expandable section |
+
+**Phase 4 - Containers & Menus:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::tabBar(id, children)` | Tab container |
+| `WidgetNode::tabItem(label, children)` | Tab page |
+| `WidgetNode::treeNode(label, children, defaultOpen, leaf)` | Tree hierarchy node |
+| `WidgetNode::child(id, width, height, border, autoScroll, children)` | Scrollable child region |
+| `WidgetNode::menuBar(children)` | Menu bar |
+| `WidgetNode::menu(label, children)` | Dropdown menu |
+| `WidgetNode::menuItem(label, onClick, shortcut, checked)` | Menu entry |
+
+**Phase 5 - Tables:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::table(id, columns, headers, children, flags)` | Table |
+| `WidgetNode::tableRow(children)` | Table row |
+| `WidgetNode::tableNextColumn()` | Advance to next column |
+
+**Phase 6 - Advanced Input:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::colorEdit(label, r, g, b, a)` | RGBA color editor |
+| `WidgetNode::colorPicker(label, r, g, b, a)` | Color picker wheel |
+| `WidgetNode::dragFloat(label, value, speed, min, max)` | Drag-to-adjust float |
+| `WidgetNode::dragInt(label, value, speed, min, max)` | Drag-to-adjust int |
+
+**Phase 7 - Misc:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::listBox(label, items, selected, heightInItems)` | List selection |
+| `WidgetNode::popup(id, children)` | Context popup |
+| `WidgetNode::modal(label, children, onClose)` | Modal dialog |
+
+**Phase 8 - Custom:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::canvas(id, width, height, onDraw, onClick)` | Custom draw area |
+| `WidgetNode::tooltip(text)` | Text tooltip for previous widget |
+| `WidgetNode::tooltip(children)` | Rich tooltip with children |
+
+**Phase 9 - Misc:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::radioButton(label, activeValue, myValue, onChange)` | Radio button |
+| `WidgetNode::selectable(label, selected, onClick)` | Selectable item |
+| `WidgetNode::inputTextMultiline(label, value, width, height)` | Multi-line text input |
+| `WidgetNode::bulletText(content)` | Bulleted text |
+| `WidgetNode::separatorText(label)` | Labeled separator |
+| `WidgetNode::indent(amount)` / `WidgetNode::unindent(amount)` | Indentation |
+| `WidgetNode::window(title, children, flags)` | Window now accepts ImGuiWindowFlags |
+
 ### Callbacks
 
 Callbacks receive a reference to the widget node that triggered them:
@@ -625,6 +694,38 @@ finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
 | `onChange` | Value change | `floatValue`, `intValue`, `boolValue`, `stringValue`, `selectedIndex` |
 | `onSubmit` | Enter in InputText | `stringValue` |
 | `onClose` | Window close button | - |
+
+### Drag-and-Drop
+
+Any widget can act as a drag source and/or drop target by setting drag-and-drop properties on the `WidgetNode`:
+
+```cpp
+auto slot = WidgetNode::image(tex, 48, 48);
+slot.dragType = "item";           // DnD type string (empty = not a source)
+slot.dragData = "sword_01";       // payload data string
+slot.dropAcceptType = "item";     // accepted type (empty = not a target)
+slot.dragMode = 0;                // 0=both, 1=drag-only, 2=click-only
+slot.onDrop = [](WidgetNode& w) { /* w.dragData has delivered payload */ };
+slot.onDragBegin = [](WidgetNode& w) { /* drag started */ };
+```
+
+**Two interaction modes** are supported:
+
+- **Traditional drag-and-drop** (ImGui DnD): Click-drag-release. Set `dragMode = 1` for this mode only.
+- **Click-to-pick-up** (game inventory style): Click to pick up an item, click again to drop it. Set `dragMode = 2` for this mode only.
+- **Both modes** (default): Set `dragMode = 0` to allow either interaction style.
+
+**DragDropManager** is required for the click-to-pick-up mode. It tracks the "held" item and renders a floating icon at the cursor:
+
+```cpp
+DragDropManager dndManager;
+guiRenderer.setDragDropManager(&dndManager);
+
+// Each frame after renderAll():
+dndManager.renderCursorItem();  // draws floating icon at cursor
+```
+
+Image widgets with valid textures automatically show image previews during drag.
 
 ---
 
@@ -748,6 +849,46 @@ Builder functions (return widget maps):
 | `ui.separator` | *(none)* | Horizontal separator |
 | `ui.group` | `children` | Group of children |
 | `ui.columns` | `count children` | Multi-column layout |
+| `ui.same_line` | `[offset]` | Same-line layout |
+| `ui.spacing` | *(none)* | Vertical spacing |
+| `ui.text_colored` | `color_array text` | Colored text |
+| `ui.text_wrapped` | `text` | Wrapping text |
+| `ui.text_disabled` | `text` | Grayed text |
+| `ui.progress_bar` | `fraction` | Progress bar |
+| `ui.collapsing_header` | `label children` | Expandable section |
+| `ui.tab_bar` | `id children` | Tab container |
+| `ui.tab` | `label children` | Tab page |
+| `ui.tree_node` | `label children` | Tree node |
+| `ui.child` | `id children` | Scrollable child |
+| `ui.menu_bar` | `children` | Menu bar |
+| `ui.menu` | `label children` | Dropdown menu |
+| `ui.menu_item` | `label [on_click]` | Menu entry |
+| `ui.table` | `id num_columns children` | Table |
+| `ui.table_row` | `[children]` | Table row |
+| `ui.table_next_column` | *(none)* | Next column |
+| `ui.color_edit` | `label color_array` | Color editor |
+| `ui.color_picker` | `label color_array` | Color picker |
+| `ui.drag_float` | `label value speed min max` | Drag float |
+| `ui.drag_int` | `label value speed min max` | Drag int |
+| `ui.listbox` | `label items selected [height]` | List box |
+| `ui.popup` | `id children` | Popup |
+| `ui.modal` | `title children` | Modal dialog |
+| `ui.open_popup` | `popup_widget` | Open a popup/modal |
+| `ui.canvas` | `id width height [commands]` | Custom draw canvas |
+| `ui.tooltip` | `text_or_children` | Tooltip |
+| `ui.draw_line` | `p1 p2 color [thickness]` | Canvas draw line |
+| `ui.draw_rect` | `p1 p2 color [filled]` | Canvas draw rect |
+| `ui.draw_circle` | `center radius color [filled] [thickness]` | Canvas draw circle |
+| `ui.draw_text` | `pos text color` | Canvas draw text |
+| `ui.draw_triangle` | `p1 p2 p3 color [filled]` | Canvas draw triangle |
+| `ui.radio_button` | `label value my_value` | Radio button |
+| `ui.selectable` | `label selected` | Selectable item |
+| `ui.input_multiline` | `label value [width] [height]` | Multiline text input |
+| `ui.bullet_text` | `text` | Bulleted text |
+| `ui.separator_text` | `label` | Labeled separator |
+| `ui.indent` | `[amount]` | Indent |
+| `ui.unindent` | `[amount]` | Unindent |
+| `ui.image` | `texture_name [width] [height] [on_click]` | Image from TextureRegistry |
 
 Action functions (require active ScriptGui context):
 
@@ -759,6 +900,7 @@ Action functions (require active ScriptGui context):
 | `ui.set_value` | `id child_index value` | Mutate value field of a child node |
 | `ui.set_label` | `id child_index label` | Mutate label of a child node |
 | `ui.hide` | `[id]` | Hide a tree (or close this GUI if no ID) |
+| `ui.node` | `gui_id child_index` | Navigate to child map (returns map ref) |
 | `gui.on_message` | `:symbol handler` | Register a message handler |
 
 ### Dynamic Updates from Scripts
@@ -793,6 +935,32 @@ ui.update gui_id {ui.window "Counter" [
     {ui.text ("Count: " + {to_str count})}
     {ui.button "Increment" fn [] do ... end}
 ]}
+```
+
+**Map-direct-mutation (MapRenderer path).** When using MapRenderer (see below), scripts create maps that ARE the widget data (shared_ptr semantics). You can mutate widget properties directly without calling mutation functions:
+
+```
+set text_widget {ui.text "Initial"}
+ui.show {ui.window "Dynamic" [
+    text_widget
+    {ui.button "Update" fn [] do
+        set text_widget.text "Updated!"
+    end}
+]}
+```
+
+Since maps are shared by reference, `set text_widget.text "Updated!"` directly mutates the rendered data. This is simpler and more efficient than `ui.set_text`.
+
+**Navigation with `ui.node`:** You can navigate into a displayed tree to get references to child maps by index, then mutate them directly:
+
+```
+set gui_id {ui.show {ui.window "Nav" [
+    {ui.text "Child 0"}
+    {ui.group [{ui.text "Nested"}]}
+]}}
+set child0 {ui.node gui_id 0}       # Get child by index
+set nested {ui.node gui_id [1 0]}    # Nested path
+set child0.text "Modified!"          # Mutate via reference
 ```
 
 ### Message Passing
@@ -868,6 +1036,63 @@ gui.beginFrame();
 mgr.processPendingMessages();
 guiRenderer.renderAll();  // Renders all trees: C++ and script
 gui.endFrame();
+```
+
+---
+
+## Map-Based Rendering (MapRenderer)
+
+The `MapRenderer` is an alternative to the `GuiRenderer` + `WidgetNode` approach. Instead of converting script maps to `WidgetNode` trees, `MapRenderer` renders directly from finescript map data. This is the path used by `ScriptGui` internally.
+
+The key advantage is that script maps use shared_ptr semantics, so direct mutation of map fields immediately affects the rendered output without needing explicit mutation functions.
+
+```cpp
+#include <finegui/map_renderer.hpp>
+
+MapRenderer mapRenderer(engine);
+
+// Show a map tree
+int id = mapRenderer.show(mapValue, ctx);
+
+// Each frame:
+gui.beginFrame();
+mapRenderer.renderAll();
+gui.endFrame();
+```
+
+MapRenderer supports drag-and-drop and texture registries:
+
+```cpp
+DragDropManager dndMgr;
+mapRenderer.setDragDropManager(&dndMgr);
+
+TextureRegistry texRegistry;
+texRegistry.registerTexture("sword_icon", swordHandle);
+mapRenderer.setTextureRegistry(&texRegistry);
+```
+
+---
+
+## TextureRegistry
+
+The `TextureRegistry` provides a name-to-handle mapping so that scripts (and MapRenderer) can reference textures by string name rather than raw handles. If a texture name is not found in the registry, a placeholder text is shown instead.
+
+```cpp
+#include <finegui/texture_registry.hpp>
+
+TextureRegistry texRegistry;
+texRegistry.registerTexture("sword_icon", swordHandle);
+texRegistry.registerTexture("shield_icon", shieldHandle);
+mapRenderer.setTextureRegistry(&texRegistry);
+```
+
+Scripts can then use `ui.image` with texture names:
+
+```
+ui.show {ui.window "Inventory" [
+    {ui.image "sword_icon" 48 48}
+    {ui.image "shield_icon" 48 48}
+]}
 ```
 
 ---

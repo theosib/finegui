@@ -129,6 +129,7 @@ set(FINEGUI_HEADERS
     include/finegui/gui_draw_data.hpp
     include/finegui/input_adapter.hpp
     include/finegui/texture_handle.hpp
+    include/finegui/texture_registry.hpp
 )
 
 # Helper function to configure a finegui library target (static or shared)
@@ -196,11 +197,13 @@ if(FINEGUI_BUILD_RETAINED)
     set(FINEGUI_RETAINED_SOURCES
         src/retained/widget_node.cpp
         src/retained/gui_renderer.cpp
+        src/retained/drag_drop_manager.cpp
     )
 
     set(FINEGUI_RETAINED_HEADERS
         include/finegui/widget_node.hpp
         include/finegui/gui_renderer.hpp
+        include/finegui/drag_drop_manager.hpp
     )
 
     # Helper function to configure a finegui-retained library target

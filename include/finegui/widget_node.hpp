@@ -36,7 +36,10 @@ struct WidgetNode {
         // Phase 7 - Misc
         ListBox, Popup, Modal,
         // Phase 8 - Custom
-        Canvas, Tooltip
+        Canvas, Tooltip,
+        // Phase 9 - New widgets
+        RadioButton, Selectable, InputTextMultiline,
+        BulletText, SeparatorText, Indent
     };
 
     Type type;
@@ -109,6 +112,9 @@ struct WidgetNode {
     /// Table properties.
     int tableFlags = 0;        // ImGuiTableFlags bitmask
 
+    /// Window properties.
+    int windowFlags = 0;       // ImGuiWindowFlags bitmask
+
     /// Drag widget properties.
     float dragSpeed = 1.0f;
 
@@ -119,9 +125,33 @@ struct WidgetNode {
     /// User can call ImGui::GetWindowDrawList() in the callback.
     WidgetCallback onDraw;
 
+    // -- Drag and Drop --------------------------------------------------------
+
+    /// DnD type string (e.g., "item"). Empty = not a drag source.
+    std::string dragType;
+
+    /// Payload data string carried during drag.
+    std::string dragData;
+
+    /// Accepted DnD type. Empty = not a drop target.
+    std::string dropAcceptType;
+
+    /// Called on the DROP TARGET when an item is delivered.
+    /// node.dragData will contain the delivered payload data.
+    WidgetCallback onDrop;
+
+    /// Called on the DRAG SOURCE when a drag/pick-up begins.
+    WidgetCallback onDragBegin;
+
+    /// Drag mode: 0 = both traditional + click-to-pick-up,
+    ///            1 = traditional drag only,
+    ///            2 = click-to-pick-up only.
+    int dragMode = 0;
+
     // -- Convenience builders ------------------------------------------------
 
-    static WidgetNode window(std::string title, std::vector<WidgetNode> children = {});
+    static WidgetNode window(std::string title, std::vector<WidgetNode> children = {},
+                             int flags = 0);
     static WidgetNode text(std::string content);
     static WidgetNode button(std::string label, WidgetCallback onClick = {});
     static WidgetNode checkbox(std::string label, bool value, WidgetCallback onChange = {});
@@ -200,6 +230,19 @@ struct WidgetNode {
                             int flags = 0);
     static WidgetNode tableRow(std::vector<WidgetNode> children = {});
     static WidgetNode tableNextColumn();
+
+    // Phase 9 builders
+    static WidgetNode radioButton(std::string label, int activeValue, int myValue,
+                                   WidgetCallback onChange = {});
+    static WidgetNode selectable(std::string label, bool selected = false,
+                                  WidgetCallback onClick = {});
+    static WidgetNode inputTextMultiline(std::string label, std::string value,
+                                          float width = 0.0f, float height = 0.0f,
+                                          WidgetCallback onChange = {});
+    static WidgetNode bulletText(std::string content);
+    static WidgetNode separatorText(std::string label);
+    static WidgetNode indent(float width = 0.0f);
+    static WidgetNode unindent(float width = 0.0f);
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).
