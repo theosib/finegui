@@ -355,6 +355,26 @@ int main() {
             }),
         }));
 
+        // Phase 14: ItemTooltip & ImageButton showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 14: ItemTooltip & ImageButton", {
+            finegui::WidgetNode::text("Item tooltips (hover the widgets below):"),
+            finegui::WidgetNode::button("Button with item_tooltip"),
+            finegui::WidgetNode::itemTooltip("This tooltip uses item_tooltip!"),
+            finegui::WidgetNode::checkbox("Check me", false),
+            finegui::WidgetNode::itemTooltip("Checkbox tooltip via item_tooltip"),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Rich item tooltip:"),
+            finegui::WidgetNode::slider("Volume", 0.7f, 0.0f, 1.0f),
+            finegui::WidgetNode::itemTooltip({
+                finegui::WidgetNode::text("Adjust volume level"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::textColored(1.0f, 1.0f, 0.0f, 1.0f, "Tip: Use mouse wheel"),
+            }),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("ImageButton requires a registered texture."),
+            finegui::WidgetNode::text("(See offscreen 3D demo for image example)"),
+        }));
+
         // Phase 13: Context Menu & Main Menu Bar showcase
         // Main menu bar is a top-level widget (not inside a window)
         guiRenderer.show(finegui::WidgetNode::mainMenuBar({

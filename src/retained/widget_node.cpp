@@ -593,6 +593,35 @@ WidgetNode WidgetNode::mainMenuBar(std::vector<WidgetNode> children) {
     return n;
 }
 
+// Phase 14 builders
+
+WidgetNode WidgetNode::itemTooltip(std::string text) {
+    WidgetNode n;
+    n.type = Type::ItemTooltip;
+    n.textContent = std::move(text);
+    return n;
+}
+
+WidgetNode WidgetNode::itemTooltip(std::vector<WidgetNode> children) {
+    WidgetNode n;
+    n.type = Type::ItemTooltip;
+    n.children = std::move(children);
+    return n;
+}
+
+WidgetNode WidgetNode::imageButton(std::string id, TextureHandle texture,
+                                    float width, float height,
+                                    WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::ImageButton;
+    n.id = std::move(id);
+    n.texture = texture;
+    n.imageWidth = width;
+    n.imageHeight = height;
+    n.onClick = std::move(onClick);
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -654,6 +683,8 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::ColorButton:       return "ColorButton";
         case WidgetNode::Type::ContextMenu:      return "ContextMenu";
         case WidgetNode::Type::MainMenuBar:      return "MainMenuBar";
+        case WidgetNode::Type::ItemTooltip:      return "ItemTooltip";
+        case WidgetNode::Type::ImageButton:      return "ImageButton";
         default:                                  return "Unknown";
     }
 }

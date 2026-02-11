@@ -172,6 +172,10 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_context_menu  = engine.intern("context_menu");
     sym_main_menu_bar = engine.intern("main_menu_bar");
 
+    // Type name symbols - Phase 14
+    sym_item_tooltip  = engine.intern("item_tooltip");
+    sym_image_button  = engine.intern("image_button");
+
     // Phase 12 field keys
     hint = engine.intern("hint");
 
@@ -235,6 +239,9 @@ static WidgetNode::Type symbolToType(uint32_t sym, const ConverterSymbols& s) {
     // Phase 13
     if (sym == s.sym_context_menu)  return WidgetNode::Type::ContextMenu;
     if (sym == s.sym_main_menu_bar) return WidgetNode::Type::MainMenuBar;
+    // Phase 14
+    if (sym == s.sym_item_tooltip)  return WidgetNode::Type::ItemTooltip;
+    if (sym == s.sym_image_button)  return WidgetNode::Type::ImageButton;
     return WidgetNode::Type::Text; // fallback
 }
 

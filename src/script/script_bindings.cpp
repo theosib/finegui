@@ -728,6 +728,48 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // =========================================================================
+    // Phase 14 - Tooltips & Images (continued)
+    // =========================================================================
+
+    // ui.item_tooltip "text" or ui.item_tooltip [children]
+    uiMap.set(engine.intern("item_tooltip"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "item_tooltip");
+            auto& m = w.asMap();
+            if (args.size() > 0) {
+                if (args[0].isString()) {
+                    m.set(engine.intern("text"), args[0]);
+                } else if (args[0].isArray()) {
+                    m.set(engine.intern("children"), args[0]);
+                }
+            }
+            return w;
+        }));
+
+    // ui.image_button "id" "texture_name" [width] [height] [on_click]
+    uiMap.set(engine.intern("image_button"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "image_button");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("id"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isString()) {
+                m.set(engine.intern("texture"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("width"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("height"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isCallable()) {
+                m.set(engine.intern("on_click"), args[4]);
+            }
+            return w;
+        }));
+
+    // =========================================================================
     // Phase 8 - Custom
     // =========================================================================
 

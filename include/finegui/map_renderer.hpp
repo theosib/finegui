@@ -173,6 +173,10 @@ private:
     void renderContextMenu(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderMainMenuBar(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
+    // Phase 14 - Tooltips & Images (continued)
+    void renderItemTooltip(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderImageButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
+
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);
 

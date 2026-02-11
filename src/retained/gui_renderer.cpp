@@ -189,6 +189,9 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         // Phase 13
         case WidgetNode::Type::ContextMenu:      renderContextMenu(node); break;
         case WidgetNode::Type::MainMenuBar:      renderMainMenuBar(node); break;
+        // Phase 14
+        case WidgetNode::Type::ItemTooltip:      renderItemTooltip(node); break;
+        case WidgetNode::Type::ImageButton:      renderImageButton(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -987,6 +990,36 @@ void GuiRenderer::renderMainMenuBar(WidgetNode& node) {
             renderNode(child);
         }
         ImGui::EndMainMenuBar();
+    }
+}
+
+// -- Phase 14: Tooltips & Images (continued) ----------------------------------
+
+void GuiRenderer::renderItemTooltip(WidgetNode& node) {
+    if (!ImGui::IsItemHovered()) return;
+
+    if (!node.textContent.empty() && node.children.empty()) {
+        ImGui::SetItemTooltip("%s", node.textContent.c_str());
+    } else if (!node.children.empty()) {
+        if (ImGui::BeginItemTooltip()) {
+            if (!node.textContent.empty()) {
+                ImGui::TextUnformatted(node.textContent.c_str());
+            }
+            for (auto& child : node.children) {
+                renderNode(child);
+            }
+            ImGui::EndTooltip();
+        }
+    }
+}
+
+void GuiRenderer::renderImageButton(WidgetNode& node) {
+    if (!node.texture.valid()) return;
+
+    const char* strId = node.id.empty() ? "##imgbtn" : node.id.c_str();
+    if (ImGui::ImageButton(strId, static_cast<ImTextureID>(node.texture),
+                           {node.imageWidth, node.imageHeight})) {
+        if (node.onClick) node.onClick(node);
     }
 }
 

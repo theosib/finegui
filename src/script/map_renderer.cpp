@@ -259,6 +259,9 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         // Phase 13
         else if (sym == syms_.sym_context_menu)      renderContextMenu(m, ctx);
         else if (sym == syms_.sym_main_menu_bar)     renderMainMenuBar(m, ctx);
+        // Phase 14
+        else if (sym == syms_.sym_item_tooltip)      renderItemTooltip(m, ctx);
+        else if (sym == syms_.sym_image_button)      renderImageButton(m, ctx);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1481,6 +1484,58 @@ void MapRenderer::renderMainMenuBar(MapData& m, ExecutionContext& ctx) {
             }
         }
         ImGui::EndMainMenuBar();
+    }
+}
+
+// -- Phase 14: Tooltips & Images (continued) ----------------------------------
+
+void MapRenderer::renderItemTooltip(MapData& m, ExecutionContext& ctx) {
+    if (!ImGui::IsItemHovered()) return;
+
+    auto text = getStringField(m, syms_.text, "");
+    auto childrenVal = m.get(syms_.children);
+    bool hasChildren = childrenVal.isArray() && !childrenVal.asArray().empty();
+
+    if (!text.empty() && !hasChildren) {
+        ImGui::SetItemTooltip("%s", text.c_str());
+    } else if (hasChildren) {
+        if (ImGui::BeginItemTooltip()) {
+            if (!text.empty()) {
+                ImGui::TextUnformatted(text.c_str());
+            }
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+            ImGui::EndTooltip();
+        }
+    }
+}
+
+void MapRenderer::renderImageButton(MapData& m, ExecutionContext& ctx) {
+    auto texName = getStringField(m, syms_.texture, "");
+    auto strId = getStringField(m, syms_.id, "##imgbtn");
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+
+    if (texName.empty() || !textureRegistry_) {
+        ImGui::TextDisabled("[image_button: %s]",
+                            texName.empty() ? "no texture" : texName.c_str());
+        return;
+    }
+
+    auto handle = textureRegistry_->get(texName);
+    if (!handle.valid()) {
+        ImGui::TextDisabled("[image_button: %s not found]", texName.c_str());
+        return;
+    }
+
+    if (w <= 0) w = static_cast<float>(handle.width);
+    if (h <= 0) h = static_cast<float>(handle.height);
+
+    if (ImGui::ImageButton(strId.c_str(), static_cast<ImTextureID>(handle), {w, h})) {
+        invokeCallback(m, syms_.on_click, ctx);
     }
 }
 

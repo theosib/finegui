@@ -48,7 +48,9 @@ struct WidgetNode {
         // Phase 12 - Advanced Input (continued)
         DragFloat3, InputTextWithHint, SliderAngle, SmallButton, ColorButton,
         // Phase 13 - Menus & Popups (continued)
-        ContextMenu, MainMenuBar
+        ContextMenu, MainMenuBar,
+        // Phase 14 - Tooltips & Images (continued)
+        ItemTooltip, ImageButton
     };
 
     Type type;
@@ -315,6 +317,13 @@ struct WidgetNode {
     // Phase 13 - Menus & Popups (continued)
     static WidgetNode contextMenu(std::vector<WidgetNode> children = {});
     static WidgetNode mainMenuBar(std::vector<WidgetNode> children = {});
+
+    // Phase 14 - Tooltips & Images (continued)
+    static WidgetNode itemTooltip(std::string text);
+    static WidgetNode itemTooltip(std::vector<WidgetNode> children);
+    static WidgetNode imageButton(std::string id, TextureHandle texture,
+                                   float width, float height,
+                                   WidgetCallback onClick = {});
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

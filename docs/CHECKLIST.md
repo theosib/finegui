@@ -73,12 +73,12 @@
 
 ### Tooltips
 - [x] tooltip
-- [ ] item_tooltip (hover tooltip on previous widget)
+- [x] item_tooltip (hover tooltip on previous widget)
 
 ### Images
 - [x] image (retained mode)
-- [ ] image (script/MapRenderer path)
-- [ ] image_button
+- [x] image (script/MapRenderer path)
+- [x] image_button
 
 ### Custom Drawing
 - [x] canvas (with draw_line, draw_rect, draw_circle, draw_text, draw_triangle)

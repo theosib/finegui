@@ -442,6 +442,8 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `ContextMenu` must be placed immediately after its target widget in the children list; right-clicking the target opens the menu
 - `MainMenuBar` must be a top-level tree (not inside a window); renders at the top of the screen
 - `ui.close_popup` must be called during popup rendering (e.g., from a button callback inside a popup/modal)
+- `ItemTooltip` must be placed immediately after the target widget in the children list (same rule as `Tooltip`)
+- `ImageButton` requires a valid TextureHandle; skips rendering silently if texture is invalid
 
 ## WidgetNode (Retained Mode)
 
@@ -473,7 +475,9 @@ struct WidgetNode {
         // Phase 10 - Style push/pop
         PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar,
         // Phase 13 - Menus & Popups
-        ContextMenu, MainMenuBar
+        ContextMenu, MainMenuBar,
+        // Phase 14 - Tooltips & Images (continued)
+        ItemTooltip, ImageButton
     };
 
     Type type;
@@ -659,6 +663,11 @@ struct WidgetNode {
     // --- Phase 13 builders ---
     static WidgetNode contextMenu(std::vector<WidgetNode> children = {});
     static WidgetNode mainMenuBar(std::vector<WidgetNode> children = {});
+
+    // --- Phase 14 builders ---
+    static WidgetNode itemTooltip(string text);
+    static WidgetNode itemTooltip(vector<WidgetNode> children);
+    static WidgetNode imageButton(string id, TextureHandle texture, float width, float height, WidgetCallback onClick={});
 };
 ```
 
@@ -950,6 +959,8 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.pop_style_var` | `ui.pop_style_var [count]` | Pop style var overrides |
 | `ui.context_menu` | `ui.context_menu [children]` | Right-click context menu; place after target widget in children list |
 | `ui.main_menu_bar` | `ui.main_menu_bar [children]` | Top-level app menu bar; must be a top-level tree (not inside a window) |
+| `ui.item_tooltip` | `ui.item_tooltip "text"` or `ui.item_tooltip [children]` | Hover tooltip on previous widget |
+| `ui.image_button` | `ui.image_button "id" "texture_name" [w] [h] [on_click]` | Clickable image button |
 
 ### Canvas Draw Commands (returned by ui.draw_*)
 

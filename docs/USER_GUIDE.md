@@ -734,6 +734,13 @@ guiRenderer.hide(mainId);
 | `WidgetNode::contextMenu(children)` | Right-click context menu for the previous widget. Place immediately after the target widget in the children list. Children are typically `menuItem` and `separator` widgets. |
 | `WidgetNode::mainMenuBar(children)` | Top-level application menu bar (renders at the top of the screen, outside any window). Must be shown as a top-level tree via `guiRenderer.show()`, not inside a window. Children are typically `menu` widgets. |
 
+**Phase 14 - Tooltips & Images:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::itemTooltip(text)` or `WidgetNode::itemTooltip(children)` | Hover tooltip on the previous widget. Place immediately after the target widget in the children list. Supports text-only or rich (multi-widget) content. Functionally similar to `tooltip` but uses `BeginItemTooltip()`. |
+| `WidgetNode::imageButton(id, texture, width, height, onClick)` | Clickable image button. Requires TextureHandle and explicit string ID. |
+
 ### Callbacks
 
 Callbacks receive a reference to the widget node that triggered them:
@@ -1054,6 +1061,8 @@ Builder functions (return widget maps):
 | `ui.pop_style_var` | `[count]` | Pop style var overrides |
 | `ui.context_menu` | `[children]` | Right-click context menu for the previous widget. Place immediately after the target widget in the children list. Children are typically `menu_item` and `separator` widgets. |
 | `ui.main_menu_bar` | `[children]` | Top-level application menu bar (renders at the top of the screen, outside any window). Must be shown as a top-level tree via `ui.show`, not inside a window. Children are typically `menu` widgets. |
+| `ui.item_tooltip` | `text_or_children` | Hover tooltip on previous widget (text string or array of children) |
+| `ui.image_button` | `id texture_name [width] [height] [on_click]` | Clickable image button (resolves texture via TextureRegistry) |
 
 Action functions (require active ScriptGui context):
 

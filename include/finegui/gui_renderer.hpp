@@ -154,6 +154,10 @@ private:
     void renderContextMenu(WidgetNode& node);
     void renderMainMenuBar(WidgetNode& node);
 
+    // Phase 14 - Tooltips & Images (continued)
+    void renderItemTooltip(WidgetNode& node);
+    void renderImageButton(WidgetNode& node);
+
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);
 };

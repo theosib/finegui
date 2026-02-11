@@ -818,6 +818,25 @@ void test_retained_rendering() {
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
     std::cout << "ok";
 
+    // --- Test 31: Phase 14 ItemTooltip & ImageButton ---
+    std::cout << "\n  31. Phase 14 ItemTooltip & ImageButton... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("ItemTooltip Test", {
+        WidgetNode::button("Hover for tooltip"),
+        WidgetNode::itemTooltip("Simple item tooltip text"),
+        WidgetNode::checkbox("Check me", false),
+        WidgetNode::itemTooltip({
+            WidgetNode::text("Rich tooltip"),
+            WidgetNode::separator(),
+            WidgetNode::text("With multiple lines"),
+        }),
+        WidgetNode::separator(),
+        // ImageButton with invalid texture (should silently skip)
+        WidgetNode::imageButton("##testbtn", TextureHandle{}, 32.0f, 32.0f),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

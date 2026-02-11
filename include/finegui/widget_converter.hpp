@@ -107,6 +107,9 @@ struct ConverterSymbols {
     // Type name symbols - Phase 13 (Menus & Popups continued)
     uint32_t sym_context_menu = 0, sym_main_menu_bar = 0;
 
+    // Type name symbols - Phase 14 (Tooltips & Images continued)
+    uint32_t sym_item_tooltip = 0, sym_image_button = 0;
+
     // Phase 12 field keys
     uint32_t hint = 0;
 

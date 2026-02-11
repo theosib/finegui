@@ -1809,6 +1809,57 @@ void test_phase13_type_names() {
 }
 
 // ============================================================================
+// Phase 14 - ItemTooltip & ImageButton
+// ============================================================================
+
+void test_item_tooltip_text_builder() {
+    std::cout << "Testing: ItemTooltip text builder... ";
+
+    auto node = WidgetNode::itemTooltip("Hover info");
+    assert(node.type == WidgetNode::Type::ItemTooltip);
+    assert(node.textContent == "Hover info");
+    assert(node.children.empty());
+
+    std::cout << "PASSED\n";
+}
+
+void test_item_tooltip_rich_builder() {
+    std::cout << "Testing: ItemTooltip rich builder... ";
+
+    auto node = WidgetNode::itemTooltip({
+        WidgetNode::text("Line 1"),
+        WidgetNode::separator(),
+    });
+    assert(node.type == WidgetNode::Type::ItemTooltip);
+    assert(node.textContent.empty());
+    assert(node.children.size() == 2);
+    assert(node.children[0].type == WidgetNode::Type::Text);
+
+    std::cout << "PASSED\n";
+}
+
+void test_image_button_builder() {
+    std::cout << "Testing: ImageButton builder... ";
+
+    auto node = WidgetNode::imageButton("btn1", TextureHandle{}, 64.0f, 48.0f);
+    assert(node.type == WidgetNode::Type::ImageButton);
+    assert(node.id == "btn1");
+    assert(node.imageWidth == 64.0f);
+    assert(node.imageHeight == 48.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase14_type_names() {
+    std::cout << "Testing: Phase 14 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::ItemTooltip)) == "ItemTooltip");
+    assert(std::string(widgetTypeName(WidgetNode::Type::ImageButton)) == "ImageButton");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Easing Function Tests (via TweenManager::applyEasing, tested indirectly)
 // ============================================================================
 
@@ -1979,6 +2030,12 @@ int main() {
         test_context_menu_builder();
         test_main_menu_bar_builder();
         test_phase13_type_names();
+
+        // Phase 14 - ItemTooltip & ImageButton
+        test_item_tooltip_text_builder();
+        test_item_tooltip_rich_builder();
+        test_image_button_builder();
+        test_phase14_type_names();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

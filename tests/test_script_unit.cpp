@@ -1758,6 +1758,79 @@ void test_phase13_symbols_interned() {
 }
 
 // ============================================================================
+// Phase 14 - ItemTooltip & ImageButton
+// ============================================================================
+
+void test_binding_ui_item_tooltip() {
+    std::cout << "Testing: ui.item_tooltip binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.item_tooltip "Hover info"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("item_tooltip"));
+
+    auto textVal = m.get(engine.intern("text"));
+    assert(textVal.isString());
+    assert(textVal.asString() == "Hover info");
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_image_button() {
+    std::cout << "Testing: ui.image_button binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.image_button "btn1" "sword" 48 48})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("image_button"));
+
+    auto idVal = m.get(engine.intern("id"));
+    assert(idVal.isString());
+    assert(idVal.asString() == "btn1");
+
+    auto texVal = m.get(engine.intern("texture"));
+    assert(texVal.isString());
+    assert(texVal.asString() == "sword");
+
+    auto wVal = m.get(engine.intern("width"));
+    assert(wVal.isNumeric());
+    assert(wVal.asNumber() == 48.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase14_symbols_interned() {
+    std::cout << "Testing: Phase 14 symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.sym_item_tooltip != 0);
+    assert(syms.sym_image_button != 0);
+    assert(syms.sym_item_tooltip == engine.intern("item_tooltip"));
+    assert(syms.sym_image_button == engine.intern("image_button"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1870,6 +1943,11 @@ int main() {
         test_binding_ui_context_menu();
         test_binding_ui_main_menu_bar();
         test_phase13_symbols_interned();
+
+        // Phase 14 - ItemTooltip & ImageButton
+        test_binding_ui_item_tooltip();
+        test_binding_ui_image_button();
+        test_phase14_symbols_interned();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {
