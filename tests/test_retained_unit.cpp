@@ -1339,7 +1339,7 @@ void test_indent_builder() {
 void test_window_flags_builder() {
     std::cout << "Testing: Window flags builder... ";
 
-    auto w = WidgetNode::window("Flagged", {}, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+    auto w = WidgetNode::window("Flagged", std::vector<WidgetNode>{}, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
     assert(w.type == WidgetNode::Type::Window);
     assert(w.label == "Flagged");
     assert(w.windowFlags == (ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize));
@@ -1906,6 +1906,50 @@ void test_phase15_type_names() {
     std::cout << "PASSED\n";
 }
 
+void test_window_size_builder() {
+    std::cout << "Testing: Window size builder... ";
+
+    // Default window has zero size (auto)
+    auto w1 = WidgetNode::window("Test");
+    assert(w1.windowSizeW == 0.0f);
+    assert(w1.windowSizeH == 0.0f);
+
+    // Sized window builder
+    auto w2 = WidgetNode::window("Sized", 400.0f, 300.0f,
+                                  {WidgetNode::text("Hello")});
+    assert(w2.type == WidgetNode::Type::Window);
+    assert(w2.label == "Sized");
+    assert(w2.windowSizeW == 400.0f);
+    assert(w2.windowSizeH == 300.0f);
+    assert(w2.children.size() == 1);
+    assert(w2.windowFlags == 0);
+
+    // Sized window with flags
+    auto w3 = WidgetNode::window("Flagged", 200.0f, 150.0f, {},
+                                  ImGuiWindowFlags_NoResize);
+    assert(w3.windowSizeW == 200.0f);
+    assert(w3.windowSizeH == 150.0f);
+    assert(w3.windowFlags == ImGuiWindowFlags_NoResize);
+
+    std::cout << "PASSED\n";
+}
+
+void test_window_flags_no_nav_no_inputs() {
+    std::cout << "Testing: Window flags no_nav, no_inputs... ";
+
+    auto w1 = WidgetNode::window("Test", std::vector<WidgetNode>{}, ImGuiWindowFlags_NoNav);
+    assert(w1.windowFlags == ImGuiWindowFlags_NoNav);
+
+    auto w2 = WidgetNode::window("Test", std::vector<WidgetNode>{}, ImGuiWindowFlags_NoInputs);
+    assert(w2.windowFlags == ImGuiWindowFlags_NoInputs);
+
+    auto w3 = WidgetNode::window("Test", std::vector<WidgetNode>{},
+        ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs);
+    assert(w3.windowFlags == (ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs));
+
+    std::cout << "PASSED\n";
+}
+
 // ============================================================================
 // Easing Function Tests (via TweenManager::applyEasing, tested indirectly)
 // ============================================================================
@@ -2088,6 +2132,10 @@ int main() {
         test_plot_lines_builder();
         test_plot_histogram_builder();
         test_phase15_type_names();
+
+        // Window Control
+        test_window_size_builder();
+        test_window_flags_no_nav_no_inputs();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

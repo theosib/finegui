@@ -855,6 +855,20 @@ void test_retained_rendering() {
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
     std::cout << "ok";
 
+    // --- Test 33: Window size (programmatic) and no_nav/no_inputs flags ---
+    std::cout << "\n  33. Window size & no_nav/no_inputs flags... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Sized Window", 500.0f, 400.0f, {
+        WidgetNode::text("This window has a programmatic size of 500x400."),
+        WidgetNode::separator(),
+        WidgetNode::text("Content goes here."),
+    }));
+    guiRenderer.show(WidgetNode::window("No Nav Window", {
+        WidgetNode::text("This window has NoNav | NoInputs flags."),
+    }, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

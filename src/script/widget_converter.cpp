@@ -207,6 +207,12 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_flag_always_auto_resize = engine.intern("always_auto_resize");
     sym_flag_no_background    = engine.intern("no_background");
     sym_flag_menu_bar         = engine.intern("menu_bar");
+    sym_flag_no_nav           = engine.intern("no_nav");
+    sym_flag_no_inputs        = engine.intern("no_inputs");
+
+    // Window size field keys
+    window_size_w = engine.intern("window_size_w");
+    window_size_h = engine.intern("window_size_h");
 
     // Focus management field keys
     focusable  = engine.intern("focusable");

@@ -11,6 +11,18 @@ WidgetNode WidgetNode::window(std::string title, std::vector<WidgetNode> childre
     return n;
 }
 
+WidgetNode WidgetNode::window(std::string title, float width, float height,
+                              std::vector<WidgetNode> children, int flags) {
+    WidgetNode n;
+    n.type = Type::Window;
+    n.label = std::move(title);
+    n.windowSizeW = width;
+    n.windowSizeH = height;
+    n.children = std::move(children);
+    n.windowFlags = flags;
+    return n;
+}
+
 WidgetNode WidgetNode::text(std::string content) {
     WidgetNode n;
     n.type = Type::Text;

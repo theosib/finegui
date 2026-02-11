@@ -86,8 +86,8 @@
 ## Window Control
 - [x] window flags (no_resize, no_title_bar, no_move, no_scrollbar, no_collapse, always_auto_resize, no_background, menu_bar)
 - [x] window position (via animation fields)
-- [ ] window size (programmatic)
-- [ ] window flags: no_nav, no_inputs
+- [x] window size (programmatic)
+- [x] window flags: no_nav, no_inputs
 
 ## Interaction
 

@@ -548,7 +548,7 @@ struct WidgetNode {
     WidgetCallback onDraw;                   // Canvas custom draw
 
     // Phase 9
-    int windowFlags = 0;                     // ImGuiWindowFlags_*
+    int windowFlags = 0;                     // ImGuiWindowFlags_* (includes NoNav, NoInputs)
 
     // Drag-and-Drop (any widget)
     std::string dragType;           // non-empty = drag source
@@ -572,11 +572,17 @@ struct WidgetNode {
     float scaleY = 1.0f;           // Window scale Y (1.0=normal, 0.0=collapsed to center)
     float rotationY = 0.0f;        // Y-axis rotation in radians (0=facing forward, PI=flipped)
 
+    // Window control
+    float windowSizeW = 0.0f;     // Programmatic window width (0 = auto)
+    float windowSizeH = 0.0f;     // Programmatic window height (0 = auto)
+
     // Phase 15
     std::vector<float> plotValues; // PlotLines, PlotHistogram data
 
     // --- Static builders (Phase 1) ---
     static WidgetNode window(string title, vector<WidgetNode> children = {}, int flags = 0);
+    static WidgetNode window(string title, float width, float height,
+                             vector<WidgetNode> children = {}, int flags = 0);
     static WidgetNode text(string content);
     static WidgetNode button(string label, WidgetCallback onClick = {});
     static WidgetNode checkbox(string label, bool value, WidgetCallback onChange = {});
@@ -684,6 +690,16 @@ struct WidgetNode {
                                    float width = 0.0f, float height = 0.0f);
 };
 ```
+
+### Window Flags Reference
+
+Common `ImGuiWindowFlags_*` values for `windowFlags` / `flags` parameter:
+- `ImGuiWindowFlags_NoTitleBar` — hides the title bar
+- `ImGuiWindowFlags_NoResize` — prevents user resizing
+- `ImGuiWindowFlags_NoMove` — prevents user moving
+- `ImGuiWindowFlags_NoBackground` — transparent window background
+- `ImGuiWindowFlags_NoNav` — disables keyboard/gamepad navigation
+- `ImGuiWindowFlags_NoInputs` — disables all inputs (`NoMouseInputs | NoNav`)
 
 ## GuiRenderer (Retained Mode)
 
@@ -798,6 +814,10 @@ Alternative to GuiRenderer -- renders directly from finescript map data (no Widg
 
 Window animation fields on maps: `:alpha`, `:window_pos_x`, `:window_pos_y`, `:scale_x`, `:scale_y`, `:rotation_y`. Same semantics as WidgetNode fields (defaults: alpha=1.0, pos=FLT_MAX for auto, scale=1.0, rotation=0.0).
 
+Window control symbols on maps: `:window_size_w` (programmatic width, 0=auto), `:window_size_h` (programmatic height, 0=auto).
+
+Window flag symbols: `:no_nav` (NoNav), `:no_inputs` (NoInputs). Used in the `:flags` field of window maps alongside existing flag symbols.
+
 ```cpp
 class MapRenderer {
     explicit MapRenderer(finescript::ScriptEngine& engine);
@@ -911,7 +931,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 
 | Function | Script Syntax | Notes |
 |----------|---------------|-------|
-| `ui.window` | `ui.window "Title" [children]` | |
+| `ui.window` | `ui.window "Title" [children]` | Supports `:window_size_w`/`:window_size_h` map keys for programmatic sizing |
 | `ui.text` | `ui.text "content"` | |
 | `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end` |
 | `ui.checkbox` | `ui.checkbox "label" value [on_change]` | on_change receives bool |

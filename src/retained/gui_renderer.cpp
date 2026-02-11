@@ -241,6 +241,11 @@ void GuiRenderer::renderWindow(WidgetNode& node) {
         ImGui::SetNextWindowPos(ImVec2(node.windowPosX, node.windowPosY));
     }
 
+    // Programmatic window size
+    if (node.windowSizeW > 0.0f || node.windowSizeH > 0.0f) {
+        ImGui::SetNextWindowSize(ImVec2(node.windowSizeW, node.windowSizeH), ImGuiCond_FirstUseEver);
+    }
+
     // Animation: window alpha
     bool pushedAlpha = node.alpha < 1.0f;
     if (pushedAlpha) {

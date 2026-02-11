@@ -313,6 +313,13 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
         ImGui::SetNextWindowPos(ImVec2(posX, posY));
     }
 
+    // Programmatic window size
+    float sizeW = static_cast<float>(getNumericField(m, syms_.window_size_w, 0.0));
+    float sizeH = static_cast<float>(getNumericField(m, syms_.window_size_h, 0.0));
+    if (sizeW > 0.0f || sizeH > 0.0f) {
+        ImGui::SetNextWindowSize(ImVec2(sizeW, sizeH), ImGuiCond_FirstUseEver);
+    }
+
     // Animation: window alpha
     float alpha = getNumericField(m, syms_.window_alpha, 1.0f);
     bool pushedAlpha = alpha < 1.0f;
@@ -1671,6 +1678,8 @@ int MapRenderer::parseWindowFlags(MapData& m) {
             else if (s == syms_.sym_flag_always_auto_resize) result |= ImGuiWindowFlags_AlwaysAutoResize;
             else if (s == syms_.sym_flag_no_background)    result |= ImGuiWindowFlags_NoBackground;
             else if (s == syms_.sym_flag_menu_bar)         result |= ImGuiWindowFlags_MenuBar;
+            else if (s == syms_.sym_flag_no_nav)           result |= ImGuiWindowFlags_NoNav;
+            else if (s == syms_.sym_flag_no_inputs)        result |= ImGuiWindowFlags_NoInputs;
         }
     } else if (flagsVal.isInt()) {
         result = static_cast<int>(flagsVal.asInt());

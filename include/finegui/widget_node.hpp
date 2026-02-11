@@ -138,6 +138,9 @@ struct WidgetNode {
 
     /// Window properties.
     int windowFlags = 0;       // ImGuiWindowFlags bitmask
+    /// Programmatic window size (0 = ImGui auto-size).
+    float windowSizeW = 0.0f;
+    float windowSizeH = 0.0f;
 
     /// Drag widget properties.
     float dragSpeed = 1.0f;
@@ -200,6 +203,8 @@ struct WidgetNode {
 
     static WidgetNode window(std::string title, std::vector<WidgetNode> children = {},
                              int flags = 0);
+    static WidgetNode window(std::string title, float width, float height,
+                             std::vector<WidgetNode> children = {}, int flags = 0);
     static WidgetNode text(std::string content);
     static WidgetNode button(std::string label, WidgetCallback onClick = {});
     static WidgetNode checkbox(std::string label, bool value, WidgetCallback onChange = {});

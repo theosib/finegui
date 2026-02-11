@@ -1907,6 +1907,28 @@ void test_phase15_symbols_interned() {
     std::cout << "PASSED\n";
 }
 
+void test_window_control_symbols_interned() {
+    std::cout << "Testing: Window control symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    // New window flags
+    assert(syms.sym_flag_no_nav != 0);
+    assert(syms.sym_flag_no_inputs != 0);
+    assert(syms.sym_flag_no_nav == engine.intern("no_nav"));
+    assert(syms.sym_flag_no_inputs == engine.intern("no_inputs"));
+
+    // Window size fields
+    assert(syms.window_size_w != 0);
+    assert(syms.window_size_h != 0);
+    assert(syms.window_size_w == engine.intern("window_size_w"));
+    assert(syms.window_size_h == engine.intern("window_size_h"));
+
+    std::cout << "PASSED\n";
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -2030,6 +2052,9 @@ int main() {
         test_binding_ui_plot_lines();
         test_binding_ui_plot_histogram();
         test_phase15_symbols_interned();
+
+        // Window Control
+        test_window_control_symbols_interned();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

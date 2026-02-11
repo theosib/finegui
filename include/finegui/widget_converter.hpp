@@ -140,6 +140,10 @@ struct ConverterSymbols {
     uint32_t sym_flag_no_move = 0, sym_flag_no_scrollbar = 0;
     uint32_t sym_flag_no_collapse = 0, sym_flag_always_auto_resize = 0;
     uint32_t sym_flag_no_background = 0, sym_flag_menu_bar = 0;
+    uint32_t sym_flag_no_nav = 0, sym_flag_no_inputs = 0;
+
+    // Window size field keys
+    uint32_t window_size_w = 0, window_size_h = 0;
 
     void intern(finescript::ScriptEngine& engine);
 };

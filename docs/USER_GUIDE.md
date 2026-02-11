@@ -717,7 +717,49 @@ guiRenderer.hide(mainId);
 | `WidgetNode::bulletText(content)` | Bulleted text |
 | `WidgetNode::separatorText(label)` | Labeled separator |
 | `WidgetNode::indent(amount)` / `WidgetNode::unindent(amount)` | Indentation |
-| `WidgetNode::window(title, children, flags)` | Window now accepts ImGuiWindowFlags |
+| `WidgetNode::window(title, children, flags)` | Window with ImGuiWindowFlags (auto-sized) |
+| `WidgetNode::window(title, width, height, children, flags)` | Window with initial size (`SetNextWindowSize` with `ImGuiCond_FirstUseEver`) |
+
+### Window Control
+
+**Programmatic window size.** Use the sized `window()` overload to set the initial window dimensions. The size is applied with `ImGuiCond_FirstUseEver`, so user resizing is preserved across frames:
+
+```cpp
+// Auto-sized window (existing behavior)
+auto win = WidgetNode::window("Settings", { ... });
+
+// Window with initial size of 400x300
+auto win = WidgetNode::window("Settings", 400.0f, 300.0f, { ... });
+
+// Sized window with flags
+auto win = WidgetNode::window("HUD", 200.0f, 100.0f, { ... },
+    ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize);
+```
+
+**Window flags.** Both `window()` overloads accept an `int flags` parameter for ImGui window flags. The supported flags in the retained-mode layer:
+
+| Flag | Effect |
+|------|--------|
+| `ImGuiWindowFlags_NoTitleBar` | Hide the title bar |
+| `ImGuiWindowFlags_NoResize` | Prevent user resizing |
+| `ImGuiWindowFlags_NoMove` | Prevent user moving |
+| `ImGuiWindowFlags_NoScrollbar` | Hide scrollbars |
+| `ImGuiWindowFlags_NoCollapse` | Disable collapse (double-click title bar) |
+| `ImGuiWindowFlags_AlwaysAutoResize` | Auto-fit to content every frame |
+| `ImGuiWindowFlags_NoBackground` | Transparent window background |
+| `ImGuiWindowFlags_MenuBar` | Enable window menu bar |
+| `ImGuiWindowFlags_NoNav` | Disable keyboard/gamepad navigation within the window |
+| `ImGuiWindowFlags_NoInputs` | Disable all inputs (equivalent to `NoMouseInputs \| NoNav`) |
+
+**In scripts**, set `:window_flags` to an array of flag symbols:
+
+```
+ui.show {ui.window "Overlay" [
+    {ui.text "No input here"}
+] :window_flags [:no_title_bar :no_resize :no_move :no_background :no_inputs]}
+```
+
+Available script flag symbols: `:no_title_bar`, `:no_resize`, `:no_move`, `:no_scrollbar`, `:no_collapse`, `:always_auto_resize`, `:no_background`, `:menu_bar`, `:no_nav`, `:no_inputs`.
 
 **Phase 10 - Style Push/Pop:**
 
@@ -998,7 +1040,7 @@ Builder functions (return widget maps):
 
 | Function | Arguments | Description |
 |----------|-----------|-------------|
-| `ui.window` | `title children` | Window with title and child array |
+| `ui.window` | `title children` | Window with title and child array. Set `:window_size_w` and `:window_size_h` map fields for initial size. Set `:window_flags` to a flag symbol array (see [Window Control](#window-control)). |
 | `ui.text` | `content` | Static text |
 | `ui.button` | `label [on_click]` | Button with optional callback |
 | `ui.checkbox` | `label value [on_change]` | Boolean toggle |
