@@ -1730,6 +1730,9 @@ void test_animation_field_defaults() {
     assert(n.alpha == 1.0f);
     assert(n.windowPosX == FLT_MAX);
     assert(n.windowPosY == FLT_MAX);
+    assert(n.scaleX == 1.0f);
+    assert(n.scaleY == 1.0f);
+    assert(n.rotationY == 0.0f);
 
     std::cout << "PASSED\n";
 }
@@ -1741,10 +1744,16 @@ void test_animation_field_setting() {
     w.alpha = 0.5f;
     w.windowPosX = 100.0f;
     w.windowPosY = 200.0f;
+    w.scaleX = 0.5f;
+    w.scaleY = 0.75f;
+    w.rotationY = 1.57f;
 
     assert(w.alpha == 0.5f);
     assert(w.windowPosX == 100.0f);
     assert(w.windowPosY == 200.0f);
+    assert(w.scaleX == 0.5f);
+    assert(w.scaleY == 0.75f);
+    assert(w.rotationY == 1.57f);
 
     std::cout << "PASSED\n";
 }

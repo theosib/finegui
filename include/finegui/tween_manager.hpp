@@ -22,7 +22,8 @@ enum class TweenProperty {
     Alpha, PosX, PosY,
     FloatValue, IntValue,
     ColorR, ColorG, ColorB, ColorA,
-    Width, Height
+    Width, Height,
+    ScaleX, ScaleY, RotationY
 };
 
 using TweenCallback = std::function<void(int tweenId)>;
@@ -63,6 +64,22 @@ public:
                 float r, float g, float b, float a,
                 float duration = 0.3f, Easing easing = Easing::EaseOut,
                 TweenCallback onComplete = {});
+
+    /// Zoom in from scale 0 to 1 (window appears from center point).
+    int zoomIn(int guiId, float duration = 0.3f, Easing easing = Easing::EaseOut,
+               TweenCallback onComplete = {});
+
+    /// Zoom out from scale 1 to 0 (window collapses to center point).
+    int zoomOut(int guiId, float duration = 0.3f, Easing easing = Easing::EaseIn,
+                TweenCallback onComplete = {});
+
+    /// Flip around the Y-axis from 0 to PI (shows back side).
+    int flipY(int guiId, float duration = 0.5f, Easing easing = Easing::EaseInOut,
+              TweenCallback onComplete = {});
+
+    /// Flip around the Y-axis from PI back to 0 (shows front side).
+    int flipYBack(int guiId, float duration = 0.5f, Easing easing = Easing::EaseInOut,
+                  TweenCallback onComplete = {});
 
     /// Screen shake effect on a window.
     int shake(int guiId, float duration = 0.4f,

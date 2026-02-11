@@ -109,6 +109,7 @@ struct ConverterSymbols {
 
     // Animation field keys
     uint32_t window_alpha = 0, window_pos_x = 0, window_pos_y = 0;
+    uint32_t scale_x = 0, scale_y = 0, rotation_y = 0;
 
     // DnD field keys
     uint32_t drag_type = 0, drag_data = 0, drop_accept = 0;

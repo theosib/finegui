@@ -435,8 +435,10 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `connectToInputManager()` replaces manual event polling for simpler integration
 - Focus management: `focusable`, `autoFocus`, `onFocus`, `onBlur` on WidgetNode; `setFocus()` on renderers
 - `findById()` on both renderers for widget search by `:id` string; `ui.find` in scripts
-- Animation fields: `alpha`, `windowPosX`, `windowPosY` on WidgetNode (FLT_MAX = auto-position)
+- Animation fields: `alpha`, `windowPosX`, `windowPosY`, `scaleX`, `scaleY`, `rotationY` on WidgetNode (FLT_MAX = auto-position for pos; 1.0 = normal scale; 0.0 = no rotation)
 - TweenManager: call `update(dt)` before `renderAll()` each frame
+- Vertex post-processing transform (scale/rotation) only affects the window's own draw list, not nested `BeginChild` regions
+- Vulkan pipeline uses `cullNone` so Y-axis flips work without back-face culling issues
 
 ## WidgetNode (Retained Mode)
 
@@ -551,6 +553,9 @@ struct WidgetNode {
     float alpha = 1.0f;            // Window opacity (0.0=invisible, 1.0=opaque)
     float windowPosX = FLT_MAX;    // Explicit window position (FLT_MAX=auto)
     float windowPosY = FLT_MAX;
+    float scaleX = 1.0f;           // Window scale X (1.0=normal, 0.0=collapsed to center)
+    float scaleY = 1.0f;           // Window scale Y (1.0=normal, 0.0=collapsed to center)
+    float rotationY = 0.0f;        // Y-axis rotation in radians (0=facing forward, PI=flipped)
 
     // --- Static builders (Phase 1) ---
     static WidgetNode window(string title, vector<WidgetNode> children = {}, int flags = 0);
@@ -743,6 +748,8 @@ mapRenderer.setTextureRegistry(&reg);
 ## MapRenderer
 
 Alternative to GuiRenderer -- renders directly from finescript map data (no WidgetNode conversion). Used internally by ScriptGui. Maps ARE the widget data (shared_ptr semantics via finescript MapData), so mutations from script or C++ are visible immediately to the renderer.
+
+Window animation fields on maps: `:alpha`, `:window_pos_x`, `:window_pos_y`, `:scale_x`, `:scale_y`, `:rotation_y`. Same semantics as WidgetNode fields (defaults: alpha=1.0, pos=FLT_MAX for auto, scale=1.0, rotation=0.0).
 
 ```cpp
 class MapRenderer {
@@ -1052,6 +1059,10 @@ class TweenManager {
     int slideTo(int guiId, float x, float y, float duration = 0.4f, Easing = EaseOut, TweenCallback = {});
     int colorTo(int guiId, std::vector<int> childPath, float r, float g, float b, float a,
                 float duration = 0.3f, Easing = EaseOut, TweenCallback = {});
+    int zoomIn(int guiId, float duration = 0.3f, Easing = EaseOut, TweenCallback = {});
+    int zoomOut(int guiId, float duration = 0.3f, Easing = EaseIn, TweenCallback = {});
+    int flipY(int guiId, float duration = 0.5f, Easing = EaseInOut, TweenCallback = {});
+    int flipYBack(int guiId, float duration = 0.5f, Easing = EaseInOut, TweenCallback = {});
     int shake(int guiId, float duration = 0.4f, float amplitude = 8.0f, float frequency = 15.0f,
               TweenCallback = {});
 
@@ -1066,7 +1077,7 @@ class TweenManager {
 
 Easing: `Linear`, `EaseIn` (quad), `EaseOut` (quad), `EaseInOut` (quad), `CubicOut`, `ElasticOut`, `BounceOut`.
 
-TweenProperty: `Alpha`, `PosX`, `PosY`, `FloatValue`, `IntValue`, `ColorR`, `ColorG`, `ColorB`, `ColorA`, `Width`, `Height`.
+TweenProperty: `Alpha`, `PosX`, `PosY`, `FloatValue`, `IntValue`, `ColorR`, `ColorG`, `ColorB`, `ColorA`, `Width`, `Height`, `ScaleX`, `ScaleY`, `RotationY`.
 
 `TweenCallback` = `std::function<void(int tweenId)>`.
 
@@ -1085,6 +1096,18 @@ tweens.fadeIn(guiId, 0.3f);
 
 // Slide window to position
 tweens.slideTo(guiId, 300.0f, 400.0f, 0.4f);
+
+// Zoom in (scale 0 -> 1, window appears from center)
+tweens.zoomIn(guiId, 0.3f);
+
+// Zoom out (scale 1 -> 0, window collapses to center)
+tweens.zoomOut(guiId, 0.3f, Easing::EaseIn, [&](int) { guiRenderer.hide(guiId); });
+
+// Flip around Y-axis (0 -> PI, shows back side)
+tweens.flipY(guiId, 0.5f);
+
+// Flip back (PI -> 0, shows front side)
+tweens.flipYBack(guiId, 0.5f);
 
 // Shake effect
 tweens.shake(guiId, 0.4f, 8.0f, 15.0f);

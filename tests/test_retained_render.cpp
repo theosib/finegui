@@ -17,6 +17,10 @@
 #include <cassert>
 #include <cmath>
 
+#ifndef M_PI
+#define M_PI 3.14159265358979323846
+#endif
+
 using namespace finegui;
 
 // Helper: run N frames with a GuiRenderer
@@ -603,6 +607,152 @@ void test_retained_rendering() {
         assert(found->label == "Deep");
 
         runFrames(window.get(), renderer.get(), gui, guiRenderer, 2);
+    }
+    std::cout << "ok";
+
+    // --- Test 24: Window with scaleX/scaleY renders without crash ---
+    std::cout << "\n  24. Window with scale... ";
+    guiRenderer.hideAll();
+    {
+        auto win = WidgetNode::window("Scaled Window", {
+            WidgetNode::text("Scaled content"),
+            WidgetNode::button("Scaled button"),
+        });
+        win.scaleX = 0.5f;
+        win.scaleY = 0.5f;
+        guiRenderer.show(std::move(win));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+    }
+    std::cout << "ok";
+
+    // --- Test 25: Window with rotationY renders without crash ---
+    std::cout << "\n  25. Window with rotation... ";
+    guiRenderer.hideAll();
+    {
+        auto win = WidgetNode::window("Rotated Window", {
+            WidgetNode::text("Flipped content"),
+        });
+        win.rotationY = 1.0f;  // ~57 degrees
+        guiRenderer.show(std::move(win));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+    }
+    std::cout << "ok";
+
+    // --- Test 26: TweenManager zoomIn ---
+    std::cout << "\n  26. TweenManager zoomIn... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Zoom Test", {
+            WidgetNode::text("Zooming in..."),
+        });
+        win.scaleX = 0.0f;
+        win.scaleY = 0.0f;
+        int zoomId = guiRenderer.show(std::move(win));
+
+        bool zoomComplete = false;
+        tweens.zoomIn(zoomId, 0.5f, Easing::Linear,
+                      [&zoomComplete](int) { zoomComplete = true; });
+        assert(tweens.activeCount() == 2);  // ScaleX + ScaleY
+
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        auto* zoomWin = guiRenderer.get(zoomId);
+        assert(zoomWin != nullptr);
+        assert(zoomWin->scaleX >= 0.99f);
+        assert(zoomWin->scaleY >= 0.99f);
+        assert(zoomComplete);
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 27: TweenManager flipY ---
+    std::cout << "\n  27. TweenManager flipY... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Flip Test", {
+            WidgetNode::text("Flipping..."),
+        });
+        int flipId = guiRenderer.show(std::move(win));
+
+        bool flipComplete = false;
+        tweens.flipY(flipId, 0.5f, Easing::Linear,
+                     [&flipComplete](int) { flipComplete = true; });
+        assert(tweens.activeCount() == 1);
+
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        auto* flipWin = guiRenderer.get(flipId);
+        assert(flipWin != nullptr);
+        assert(std::abs(flipWin->rotationY - static_cast<float>(M_PI)) < 0.1f);
+        assert(flipComplete);
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 28: TweenManager zoomOut ---
+    std::cout << "\n  28. TweenManager zoomOut... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("ZoomOut Test", {
+            WidgetNode::text("Zooming out..."),
+        });
+        int zoomOutId = guiRenderer.show(std::move(win));
+
+        bool zoomOutComplete = false;
+        tweens.zoomOut(zoomOutId, 0.5f, Easing::Linear,
+                       [&zoomOutComplete](int) { zoomOutComplete = true; });
+        assert(tweens.activeCount() == 2);
+
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        auto* zoomOutWin = guiRenderer.get(zoomOutId);
+        assert(zoomOutWin != nullptr);
+        assert(zoomOutWin->scaleX < 0.01f);
+        assert(zoomOutWin->scaleY < 0.01f);
+        assert(zoomOutComplete);
+        assert(tweens.activeCount() == 0);
     }
     std::cout << "ok";
 

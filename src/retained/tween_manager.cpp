@@ -36,6 +36,9 @@ float TweenManager::readProperty(const WidgetNode& node, TweenProperty prop) {
         case TweenProperty::ColorA:     return node.colorA;
         case TweenProperty::Width:      return node.width;
         case TweenProperty::Height:     return node.height;
+        case TweenProperty::ScaleX:     return node.scaleX;
+        case TweenProperty::ScaleY:     return node.scaleY;
+        case TweenProperty::RotationY:  return node.rotationY;
     }
     return 0.0f;
 }
@@ -53,6 +56,9 @@ void TweenManager::writeProperty(WidgetNode& node, TweenProperty prop, float val
         case TweenProperty::ColorA:     node.colorA = value; break;
         case TweenProperty::Width:      node.width = value; break;
         case TweenProperty::Height:     node.height = value; break;
+        case TweenProperty::ScaleX:     node.scaleX = value; break;
+        case TweenProperty::ScaleY:     node.scaleY = value; break;
+        case TweenProperty::RotationY:  node.rotationY = value; break;
     }
 }
 
@@ -228,6 +234,26 @@ int TweenManager::colorTo(int guiId, std::vector<int> childPath,
     animate(guiId, childPath, TweenProperty::ColorG, g, duration, easing);
     animate(guiId, childPath, TweenProperty::ColorB, b, duration, easing);
     return animate(guiId, std::move(childPath), TweenProperty::ColorA, a, duration, easing, std::move(onComplete));
+}
+
+int TweenManager::zoomIn(int guiId, float duration, Easing easing, TweenCallback onComplete) {
+    animate(guiId, {}, TweenProperty::ScaleX, 0.0f, 1.0f, duration, easing);
+    return animate(guiId, {}, TweenProperty::ScaleY, 0.0f, 1.0f, duration, easing, std::move(onComplete));
+}
+
+int TweenManager::zoomOut(int guiId, float duration, Easing easing, TweenCallback onComplete) {
+    animate(guiId, {}, TweenProperty::ScaleX, 1.0f, 0.0f, duration, easing);
+    return animate(guiId, {}, TweenProperty::ScaleY, 1.0f, 0.0f, duration, easing, std::move(onComplete));
+}
+
+int TweenManager::flipY(int guiId, float duration, Easing easing, TweenCallback onComplete) {
+    return animate(guiId, {}, TweenProperty::RotationY, 0.0f,
+                   static_cast<float>(M_PI), duration, easing, std::move(onComplete));
+}
+
+int TweenManager::flipYBack(int guiId, float duration, Easing easing, TweenCallback onComplete) {
+    return animate(guiId, {}, TweenProperty::RotationY, static_cast<float>(M_PI),
+                   0.0f, duration, easing, std::move(onComplete));
 }
 
 int TweenManager::shake(int guiId, float duration, float amplitude, float frequency,

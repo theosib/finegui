@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <cstring>
 #include <cfloat>
+#include <cmath>
 
 namespace finegui {
 
@@ -301,8 +302,21 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
         ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
     }
 
+    // Animation: scale and rotation
+    float scaleX = static_cast<float>(getNumericField(m, syms_.scale_x, 1.0));
+    float scaleY = static_cast<float>(getNumericField(m, syms_.scale_y, 1.0));
+    float rotY = static_cast<float>(getNumericField(m, syms_.rotation_y, 0.0));
+
     bool open = true;
-    if (ImGui::Begin(title.c_str(), &open, static_cast<ImGuiWindowFlags>(wflags))) {
+    bool windowOpen = ImGui::Begin(title.c_str(), &open, static_cast<ImGuiWindowFlags>(wflags));
+
+    // Capture draw list and window geometry for vertex post-processing
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 windowPos = ImGui::GetWindowPos();
+    ImVec2 windowSize = ImGui::GetWindowSize();
+    int vtxStart = drawList->VtxBuffer.Size;
+
+    if (windowOpen) {
         auto childrenVal = m.get(syms_.children);
         if (childrenVal.isArray()) {
             for (auto& child : childrenVal.asArrayMut()) {
@@ -316,6 +330,42 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
 
     if (pushedAlpha) {
         ImGui::PopStyleVar();
+    }
+
+    // Post-process vertices for zoom/flip transforms
+    bool needsTransform = scaleX != 1.0f || scaleY != 1.0f || rotY != 0.0f;
+    if (needsTransform && drawList->VtxBuffer.Size > vtxStart) {
+        float cx = windowPos.x + windowSize.x * 0.5f;
+        float cy = windowPos.y + windowSize.y * 0.5f;
+        float cosR = std::cos(rotY);
+        float sinR = std::sin(rotY);
+        constexpr float perspD = 800.0f;
+
+        for (int i = vtxStart; i < drawList->VtxBuffer.Size; i++) {
+            ImDrawVert& v = drawList->VtxBuffer.Data[i];
+            float dx = v.pos.x - cx;
+            float dy = v.pos.y - cy;
+
+            dx *= scaleX;
+            dy *= scaleY;
+
+            if (rotY != 0.0f) {
+                float xRot = dx * cosR;
+                float z = dx * sinR;
+                float pScale = perspD / (perspD + z);
+                dx = xRot * pScale;
+                dy *= pScale;
+            }
+
+            v.pos.x = cx + dx;
+            v.pos.y = cy + dy;
+        }
+
+        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        for (int i = 0; i < drawList->CmdBuffer.Size; i++) {
+            ImDrawCmd& cmd = drawList->CmdBuffer.Data[i];
+            cmd.ClipRect = ImVec4(0, 0, displaySize.x, displaySize.y);
+        }
     }
 
     if (!open) {

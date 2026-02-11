@@ -103,6 +103,11 @@ struct WidgetNode {
     /// Animation: explicit window position (FLT_MAX = ImGui auto-positioning).
     float windowPosX = FLT_MAX;
     float windowPosY = FLT_MAX;
+    /// Animation: window scale (1.0 = normal size, 0.0 = collapsed to center).
+    float scaleX = 1.0f;
+    float scaleY = 1.0f;
+    /// Animation: Y-axis rotation in radians (0 = facing forward, PI = flipped).
+    float rotationY = 0.0f;
 
     /// Default-open state (for CollapsingHeader, TreeNode).
     bool defaultOpen = false;

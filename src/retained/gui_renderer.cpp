@@ -3,6 +3,7 @@
 #include <imgui.h>
 #include <cstring>
 #include <algorithm>
+#include <cmath>
 
 namespace finegui {
 
@@ -229,8 +230,16 @@ void GuiRenderer::renderWindow(WidgetNode& node) {
     }
 
     bool open = true;
-    if (ImGui::Begin(node.label.c_str(), &open,
-                     static_cast<ImGuiWindowFlags>(node.windowFlags))) {
+    bool windowOpen = ImGui::Begin(node.label.c_str(), &open,
+                     static_cast<ImGuiWindowFlags>(node.windowFlags));
+
+    // Capture draw list and window geometry for vertex post-processing
+    ImDrawList* drawList = ImGui::GetWindowDrawList();
+    ImVec2 windowPos = ImGui::GetWindowPos();
+    ImVec2 windowSize = ImGui::GetWindowSize();
+    int vtxStart = drawList->VtxBuffer.Size;
+
+    if (windowOpen) {
         for (auto& child : node.children) {
             renderNode(child);
         }
@@ -239,6 +248,45 @@ void GuiRenderer::renderWindow(WidgetNode& node) {
 
     if (pushedAlpha) {
         ImGui::PopStyleVar();
+    }
+
+    // Post-process vertices for zoom/flip transforms
+    bool needsTransform = node.scaleX != 1.0f || node.scaleY != 1.0f || node.rotationY != 0.0f;
+    if (needsTransform && drawList->VtxBuffer.Size > vtxStart) {
+        float cx = windowPos.x + windowSize.x * 0.5f;
+        float cy = windowPos.y + windowSize.y * 0.5f;
+        float cosR = std::cos(node.rotationY);
+        float sinR = std::sin(node.rotationY);
+        constexpr float perspD = 800.0f; // perspective focal length in pixels
+
+        for (int i = vtxStart; i < drawList->VtxBuffer.Size; i++) {
+            ImDrawVert& v = drawList->VtxBuffer.Data[i];
+            float dx = v.pos.x - cx;
+            float dy = v.pos.y - cy;
+
+            // Apply scale
+            dx *= node.scaleX;
+            dy *= node.scaleY;
+
+            // Apply Y-axis rotation with perspective
+            if (node.rotationY != 0.0f) {
+                float xRot = dx * cosR;
+                float z = dx * sinR;
+                float pScale = perspD / (perspD + z);
+                dx = xRot * pScale;
+                dy *= pScale;
+            }
+
+            v.pos.x = cx + dx;
+            v.pos.y = cy + dy;
+        }
+
+        // Expand clip rects to full screen so transformed vertices aren't clipped
+        ImVec2 displaySize = ImGui::GetIO().DisplaySize;
+        for (int i = 0; i < drawList->CmdBuffer.Size; i++) {
+            ImDrawCmd& cmd = drawList->CmdBuffer.Data[i];
+            cmd.ClipRect = ImVec4(0, 0, displaySize.x, displaySize.y);
+        }
     }
 
     if (!open) {

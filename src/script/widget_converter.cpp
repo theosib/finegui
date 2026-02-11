@@ -192,6 +192,9 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     window_alpha = engine.intern("window_alpha");
     window_pos_x = engine.intern("window_pos_x");
     window_pos_y = engine.intern("window_pos_y");
+    scale_x = engine.intern("scale_x");
+    scale_y = engine.intern("scale_y");
+    rotation_y = engine.intern("rotation_y");
 }
 
 // -- Type mapping -------------------------------------------------------------

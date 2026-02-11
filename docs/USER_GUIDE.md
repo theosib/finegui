@@ -779,12 +779,19 @@ WidgetNode supports animation-related fields for smooth transitions (used by Twe
 | `alpha` | `1.0f` | Window opacity (0.0 = invisible, 1.0 = fully opaque) |
 | `windowPosX` | `FLT_MAX` | Explicit window position X (`FLT_MAX` = ImGui auto-positioning) |
 | `windowPosY` | `FLT_MAX` | Explicit window position Y (`FLT_MAX` = ImGui auto-positioning) |
+| `scaleX` | `1.0f` | Horizontal scale factor (0.0 = collapsed, 1.0 = normal size) |
+| `scaleY` | `1.0f` | Vertical scale factor (0.0 = collapsed, 1.0 = normal size) |
+| `rotationY` | `0.0f` | Rotation around the Y-axis in radians (0 = front face, PI = back face) |
 
 ```cpp
 auto win = WidgetNode::window("Fading", { WidgetNode::text("Semi-transparent") });
 win.alpha = 0.5f;          // 50% opacity
 win.windowPosX = 100.0f;   // Position at (100, 200)
 win.windowPosY = 200.0f;
+
+auto popup = WidgetNode::window("ZoomPopup", { WidgetNode::text("Zoomed!") });
+popup.scaleX = 0.0f;       // Start collapsed (animate to 1.0 with TweenManager)
+popup.scaleY = 0.0f;
 ```
 
 ### Widget Search by ID
@@ -1268,7 +1275,19 @@ tweens.colorTo(guiId, {0, 1}, 1.0f, 0.0f, 0.0f, 1.0f, 0.3f);  // Flash red
 
 // Screen shake
 tweens.shake(guiId, 0.4f, 8.0f, 15.0f);
+
+// Zoom in/out (animates scaleX and scaleY)
+tweens.zoomIn(guiId, 0.3f);   // Scale 0 -> 1, window appears from center
+tweens.zoomOut(guiId, 0.3f, Easing::EaseIn, [](int id) {
+    // Called when zoom-out completes
+});
+
+// Y-axis flip (animates rotationY)
+tweens.flipY(guiId, 0.5f);      // Rotate 0 -> PI, shows back side
+tweens.flipYBack(guiId, 0.5f);  // Rotate PI -> 0, shows front side
 ```
+
+**Note:** The Vulkan pipeline uses `cullNone`, so back-face culling is disabled. Flip animations render correctly at all rotation angles without faces being discarded.
 
 ### Generic Animation
 
@@ -1302,6 +1321,8 @@ tweens.animate(guiId, {0}, TweenProperty::FloatValue, 0.0f, 1.0f, 0.5f);
 | `IntValue` | `intValue` | Counters |
 | `ColorR/G/B/A` | `colorR/G/B/A` | Color transitions |
 | `Width`, `Height` | `width`, `height` | Resize |
+| `ScaleX`, `ScaleY` | `scaleX`, `scaleY` | Zoom in/out |
+| `RotationY` | `rotationY` | Y-axis flip |
 
 ### Cancellation
 
