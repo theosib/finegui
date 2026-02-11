@@ -784,6 +784,40 @@ void test_retained_rendering() {
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
     std::cout << "ok";
 
+    // --- Test 30: Phase 13 Context Menu and Main Menu Bar ---
+    std::cout << "\n  30. Phase 13 Context Menu & Main Menu Bar... ";
+    guiRenderer.hideAll();
+
+    // Main menu bar (top-level, outside any window)
+    guiRenderer.show(WidgetNode::mainMenuBar({
+        WidgetNode::menu("File", {
+            WidgetNode::menuItem("New"),
+            WidgetNode::menuItem("Open"),
+            WidgetNode::separator(),
+            WidgetNode::menuItem("Exit"),
+        }),
+        WidgetNode::menu("Edit", {
+            WidgetNode::menuItem("Undo"),
+            WidgetNode::menuItem("Redo"),
+        }),
+    }));
+
+    // Window with context menus
+    guiRenderer.show(WidgetNode::window("Context Menu Test", {
+        WidgetNode::button("Right-Click Me"),
+        WidgetNode::contextMenu({
+            WidgetNode::menuItem("Cut"),
+            WidgetNode::menuItem("Copy"),
+            WidgetNode::menuItem("Paste"),
+        }),
+        WidgetNode::text("Some text"),
+        WidgetNode::contextMenu({
+            WidgetNode::menuItem("Select All"),
+        }),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

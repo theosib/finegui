@@ -577,6 +577,22 @@ WidgetNode WidgetNode::colorButton(std::string label, float r, float g, float b,
     return n;
 }
 
+// Phase 13 builders
+
+WidgetNode WidgetNode::contextMenu(std::vector<WidgetNode> children) {
+    WidgetNode n;
+    n.type = Type::ContextMenu;
+    n.children = std::move(children);
+    return n;
+}
+
+WidgetNode WidgetNode::mainMenuBar(std::vector<WidgetNode> children) {
+    WidgetNode n;
+    n.type = Type::MainMenuBar;
+    n.children = std::move(children);
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -636,6 +652,8 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::SliderAngle:       return "SliderAngle";
         case WidgetNode::Type::SmallButton:       return "SmallButton";
         case WidgetNode::Type::ColorButton:       return "ColorButton";
+        case WidgetNode::Type::ContextMenu:      return "ContextMenu";
+        case WidgetNode::Type::MainMenuBar:      return "MainMenuBar";
         default:                                  return "Unknown";
     }
 }

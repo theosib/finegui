@@ -1693,6 +1693,71 @@ void test_convert_focus_callbacks() {
 }
 
 // ============================================================================
+// Phase 13: Context Menu, Main Menu Bar, Close Popup
+// ============================================================================
+
+void test_binding_ui_context_menu() {
+    std::cout << "Testing: ui.context_menu binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.context_menu [{ui.menu_item "Cut"} {ui.menu_item "Copy"}]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("context_menu"));
+
+    auto children = m.get(engine.intern("children"));
+    assert(children.isArray());
+    assert(children.asArray().size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_main_menu_bar() {
+    std::cout << "Testing: ui.main_menu_bar binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.main_menu_bar [{ui.menu "File" [{ui.menu_item "New"}]}]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("main_menu_bar"));
+
+    auto children = m.get(engine.intern("children"));
+    assert(children.isArray());
+    assert(children.asArray().size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase13_symbols_interned() {
+    std::cout << "Testing: Phase 13 symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.sym_context_menu != 0);
+    assert(syms.sym_main_menu_bar != 0);
+    assert(syms.sym_context_menu == engine.intern("context_menu"));
+    assert(syms.sym_main_menu_bar == engine.intern("main_menu_bar"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1800,6 +1865,11 @@ int main() {
         test_focus_symbols_interned();
         test_convert_focusable_false();
         test_convert_focus_callbacks();
+
+        // Phase 13 - Context Menu, Main Menu Bar
+        test_binding_ui_context_menu();
+        test_binding_ui_main_menu_bar();
+        test_phase13_symbols_interned();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

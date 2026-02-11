@@ -169,6 +169,10 @@ private:
     void renderSmallButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderColorButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
+    // Phase 13 - Menus & Popups (continued)
+    void renderContextMenu(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderMainMenuBar(finescript::MapData& m, finescript::ExecutionContext& ctx);
+
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);
 

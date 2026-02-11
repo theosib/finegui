@@ -1759,6 +1759,56 @@ void test_animation_field_setting() {
 }
 
 // ============================================================================
+// Phase 13: Context Menu & Main Menu Bar Builders
+// ============================================================================
+
+void test_context_menu_builder() {
+    std::cout << "Testing: ContextMenu builder... ";
+
+    auto cm = WidgetNode::contextMenu({
+        WidgetNode::menuItem("Cut"),
+        WidgetNode::menuItem("Copy"),
+    });
+    assert(cm.type == WidgetNode::Type::ContextMenu);
+    assert(cm.children.size() == 2);
+    assert(cm.children[0].label == "Cut");
+    assert(cm.children[1].label == "Copy");
+
+    std::cout << "PASSED\n";
+}
+
+void test_main_menu_bar_builder() {
+    std::cout << "Testing: MainMenuBar builder... ";
+
+    auto mmb = WidgetNode::mainMenuBar({
+        WidgetNode::menu("File", {
+            WidgetNode::menuItem("New"),
+            WidgetNode::menuItem("Open"),
+        }),
+        WidgetNode::menu("Edit", {
+            WidgetNode::menuItem("Undo"),
+        }),
+    });
+    assert(mmb.type == WidgetNode::Type::MainMenuBar);
+    assert(mmb.children.size() == 2);
+    assert(mmb.children[0].label == "File");
+    assert(mmb.children[0].children.size() == 2);
+    assert(mmb.children[1].label == "Edit");
+    assert(mmb.children[1].children.size() == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase13_type_names() {
+    std::cout << "Testing: Phase 13 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::ContextMenu)) == "ContextMenu");
+    assert(std::string(widgetTypeName(WidgetNode::Type::MainMenuBar)) == "MainMenuBar");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Easing Function Tests (via TweenManager::applyEasing, tested indirectly)
 // ============================================================================
 
@@ -1924,6 +1974,11 @@ int main() {
         test_animation_field_defaults();
         test_animation_field_setting();
         test_easing_boundary_values();
+
+        // Phase 13 - Context Menu & Main Menu Bar
+        test_context_menu_builder();
+        test_main_menu_bar_builder();
+        test_phase13_type_names();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

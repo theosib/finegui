@@ -439,6 +439,9 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - TweenManager: call `update(dt)` before `renderAll()` each frame
 - Vertex post-processing transform (scale/rotation) only affects the window's own draw list, not nested `BeginChild` regions
 - Vulkan pipeline uses `cullNone` so Y-axis flips work without back-face culling issues
+- `ContextMenu` must be placed immediately after its target widget in the children list; right-clicking the target opens the menu
+- `MainMenuBar` must be a top-level tree (not inside a window); renders at the top of the screen
+- `ui.close_popup` must be called during popup rendering (e.g., from a button callback inside a popup/modal)
 
 ## WidgetNode (Retained Mode)
 
@@ -468,7 +471,9 @@ struct WidgetNode {
         RadioButton, Selectable, InputTextMultiline,
         BulletText, SeparatorText, Indent, Dummy, NewLine,
         // Phase 10 - Style push/pop
-        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar
+        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar,
+        // Phase 13 - Menus & Popups
+        ContextMenu, MainMenuBar
     };
 
     Type type;
@@ -650,6 +655,10 @@ struct WidgetNode {
     static WidgetNode pushStyleVar(int varIdx, float val);
     static WidgetNode pushStyleVar(int varIdx, float x, float y);
     static WidgetNode popStyleVar(int count=1);
+
+    // --- Phase 13 builders ---
+    static WidgetNode contextMenu(std::vector<WidgetNode> children = {});
+    static WidgetNode mainMenuBar(std::vector<WidgetNode> children = {});
 };
 ```
 
@@ -923,6 +932,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.popup` | `ui.popup "id" [children]` | |
 | `ui.modal` | `ui.modal "title" [children] [on_close]` | |
 | `ui.open_popup` | `ui.open_popup popup_map` | Sets `:value` to true on map |
+| `ui.close_popup` | `ui.close_popup` | Closes innermost open popup (call during popup rendering) |
 | `ui.canvas` | `ui.canvas "id" w h [commands]` | commands: array of draw_* |
 | `ui.tooltip` | `ui.tooltip "text"` or `ui.tooltip [children]` | |
 | `ui.radio_button` | `ui.radio_button "label" value my_value [on_change]` | |
@@ -938,6 +948,8 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.pop_style_color` | `ui.pop_style_color [count]` | Pop color overrides |
 | `ui.push_style_var` | `ui.push_style_var var_idx val` or `var_idx [x y]` | Push style var |
 | `ui.pop_style_var` | `ui.pop_style_var [count]` | Pop style var overrides |
+| `ui.context_menu` | `ui.context_menu [children]` | Right-click context menu; place after target widget in children list |
+| `ui.main_menu_bar` | `ui.main_menu_bar [children]` | Top-level app menu bar; must be a top-level tree (not inside a window) |
 
 ### Canvas Draw Commands (returned by ui.draw_*)
 

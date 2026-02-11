@@ -698,6 +698,35 @@ void registerGuiBindings(ScriptEngine& engine) {
             return Value::nil();
         }));
 
+    // ui.close_popup  ->  closes the current popup (must be called during popup rendering)
+    uiMap.set(engine.intern("close_popup"), makeFn(
+        [](ExecutionContext&, const std::vector<Value>&) -> Value {
+            ImGui::CloseCurrentPopup();
+            return Value::nil();
+        }));
+
+    // ui.context_menu [children]
+    uiMap.set(engine.intern("context_menu"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "context_menu");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isArray()) {
+                m.set(engine.intern("children"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.main_menu_bar [children]
+    uiMap.set(engine.intern("main_menu_bar"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "main_menu_bar");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isArray()) {
+                m.set(engine.intern("children"), args[0]);
+            }
+            return w;
+        }));
+
     // =========================================================================
     // Phase 8 - Custom
     // =========================================================================

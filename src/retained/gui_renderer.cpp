@@ -186,6 +186,9 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         case WidgetNode::Type::SliderAngle:       renderSliderAngle(node); break;
         case WidgetNode::Type::SmallButton:       renderSmallButton(node); break;
         case WidgetNode::Type::ColorButton:       renderColorButton(node); break;
+        // Phase 13
+        case WidgetNode::Type::ContextMenu:      renderContextMenu(node); break;
+        case WidgetNode::Type::MainMenuBar:      renderMainMenuBar(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -962,6 +965,28 @@ void GuiRenderer::renderColorButton(WidgetNode& node) {
     ImVec4 col{node.colorR, node.colorG, node.colorB, node.colorA};
     if (ImGui::ColorButton(node.label.c_str(), col)) {
         if (node.onClick) node.onClick(node);
+    }
+}
+
+// -- Phase 13: Menus & Popups (continued) -------------------------------------
+
+void GuiRenderer::renderContextMenu(WidgetNode& node) {
+    // BeginPopupContextItem needs a string ID (required if previous item has no ID, e.g. Text)
+    const char* popupId = node.id.empty() ? "##ctx" : node.id.c_str();
+    if (ImGui::BeginPopupContextItem(popupId)) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void GuiRenderer::renderMainMenuBar(WidgetNode& node) {
+    if (ImGui::BeginMainMenuBar()) {
+        for (auto& child : node.children) {
+            renderNode(child);
+        }
+        ImGui::EndMainMenuBar();
     }
 }
 

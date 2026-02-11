@@ -66,10 +66,10 @@
 - [x] menu_item
 - [x] popup
 - [x] modal
-- [ ] context_menu (right-click)
-- [ ] main_menu_bar (top-level app menu)
-- [ ] open_popup (script function)
-- [ ] close_popup (script function)
+- [x] context_menu (right-click)
+- [x] main_menu_bar (top-level app menu)
+- [x] open_popup (script function)
+- [x] close_popup (script function)
 
 ### Tooltips
 - [x] tooltip

@@ -150,6 +150,10 @@ private:
     void renderSmallButton(WidgetNode& node);
     void renderColorButton(WidgetNode& node);
 
+    // Phase 13 - Menus & Popups (continued)
+    void renderContextMenu(WidgetNode& node);
+    void renderMainMenuBar(WidgetNode& node);
+
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);
 };

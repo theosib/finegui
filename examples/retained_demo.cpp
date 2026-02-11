@@ -355,6 +355,51 @@ int main() {
             }),
         }));
 
+        // Phase 13: Context Menu & Main Menu Bar showcase
+        // Main menu bar is a top-level widget (not inside a window)
+        guiRenderer.show(finegui::WidgetNode::mainMenuBar({
+            finegui::WidgetNode::menu("File", {
+                finegui::WidgetNode::menuItem("New", {}, "Ctrl+N"),
+                finegui::WidgetNode::menuItem("Open", {}, "Ctrl+O"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::menuItem("Save", {}, "Ctrl+S"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::menuItem("Exit"),
+            }),
+            finegui::WidgetNode::menu("Edit", {
+                finegui::WidgetNode::menuItem("Undo", {}, "Ctrl+Z"),
+                finegui::WidgetNode::menuItem("Redo", {}, "Ctrl+Shift+Z"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::menuItem("Cut", {}, "Ctrl+X"),
+                finegui::WidgetNode::menuItem("Copy", {}, "Ctrl+C"),
+                finegui::WidgetNode::menuItem("Paste", {}, "Ctrl+V"),
+            }),
+            finegui::WidgetNode::menu("Help", {
+                finegui::WidgetNode::menuItem("About"),
+            }),
+        }));
+
+        // Context menu demo window
+        guiRenderer.show(finegui::WidgetNode::window("Phase 13: Context Menu", {
+            finegui::WidgetNode::text("Right-click the buttons below for context menus:"),
+            finegui::WidgetNode::button("Right-Click Me"),
+            finegui::WidgetNode::contextMenu({
+                finegui::WidgetNode::menuItem("Cut", {}, "Ctrl+X"),
+                finegui::WidgetNode::menuItem("Copy", {}, "Ctrl+C"),
+                finegui::WidgetNode::menuItem("Paste", {}, "Ctrl+V"),
+            }),
+            finegui::WidgetNode::button("Another Button"),
+            finegui::WidgetNode::contextMenu({
+                finegui::WidgetNode::menuItem("Inspect"),
+                finegui::WidgetNode::menuItem("Delete"),
+                finegui::WidgetNode::separator(),
+                finegui::WidgetNode::menu("More...", {
+                    finegui::WidgetNode::menuItem("Option A"),
+                    finegui::WidgetNode::menuItem("Option B"),
+                }),
+            }),
+        }));
+
         // Offscreen 3D Preview — renders to an offscreen surface and displays in GUI
         auto offscreen = finevk::OffscreenSurface::create(device.get())
             .extent(256, 256)

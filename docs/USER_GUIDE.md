@@ -727,6 +727,13 @@ guiRenderer.hide(mainId);
 | `WidgetNode::pushStyleVar(varIdx, x, y)` | Push style var (ImVec2) |
 | `WidgetNode::popStyleVar(count)` | Pop style var overrides |
 
+**Phase 13 - Menus & Popups:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::contextMenu(children)` | Right-click context menu for the previous widget. Place immediately after the target widget in the children list. Children are typically `menuItem` and `separator` widgets. |
+| `WidgetNode::mainMenuBar(children)` | Top-level application menu bar (renders at the top of the screen, outside any window). Must be shown as a top-level tree via `guiRenderer.show()`, not inside a window. Children are typically `menu` widgets. |
+
 ### Callbacks
 
 Callbacks receive a reference to the widget node that triggered them:
@@ -1026,7 +1033,6 @@ Builder functions (return widget maps):
 | `ui.listbox` | `label items selected [height]` | List box |
 | `ui.popup` | `id children` | Popup |
 | `ui.modal` | `title children` | Modal dialog |
-| `ui.open_popup` | `popup_widget` | Open a popup/modal |
 | `ui.canvas` | `id width height [commands]` | Custom draw canvas |
 | `ui.tooltip` | `text_or_children` | Tooltip |
 | `ui.draw_line` | `p1 p2 color [thickness]` | Canvas draw line |
@@ -1046,6 +1052,8 @@ Builder functions (return widget maps):
 | `ui.pop_style_color` | `[count]` | Pop color overrides |
 | `ui.push_style_var` | `var_idx value` | Push style var (float or `[x y]`) |
 | `ui.pop_style_var` | `[count]` | Pop style var overrides |
+| `ui.context_menu` | `[children]` | Right-click context menu for the previous widget. Place immediately after the target widget in the children list. Children are typically `menu_item` and `separator` widgets. |
+| `ui.main_menu_bar` | `[children]` | Top-level application menu bar (renders at the top of the screen, outside any window). Must be shown as a top-level tree via `ui.show`, not inside a window. Children are typically `menu` widgets. |
 
 Action functions (require active ScriptGui context):
 
@@ -1061,6 +1069,8 @@ Action functions (require active ScriptGui context):
 | `gui.on_message` | `:symbol handler` | Register a message handler |
 | `gui.set_focus` | `"widget_id"` | Programmatically focus a widget by ID |
 | `ui.find` | `"widget_id"` or `:widget_id` | Find widget map by `:id` string or symbol (nil if not found) |
+| `ui.open_popup` | `popup_map` | Open a popup or modal programmatically (sets `:value` to true on the popup/modal map) |
+| `ui.close_popup` | *(none)* | Close the innermost open popup (must be called during popup rendering) |
 
 ### Dynamic Updates from Scripts
 

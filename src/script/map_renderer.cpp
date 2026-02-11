@@ -256,6 +256,9 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else if (sym == syms_.sym_slider_angle)      renderSliderAngle(m, ctx);
         else if (sym == syms_.sym_small_button)      renderSmallButton(m, ctx);
         else if (sym == syms_.sym_color_button)      renderColorButton(m, ctx);
+        // Phase 13
+        else if (sym == syms_.sym_context_menu)      renderContextMenu(m, ctx);
+        else if (sym == syms_.sym_main_menu_bar)     renderMainMenuBar(m, ctx);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1446,6 +1449,38 @@ void MapRenderer::renderColorButton(MapData& m, ExecutionContext& ctx) {
 
     if (ImGui::ColorButton(label.c_str(), col)) {
         invokeCallback(m, syms_.on_click, ctx);
+    }
+}
+
+// -- Phase 13: Menus & Popups (continued) -------------------------------------
+
+void MapRenderer::renderContextMenu(MapData& m, ExecutionContext& ctx) {
+    // BeginPopupContextItem needs a string ID (required if previous item has no ID, e.g. Text)
+    auto id = getStringField(m, syms_.id, "##ctx");
+    if (ImGui::BeginPopupContextItem(id.c_str())) {
+        auto childrenVal = m.get(syms_.children);
+        if (childrenVal.isArray()) {
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+        }
+        ImGui::EndPopup();
+    }
+}
+
+void MapRenderer::renderMainMenuBar(MapData& m, ExecutionContext& ctx) {
+    if (ImGui::BeginMainMenuBar()) {
+        auto childrenVal = m.get(syms_.children);
+        if (childrenVal.isArray()) {
+            for (auto& child : childrenVal.asArrayMut()) {
+                if (child.isMap()) {
+                    renderNode(child.asMap(), ctx);
+                }
+            }
+        }
+        ImGui::EndMainMenuBar();
     }
 }
 
