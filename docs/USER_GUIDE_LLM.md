@@ -434,6 +434,9 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - Modal dialogs close on Escape key (fires onClose callback)
 - `connectToInputManager()` replaces manual event polling for simpler integration
 - Focus management: `focusable`, `autoFocus`, `onFocus`, `onBlur` on WidgetNode; `setFocus()` on renderers
+- `findById()` on both renderers for widget search by `:id` string; `ui.find` in scripts
+- Animation fields: `alpha`, `windowPosX`, `windowPosY` on WidgetNode (FLT_MAX = auto-position)
+- TweenManager: call `update(dt)` before `renderAll()` each frame
 
 ## WidgetNode (Retained Mode)
 
@@ -544,6 +547,11 @@ struct WidgetNode {
     WidgetCallback onFocus;         // called when widget gains keyboard focus
     WidgetCallback onBlur;          // called when widget loses keyboard focus
 
+    // Animation (used by TweenManager)
+    float alpha = 1.0f;            // Window opacity (0.0=invisible, 1.0=opaque)
+    float windowPosX = FLT_MAX;    // Explicit window position (FLT_MAX=auto)
+    float windowPosY = FLT_MAX;
+
     // --- Static builders (Phase 1) ---
     static WidgetNode window(string title, vector<WidgetNode> children = {}, int flags = 0);
     static WidgetNode text(string content);
@@ -639,6 +647,7 @@ class GuiRenderer {
     void renderAll();                        // Call between beginFrame/endFrame
     void setDragDropManager(DragDropManager* manager); // Enable click-to-pick-up DnD
     void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
+    WidgetNode* findById(const std::string& widgetId); // Find widget by :id string (nullptr if not found)
 };
 ```
 
@@ -655,6 +664,10 @@ gui.endFrame();
 // Mutate:
 auto* tree = renderer.get(id);
 tree->children[0].textContent = "Updated";
+
+// Find by ID (searches all trees recursively):
+auto* widget = renderer.findById("hp_bar");
+if (widget) widget->floatValue = 0.5f;
 
 // Remove:
 renderer.hide(id);
@@ -744,6 +757,7 @@ class MapRenderer {
     void setTextureRegistry(TextureRegistry* registry);
     const ConverterSymbols& syms() const;      // Pre-interned symbols
     void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
+    finescript::Value findById(const std::string& widgetId); // Find widget map by :id (nil if not found)
 };
 ```
 
@@ -912,6 +926,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.show` | `ui.show widget_map` | Store map in MapRenderer, returns ID |
 | `ui.hide` | `ui.hide` | Remove tree from renderer |
 | `ui.node` | `ui.node gui_id [child_path]` | Navigate map tree, return child map |
+| `ui.find` | `ui.find "widget_id"` | Find widget map by `:id` string (nil if not found) |
 
 `ui.node` path: integer (direct child index) or array of integers (nested path, e.g., `[2 0]`). No path returns root map.
 
@@ -1006,6 +1021,75 @@ auto val = scriptGui->context()->get("variable_name");
 // Thread-safe messaging
 scriptGui->queueMessage(engine.intern("event"), Value::nil());
 mgr.queueBroadcast(engine.intern("global_event"), Value::nil());
+```
+
+## TweenManager (Animation)
+
+Smooth property interpolation for retained-mode widgets. Animates WidgetNode fields over time with configurable easing. Works with GuiRenderer only (not MapRenderer).
+
+```cpp
+class TweenManager {
+    explicit TweenManager(GuiRenderer& renderer);
+
+    void update(float dt);  // Call each frame before renderAll()
+
+    // Generic: animate property (reads current "from" automatically)
+    int animate(int guiId, std::vector<int> childPath,
+                TweenProperty prop, float toValue,
+                float duration, Easing easing = Easing::EaseOut,
+                TweenCallback onComplete = {});
+
+    // Generic: explicit from/to
+    int animate(int guiId, std::vector<int> childPath,
+                TweenProperty prop, float fromValue, float toValue,
+                float duration, Easing easing = Easing::EaseOut,
+                TweenCallback onComplete = {});
+
+    // Convenience
+    int fadeIn(int guiId, float duration = 0.3f, Easing = EaseOut, TweenCallback = {});
+    int fadeOut(int guiId, float duration = 0.3f, Easing = EaseIn, TweenCallback = {});
+    int slideTo(int guiId, float x, float y, float duration = 0.4f, Easing = EaseOut, TweenCallback = {});
+    int colorTo(int guiId, std::vector<int> childPath, float r, float g, float b, float a,
+                float duration = 0.3f, Easing = EaseOut, TweenCallback = {});
+    int shake(int guiId, float duration = 0.4f, float amplitude = 8.0f, float frequency = 15.0f,
+              TweenCallback = {});
+
+    // Cancellation
+    void cancel(int tweenId);
+    void cancelAll(int guiId);
+    void cancelAll();
+    bool isActive(int tweenId) const;
+    int activeCount() const;
+};
+```
+
+Easing: `Linear`, `EaseIn` (quad), `EaseOut` (quad), `EaseInOut` (quad), `CubicOut`, `ElasticOut`, `BounceOut`.
+
+TweenProperty: `Alpha`, `PosX`, `PosY`, `FloatValue`, `IntValue`, `ColorR`, `ColorG`, `ColorB`, `ColorA`, `Width`, `Height`.
+
+`TweenCallback` = `std::function<void(int tweenId)>`.
+
+Usage:
+```cpp
+TweenManager tweens(guiRenderer);
+
+// Game loop:
+gui.beginFrame();
+tweens.update(ImGui::GetIO().DeltaTime);
+guiRenderer.renderAll();
+gui.endFrame();
+
+// Fade in a window
+tweens.fadeIn(guiId, 0.3f);
+
+// Slide window to position
+tweens.slideTo(guiId, 300.0f, 400.0f, 0.4f);
+
+// Shake effect
+tweens.shake(guiId, 0.4f, 8.0f, 15.0f);
+
+// Target child widget by index path: children[2].children[0]
+tweens.animate(guiId, {2, 0}, TweenProperty::FloatValue, 1.0f, 0.5f);
 ```
 
 ## Widget Converter (Advanced)

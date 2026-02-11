@@ -2,6 +2,7 @@
 #include <finescript/map_data.h>
 #include <imgui.h>
 #include <cstring>
+#include <cfloat>
 
 namespace finegui {
 
@@ -63,6 +64,30 @@ Value* MapRenderer::get(int id) {
 
 void MapRenderer::setFocus(const std::string& widgetId) {
     pendingFocusId_ = widgetId;
+}
+
+finescript::Value MapRenderer::findByIdRecursive(finescript::Value& node, const std::string& widgetId) {
+    if (!node.isMap()) return finescript::Value::nil();
+    auto& m = node.asMap();
+    auto idVal = m.get(syms_.id);
+    if (idVal.isString() && idVal.asString() == widgetId) return node;
+    auto childrenVal = m.get(syms_.children);
+    if (childrenVal.isArray()) {
+        for (auto& child : childrenVal.asArrayMut()) {
+            auto found = findByIdRecursive(child, widgetId);
+            if (!found.isNil()) return found;
+        }
+    }
+    return finescript::Value::nil();
+}
+
+finescript::Value MapRenderer::findById(const std::string& widgetId) {
+    if (widgetId.empty()) return finescript::Value::nil();
+    for (auto& [id, entry] : trees_) {
+        auto found = findByIdRecursive(entry.rootMap, widgetId);
+        if (!found.isNil()) return found;
+    }
+    return finescript::Value::nil();
 }
 
 void MapRenderer::renderAll() {
@@ -246,6 +271,20 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
     auto title = getStringField(m, syms_.title, "Untitled");
     int wflags = parseWindowFlags(m);
 
+    // Animation: explicit window position
+    float posX = getNumericField(m, syms_.window_pos_x, FLT_MAX);
+    float posY = getNumericField(m, syms_.window_pos_y, FLT_MAX);
+    if (posX != FLT_MAX && posY != FLT_MAX) {
+        ImGui::SetNextWindowPos(ImVec2(posX, posY));
+    }
+
+    // Animation: window alpha
+    float alpha = getNumericField(m, syms_.window_alpha, 1.0f);
+    bool pushedAlpha = alpha < 1.0f;
+    if (pushedAlpha) {
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, alpha);
+    }
+
     bool open = true;
     if (ImGui::Begin(title.c_str(), &open, static_cast<ImGuiWindowFlags>(wflags))) {
         auto childrenVal = m.get(syms_.children);
@@ -258,6 +297,10 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
         }
     }
     ImGui::End();
+
+    if (pushedAlpha) {
+        ImGui::PopStyleVar();
+    }
 
     if (!open) {
         m.set(syms_.visible, Value::boolean(false));

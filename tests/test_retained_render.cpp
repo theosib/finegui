@@ -9,11 +9,13 @@
 #include <finegui/finegui.hpp>
 #include <finegui/gui_renderer.hpp>
 #include <finegui/drag_drop_manager.hpp>
+#include <finegui/tween_manager.hpp>
 
 #include <finevk/finevk.hpp>
 
 #include <iostream>
 #include <cassert>
+#include <cmath>
 
 using namespace finegui;
 
@@ -335,6 +337,273 @@ void test_retained_rendering() {
 
     guiRenderer.setFocus("tracked_input");
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+    std::cout << "ok";
+
+    // --- Test 15: Window with alpha < 1.0 ---
+    std::cout << "\n  15. Window alpha... ";
+    guiRenderer.hideAll();
+    {
+        auto win = WidgetNode::window("Alpha Test", {
+            WidgetNode::text("Semi-transparent"),
+            WidgetNode::button("Click me"),
+        });
+        win.alpha = 0.5f;
+        int alphaId = guiRenderer.show(std::move(win));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+        auto* alphaWin = guiRenderer.get(alphaId);
+        assert(alphaWin != nullptr);
+        assert(alphaWin->alpha == 0.5f);
+    }
+    std::cout << "ok";
+
+    // --- Test 16: Window with explicit position ---
+    std::cout << "\n  16. Window position... ";
+    guiRenderer.hideAll();
+    {
+        auto win = WidgetNode::window("Positioned", {
+            WidgetNode::text("At 100,200"),
+        });
+        win.windowPosX = 100.0f;
+        win.windowPosY = 200.0f;
+        int posId = guiRenderer.show(std::move(win));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+        auto* posWin = guiRenderer.get(posId);
+        assert(posWin != nullptr);
+        assert(posWin->windowPosX == 100.0f);
+        assert(posWin->windowPosY == 200.0f);
+    }
+    std::cout << "ok";
+
+    // --- Test 17: TweenManager fadeIn ---
+    std::cout << "\n  17. TweenManager fadeIn... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Fade Test", {
+            WidgetNode::text("Fading in..."),
+        });
+        win.alpha = 0.0f;
+        int fadeId = guiRenderer.show(std::move(win));
+
+        bool fadeComplete = false;
+        tweens.fadeIn(fadeId, 0.5f, Easing::Linear,
+                      [&fadeComplete](int) { fadeComplete = true; });
+        assert(tweens.activeCount() == 1);
+
+        // Simulate 30 frames at ~60fps (0.5s total)
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        auto* fadeWin = guiRenderer.get(fadeId);
+        assert(fadeWin != nullptr);
+        assert(fadeWin->alpha >= 0.99f);  // should be ~1.0
+        assert(fadeComplete);
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 18: TweenManager slideTo ---
+    std::cout << "\n  18. TweenManager slideTo... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Slide Test", {
+            WidgetNode::text("Sliding..."),
+        });
+        win.windowPosX = 50.0f;
+        win.windowPosY = 50.0f;
+        int slideId = guiRenderer.show(std::move(win));
+
+        bool slideComplete = false;
+        tweens.slideTo(slideId, 300.0f, 400.0f, 0.3f, Easing::Linear,
+                        [&slideComplete](int) { slideComplete = true; });
+        assert(tweens.activeCount() == 2);  // PosX + PosY
+
+        // Simulate enough frames
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        auto* slideWin = guiRenderer.get(slideId);
+        assert(slideWin != nullptr);
+        assert(std::abs(slideWin->windowPosX - 300.0f) < 1.0f);
+        assert(std::abs(slideWin->windowPosY - 400.0f) < 1.0f);
+        assert(slideComplete);
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 19: TweenManager cancel ---
+    std::cout << "\n  19. TweenManager cancel... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Cancel Test", {});
+        win.alpha = 1.0f;
+        int cancelId = guiRenderer.show(std::move(win));
+
+        int tweenId = tweens.fadeOut(cancelId, 10.0f);  // very long duration
+        assert(tweens.isActive(tweenId));
+        assert(tweens.activeCount() == 1);
+
+        tweens.cancel(tweenId);
+        assert(!tweens.isActive(tweenId));
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 20: TweenManager shake ---
+    std::cout << "\n  20. TweenManager shake... ";
+    guiRenderer.hideAll();
+    {
+        TweenManager tweens(guiRenderer);
+
+        auto win = WidgetNode::window("Shake Test", {
+            WidgetNode::text("Shaking!"),
+        });
+        win.windowPosX = 200.0f;
+        win.windowPosY = 200.0f;
+        int shakeGuiId = guiRenderer.show(std::move(win));
+
+        bool shakeComplete = false;
+        tweens.shake(shakeGuiId, 0.4f, 8.0f, 15.0f,
+                     [&shakeComplete](int) { shakeComplete = true; });
+        assert(tweens.activeCount() == 1);
+
+        // Run frames
+        for (int i = 0; i < 30 && window->isOpen(); i++) {
+            window->pollEvents();
+            if (auto frame = renderer->beginFrame()) {
+                gui.beginFrame();
+                tweens.update(1.0f / 60.0f);
+                guiRenderer.renderAll();
+                gui.endFrame();
+                frame.beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+                gui.render(frame);
+                frame.endRenderPass();
+                renderer->endFrame();
+            }
+        }
+
+        // After shake, position should be restored to base
+        auto* shakeWin = guiRenderer.get(shakeGuiId);
+        assert(shakeWin != nullptr);
+        assert(std::abs(shakeWin->windowPosX - 200.0f) < 1.0f);
+        assert(std::abs(shakeWin->windowPosY - 200.0f) < 1.0f);
+        assert(shakeComplete);
+        assert(tweens.activeCount() == 0);
+    }
+    std::cout << "ok";
+
+    // --- Test 21: findById ---
+    std::cout << "\n  21. findById... ";
+    guiRenderer.hideAll();
+    {
+        auto hp = WidgetNode::progressBar(0.85f, 200.0f, 20.0f);
+        hp.id = "hp_bar";
+        auto mp = WidgetNode::progressBar(0.6f, 200.0f, 20.0f);
+        mp.id = "mp_bar";
+
+        guiRenderer.show(WidgetNode::window("HUD", {
+            WidgetNode::text("Health"),
+            std::move(hp),
+            WidgetNode::text("Mana"),
+            std::move(mp),
+        }));
+
+        // Find by ID
+        auto* found = guiRenderer.findById("hp_bar");
+        assert(found != nullptr);
+        assert(found->type == WidgetNode::Type::ProgressBar);
+        assert(found->floatValue == 0.85f);
+
+        auto* found2 = guiRenderer.findById("mp_bar");
+        assert(found2 != nullptr);
+        assert(found2->floatValue == 0.6f);
+
+        // Mutate via findById
+        found->floatValue = 0.5f;
+        assert(guiRenderer.findById("hp_bar")->floatValue == 0.5f);
+
+        // Not found
+        assert(guiRenderer.findById("nonexistent") == nullptr);
+        assert(guiRenderer.findById("") == nullptr);
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+    }
+    std::cout << "ok";
+
+    // --- Test 22: findById across multiple trees ---
+    std::cout << "\n  22. findById multi-tree... ";
+    guiRenderer.hideAll();
+    {
+        auto btn1 = WidgetNode::button("Action");
+        btn1.id = "action_btn";
+        guiRenderer.show(WidgetNode::window("Window 1", {
+            std::move(btn1),
+        }));
+
+        auto btn2 = WidgetNode::button("Settings");
+        btn2.id = "settings_btn";
+        guiRenderer.show(WidgetNode::window("Window 2", {
+            std::move(btn2),
+        }));
+
+        assert(guiRenderer.findById("action_btn") != nullptr);
+        assert(guiRenderer.findById("settings_btn") != nullptr);
+        assert(guiRenderer.findById("action_btn")->label == "Action");
+        assert(guiRenderer.findById("settings_btn")->label == "Settings");
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 2);
+    }
+    std::cout << "ok";
+
+    // --- Test 23: findById deeply nested ---
+    std::cout << "\n  23. findById nested... ";
+    guiRenderer.hideAll();
+    {
+        auto deep = WidgetNode::slider("Deep", 0.0f, 0.0f, 1.0f);
+        deep.id = "deep_slider";
+
+        guiRenderer.show(WidgetNode::window("Outer", {
+            WidgetNode::group({
+                WidgetNode::group({
+                    std::move(deep),
+                }),
+            }),
+        }));
+
+        auto* found = guiRenderer.findById("deep_slider");
+        assert(found != nullptr);
+        assert(found->type == WidgetNode::Type::Slider);
+        assert(found->label == "Deep");
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 2);
+    }
     std::cout << "ok";
 
     renderer->waitIdle();

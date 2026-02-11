@@ -187,6 +187,11 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     auto_focus = engine.intern("auto_focus");
     on_focus   = engine.intern("on_focus");
     on_blur    = engine.intern("on_blur");
+
+    // Animation field keys
+    window_alpha = engine.intern("window_alpha");
+    window_pos_x = engine.intern("window_pos_x");
+    window_pos_y = engine.intern("window_pos_y");
 }
 
 // -- Type mapping -------------------------------------------------------------

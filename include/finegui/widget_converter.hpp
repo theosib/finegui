@@ -107,6 +107,9 @@ struct ConverterSymbols {
     uint32_t focusable = 0, auto_focus = 0;
     uint32_t on_focus = 0, on_blur = 0;
 
+    // Animation field keys
+    uint32_t window_alpha = 0, window_pos_x = 0, window_pos_y = 0;
+
     // DnD field keys
     uint32_t drag_type = 0, drag_data = 0, drop_accept = 0;
     uint32_t on_drop = 0, on_drag = 0, drag_mode = 0;

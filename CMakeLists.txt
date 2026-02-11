@@ -198,12 +198,14 @@ if(FINEGUI_BUILD_RETAINED)
         src/retained/widget_node.cpp
         src/retained/gui_renderer.cpp
         src/retained/drag_drop_manager.cpp
+        src/retained/tween_manager.cpp
     )
 
     set(FINEGUI_RETAINED_HEADERS
         include/finegui/widget_node.hpp
         include/finegui/gui_renderer.hpp
         include/finegui/drag_drop_manager.hpp
+        include/finegui/tween_manager.hpp
     )
 
     # Helper function to configure a finegui-retained library target

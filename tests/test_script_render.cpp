@@ -1012,6 +1012,108 @@ void test_script_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 24: MapRenderer findById ---
+    std::cout << "\n  24. MapRenderer findById... ";
+    {
+        using finescript::Value;
+
+        // Build maps with :id fields set (C++ construction)
+        auto label = Value::map();
+        label.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+        label.asMap().set(engine.intern("text"), Value::string("Label"));
+        label.asMap().set(engine.intern("id"), Value::string("my_label"));
+
+        auto btn = Value::map();
+        btn.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+        btn.asMap().set(engine.intern("label"), Value::string("OK"));
+        btn.asMap().set(engine.intern("id"), Value::string("ok_btn"));
+
+        auto slider = Value::map();
+        slider.asMap().set(engine.intern("type"), Value::symbol(engine.intern("slider")));
+        slider.asMap().set(engine.intern("label"), Value::string("Val"));
+        slider.asMap().set(engine.intern("value"), Value::number(0.5));
+        slider.asMap().set(engine.intern("min"), Value::number(0.0));
+        slider.asMap().set(engine.intern("max"), Value::number(1.0));
+        slider.asMap().set(engine.intern("id"), Value::string("nested_slider"));
+
+        auto group = Value::map();
+        group.asMap().set(engine.intern("type"), Value::symbol(engine.intern("group")));
+        auto groupChildren = Value::array({std::move(slider)});
+        group.asMap().set(engine.intern("children"), std::move(groupChildren));
+
+        auto win = Value::map();
+        win.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), Value::string("Find Test"));
+        auto children = Value::array({std::move(label), std::move(btn), std::move(group)});
+        win.asMap().set(engine.intern("children"), std::move(children));
+
+        finescript::ExecutionContext ctx(engine);
+        int findId = mapRenderer.show(std::move(win), ctx);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // Find by ID through MapRenderer
+        auto found = mapRenderer.findById("ok_btn");
+        assert(!found.isNil());
+        assert(found.isMap());
+
+        // Find nested widget
+        auto nested = mapRenderer.findById("nested_slider");
+        assert(!nested.isNil());
+        assert(nested.isMap());
+
+        // Not found returns nil
+        auto missing = mapRenderer.findById("nonexistent");
+        assert(missing.isNil());
+
+        mapRenderer.hide(findId);
+    }
+    std::cout << "ok";
+
+    // --- Test 25: ui.find script binding ---
+    std::cout << "\n  25. ui.find binding... ";
+    {
+        using finescript::Value;
+
+        // Build a tree with IDs set
+        auto hp = Value::map();
+        hp.asMap().set(engine.intern("type"), Value::symbol(engine.intern("slider")));
+        hp.asMap().set(engine.intern("label"), Value::string("HP"));
+        hp.asMap().set(engine.intern("value"), Value::number(0.8));
+        hp.asMap().set(engine.intern("min"), Value::number(0.0));
+        hp.asMap().set(engine.intern("max"), Value::number(1.0));
+        hp.asMap().set(engine.intern("id"), Value::string("hp_bar"));
+
+        auto statusText = Value::map();
+        statusText.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+        statusText.asMap().set(engine.intern("text"), Value::string("Status"));
+        statusText.asMap().set(engine.intern("id"), Value::string("status_text"));
+
+        auto win = Value::map();
+        win.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), Value::string("Find Binding"));
+        auto winChildren = Value::array({std::move(hp), std::move(statusText)});
+        win.asMap().set(engine.intern("children"), std::move(winChildren));
+
+        // Show via ScriptGui so ui.find works
+        ScriptGui scriptGui(engine, mapRenderer);
+        scriptGui.loadAndRun("set placeholder 0", "find_binding");
+        auto showResult = scriptGui.scriptShow(win);
+        assert(showResult.isInt());
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // Test ui.find through script
+        auto findResult = engine.executeCommand(R"(ui.find "hp_bar")", *scriptGui.context());
+        assert(findResult.success);
+        assert(findResult.returnValue.isMap());
+
+        auto findMissing = engine.executeCommand(R"(ui.find "nonexistent")", *scriptGui.context());
+        assert(findMissing.success);
+        assert(findMissing.returnValue.isNil());
+
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 

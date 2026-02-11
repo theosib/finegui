@@ -770,6 +770,54 @@ guiRenderer.setFocus("name_input");  // Focuses on next renderAll()
 | `onFocus` | *(none)* | Callback when widget gains keyboard focus |
 | `onBlur` | *(none)* | Callback when widget loses keyboard focus |
 
+### Animation Fields
+
+WidgetNode supports animation-related fields for smooth transitions (used by TweenManager):
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `alpha` | `1.0f` | Window opacity (0.0 = invisible, 1.0 = fully opaque) |
+| `windowPosX` | `FLT_MAX` | Explicit window position X (`FLT_MAX` = ImGui auto-positioning) |
+| `windowPosY` | `FLT_MAX` | Explicit window position Y (`FLT_MAX` = ImGui auto-positioning) |
+
+```cpp
+auto win = WidgetNode::window("Fading", { WidgetNode::text("Semi-transparent") });
+win.alpha = 0.5f;          // 50% opacity
+win.windowPosX = 100.0f;   // Position at (100, 200)
+win.windowPosY = 200.0f;
+```
+
+### Widget Search by ID
+
+Both `GuiRenderer` and `MapRenderer` support finding widgets by their `id` string. This is more robust than navigating by child index, which breaks when the tree structure changes.
+
+**GuiRenderer:**
+```cpp
+auto hp = WidgetNode::progressBar(0.85f, 200.0f, 20.0f);
+hp.id = "hp_bar";
+guiRenderer.show(WidgetNode::window("HUD", { std::move(hp) }));
+
+// Find by ID (searches all trees, returns first match)
+WidgetNode* found = guiRenderer.findById("hp_bar");
+if (found) {
+    found->floatValue = 0.5f;  // Mutate directly
+}
+```
+
+**MapRenderer:**
+```cpp
+finescript::Value found = mapRenderer.findById("hp_bar");
+if (!found.isNil()) {
+    found.asMap().set(engine.intern("value"), Value::number(0.5));
+}
+```
+
+**From scripts** (using `ui.find`):
+```
+set widget {ui.find "hp_bar"}
+set widget.value 0.5
+```
+
 ### Modals
 
 Modal dialogs block interaction with the rest of the UI. Press **Escape** to close any modal (equivalent to clicking the X button). The `onClose` callback fires in both cases.
@@ -986,6 +1034,7 @@ Action functions (require active ScriptGui context):
 | `ui.node` | `gui_id child_index` | Navigate to child map (returns map ref) |
 | `gui.on_message` | `:symbol handler` | Register a message handler |
 | `gui.set_focus` | `"widget_id"` | Programmatically focus a widget by ID |
+| `ui.find` | `"widget_id"` | Find widget map by `:id` string (returns nil if not found) |
 
 ### Dynamic Updates from Scripts
 
@@ -1177,6 +1226,102 @@ ui.show {ui.window "Inventory" [
     {ui.image "sword_icon" 48 48}
     {ui.image "shield_icon" 48 48}
 ]}
+```
+
+---
+
+## TweenManager (Animation)
+
+`TweenManager` provides smooth property interpolation for retained-mode widgets. It animates `WidgetNode` fields (alpha, position, value, color) over time with configurable easing.
+
+```cpp
+#include <finegui/tween_manager.hpp>
+
+TweenManager tweens(guiRenderer);
+
+// Game loop:
+gui.beginFrame();
+tweens.update(ImGui::GetIO().DeltaTime);  // advance animations
+guiRenderer.renderAll();                   // reads tweened values
+gui.endFrame();
+```
+
+### Convenience Methods
+
+```cpp
+// Fade in/out (animates alpha)
+tweens.fadeIn(guiId, 0.3f);
+tweens.fadeOut(guiId, 0.3f, Easing::EaseIn, [](int id) {
+    // Called when fade completes
+});
+
+// Slide to position
+tweens.slideTo(guiId, 300.0f, 400.0f, 0.4f);
+
+// Color transition (targets a child widget by index path)
+tweens.colorTo(guiId, {0, 1}, 1.0f, 0.0f, 0.0f, 1.0f, 0.3f);  // Flash red
+
+// Screen shake
+tweens.shake(guiId, 0.4f, 8.0f, 15.0f);
+```
+
+### Generic Animation
+
+```cpp
+// Animate any property — reads current value as "from" automatically
+tweens.animate(guiId, {}, TweenProperty::Alpha, 0.5f, 0.3f, Easing::EaseOut);
+
+// Explicit from/to
+tweens.animate(guiId, {0}, TweenProperty::FloatValue, 0.0f, 1.0f, 0.5f);
+```
+
+### Easing Functions
+
+| Easing | Description |
+|--------|-------------|
+| `Linear` | Constant speed |
+| `EaseIn` | Quadratic acceleration |
+| `EaseOut` | Quadratic deceleration (default) |
+| `EaseInOut` | Quadratic ease in then out |
+| `CubicOut` | Cubic deceleration |
+| `ElasticOut` | Elastic overshoot |
+| `BounceOut` | Bouncing effect |
+
+### Animatable Properties
+
+| Property | WidgetNode field | Typical use |
+|----------|-----------------|-------------|
+| `Alpha` | `alpha` | Fade in/out |
+| `PosX`, `PosY` | `windowPosX`, `windowPosY` | Slide windows |
+| `FloatValue` | `floatValue` | Progress bars, sliders |
+| `IntValue` | `intValue` | Counters |
+| `ColorR/G/B/A` | `colorR/G/B/A` | Color transitions |
+| `Width`, `Height` | `width`, `height` | Resize |
+
+### Cancellation
+
+```cpp
+int tid = tweens.fadeIn(guiId, 1.0f);
+tweens.cancel(tid);          // Cancel specific tween
+tweens.cancelAll(guiId);     // Cancel all tweens on a widget tree
+tweens.cancelAll();          // Cancel everything
+tweens.isActive(tid);        // Check if still running
+tweens.activeCount();        // Number of active tweens
+```
+
+### Target Resolution
+
+Tweens identify their target widget by `guiId` (from `guiRenderer.show()`) plus an optional `childPath` (vector of child indices). If the target tree is removed, the tween silently stops.
+
+```cpp
+// Target root window
+tweens.animate(guiId, {}, TweenProperty::Alpha, 0.0f, 0.3f);
+
+// Target children[0] of the window
+tweens.animate(guiId, {0}, TweenProperty::FloatValue, 1.0f, 0.5f);
+
+// Target children[2].children[0] (deeply nested)
+tweens.animate(guiId, {2, 0}, TweenProperty::ColorR, 1.0f, 0.3f);
 ```
 
 ---

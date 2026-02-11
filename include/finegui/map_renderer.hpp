@@ -59,7 +59,13 @@ public:
     /// The focus will be applied during the next renderAll() call.
     void setFocus(const std::string& widgetId);
 
+    /// Find a widget map by its :id string across all trees.
+    /// Returns nil if not found. Returns first match.
+    finescript::Value findById(const std::string& widgetId);
+
 private:
+    finescript::Value findByIdRecursive(finescript::Value& node, const std::string& widgetId);
+
     DragDropManager* dndManager_ = nullptr;
     TextureRegistry* textureRegistry_ = nullptr;
     struct Entry {

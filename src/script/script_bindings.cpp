@@ -1073,6 +1073,16 @@ void registerGuiBindings(ScriptEngine& engine) {
             return gui->navigateMap(guiId, args[1]);
         }));
 
+    // ui.find "widget_id"  ->  find a widget map by :id string
+    uiMap.set(engine.intern("find"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* gui = static_cast<ScriptGui*>(ctx.userData());
+            if (!gui || args.empty() || !args[0].isString()) {
+                return Value::nil();
+            }
+            return gui->scriptFindById(std::string(args[0].asString()));
+        }));
+
     // Register the ui namespace
     engine.registerConstant("ui", ui);
 

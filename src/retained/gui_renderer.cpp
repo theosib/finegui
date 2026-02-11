@@ -62,6 +62,22 @@ void GuiRenderer::setFocus(const std::string& widgetId) {
     pendingFocusId_ = widgetId;
 }
 
+WidgetNode* GuiRenderer::findByIdRecursive(WidgetNode& node, const std::string& widgetId) {
+    if (!node.id.empty() && node.id == widgetId) return &node;
+    for (auto& child : node.children) {
+        if (auto* found = findByIdRecursive(child, widgetId)) return found;
+    }
+    return nullptr;
+}
+
+WidgetNode* GuiRenderer::findById(const std::string& widgetId) {
+    if (widgetId.empty()) return nullptr;
+    for (auto& [id, tree] : trees_) {
+        if (auto* found = findByIdRecursive(tree, widgetId)) return found;
+    }
+    return nullptr;
+}
+
 void GuiRenderer::renderAll() {
     currentFocusedId_.clear();
     for (auto& [id, tree] : trees_) {
@@ -201,6 +217,17 @@ void GuiRenderer::renderNode(WidgetNode& node) {
 // -- Per-widget render methods ------------------------------------------------
 
 void GuiRenderer::renderWindow(WidgetNode& node) {
+    // Animation: explicit window position
+    if (node.windowPosX != FLT_MAX && node.windowPosY != FLT_MAX) {
+        ImGui::SetNextWindowPos(ImVec2(node.windowPosX, node.windowPosY));
+    }
+
+    // Animation: window alpha
+    bool pushedAlpha = node.alpha < 1.0f;
+    if (pushedAlpha) {
+        ImGui::PushStyleVar(ImGuiStyleVar_Alpha, node.alpha);
+    }
+
     bool open = true;
     if (ImGui::Begin(node.label.c_str(), &open,
                      static_cast<ImGuiWindowFlags>(node.windowFlags))) {
@@ -209,6 +236,11 @@ void GuiRenderer::renderWindow(WidgetNode& node) {
         }
     }
     ImGui::End();
+
+    if (pushedAlpha) {
+        ImGui::PopStyleVar();
+    }
+
     if (!open) {
         node.visible = false;
         if (node.onClose) node.onClose(node);

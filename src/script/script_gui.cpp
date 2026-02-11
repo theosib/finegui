@@ -216,4 +216,8 @@ void ScriptGui::scriptSetFocus(const std::string& widgetId) {
     impl_->renderer.setFocus(widgetId);
 }
 
+finescript::Value ScriptGui::scriptFindById(const std::string& widgetId) {
+    return impl_->renderer.findById(widgetId);
+}
+
 } // namespace finegui

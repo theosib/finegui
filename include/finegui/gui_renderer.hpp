@@ -54,7 +54,13 @@ public:
     /// The focus will be applied during the next renderAll() call.
     void setFocus(const std::string& widgetId);
 
+    /// Find a widget node by its ID string across all trees.
+    /// Returns nullptr if not found. Returns first match.
+    WidgetNode* findById(const std::string& widgetId);
+
 private:
+    static WidgetNode* findByIdRecursive(WidgetNode& node, const std::string& widgetId);
+
     DragDropManager* dndManager_ = nullptr;
     GuiSystem& gui_;
     int nextId_ = 1;

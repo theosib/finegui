@@ -3,6 +3,7 @@
 #include <string>
 #include <vector>
 #include <functional>
+#include <cfloat>
 #include "texture_handle.hpp"
 
 namespace finegui {
@@ -96,6 +97,12 @@ struct WidgetNode {
 
     /// Offset (for SameLine).
     float offsetX = 0.0f;
+
+    /// Animation: window alpha (1.0 = fully opaque).
+    float alpha = 1.0f;
+    /// Animation: explicit window position (FLT_MAX = ImGui auto-positioning).
+    float windowPosX = FLT_MAX;
+    float windowPosY = FLT_MAX;
 
     /// Default-open state (for CollapsingHeader, TreeNode).
     bool defaultOpen = false;
