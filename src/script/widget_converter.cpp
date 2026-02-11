@@ -161,6 +161,16 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_dummy    = engine.intern("dummy");
     sym_new_line = engine.intern("new_line");
 
+    // Type name symbols - Phase 12
+    sym_drag_float3    = engine.intern("drag_float3");
+    sym_input_with_hint = engine.intern("input_with_hint");
+    sym_slider_angle   = engine.intern("slider_angle");
+    sym_small_button   = engine.intern("small_button");
+    sym_color_button   = engine.intern("color_button");
+
+    // Phase 12 field keys
+    hint = engine.intern("hint");
+
     // Phase 9 field keys
     my_value = engine.intern("my_value");
 
@@ -443,13 +453,21 @@ finescript::Value widgetValueToScriptValue(const WidgetNode& widget) {
         case WidgetNode::Type::Slider:
         case WidgetNode::Type::InputFloat:
         case WidgetNode::Type::DragFloat:
+        case WidgetNode::Type::SliderAngle:
             return finescript::Value::number(widget.floatValue);
         case WidgetNode::Type::SliderInt:
         case WidgetNode::Type::InputInt:
         case WidgetNode::Type::DragInt:
             return finescript::Value::integer(widget.intValue);
         case WidgetNode::Type::InputText:
+        case WidgetNode::Type::InputTextWithHint:
             return finescript::Value::string(widget.stringValue);
+        case WidgetNode::Type::DragFloat3:
+            return finescript::Value::array({
+                finescript::Value::number(widget.floatX),
+                finescript::Value::number(widget.floatY),
+                finescript::Value::number(widget.floatZ)
+            });
         case WidgetNode::Type::Combo:
         case WidgetNode::Type::ListBox:
             return finescript::Value::integer(widget.selectedIndex);

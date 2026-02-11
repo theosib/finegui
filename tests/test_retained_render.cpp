@@ -756,6 +756,34 @@ void test_retained_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 29: Phase 12 Advanced Input widgets ---
+    std::cout << "\n  29. Phase 12 Advanced Input widgets... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Phase 12 Test", {
+        WidgetNode::text("DragFloat3:"),
+        WidgetNode::dragFloat3("Position", 1.0f, 2.0f, 3.0f, 0.1f, -10.0f, 10.0f),
+        WidgetNode::separator(),
+        WidgetNode::text("SliderAngle:"),
+        WidgetNode::sliderAngle("Rotation", 0.0f, -180.0f, 180.0f),
+        WidgetNode::separator(),
+        WidgetNode::text("InputTextWithHint:"),
+        WidgetNode::inputTextWithHint("Search", "Type to search...", ""),
+        WidgetNode::separator(),
+        WidgetNode::text("SmallButtons:"),
+        WidgetNode::smallButton("Compact"),
+        WidgetNode::sameLine(),
+        WidgetNode::smallButton("Row"),
+        WidgetNode::separator(),
+        WidgetNode::text("ColorButtons:"),
+        WidgetNode::colorButton("Red", 1.0f, 0.0f, 0.0f, 1.0f),
+        WidgetNode::sameLine(),
+        WidgetNode::colorButton("Green", 0.0f, 1.0f, 0.0f, 1.0f),
+        WidgetNode::sameLine(),
+        WidgetNode::colorButton("Blue", 0.0f, 0.0f, 1.0f, 1.0f),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

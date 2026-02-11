@@ -162,6 +162,13 @@ private:
     void renderDummy(finescript::MapData& m);
     void renderNewLine();
 
+    // Phase 12 - Advanced Input (continued)
+    void renderDragFloat3(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderInputTextWithHint(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderSliderAngle(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderSmallButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
+    void renderColorButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
+
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);
 

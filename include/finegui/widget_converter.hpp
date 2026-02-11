@@ -100,6 +100,13 @@ struct ConverterSymbols {
     // Type name symbols - Phase 11 (Layout helpers)
     uint32_t sym_dummy = 0, sym_new_line = 0;
 
+    // Type name symbols - Phase 12 (Advanced Input continued)
+    uint32_t sym_drag_float3 = 0, sym_input_with_hint = 0;
+    uint32_t sym_slider_angle = 0, sym_small_button = 0, sym_color_button = 0;
+
+    // Phase 12 field keys
+    uint32_t hint = 0;
+
     // Phase 9 field keys
     uint32_t my_value = 0;
 

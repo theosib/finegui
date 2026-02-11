@@ -683,6 +683,11 @@ guiRenderer.hide(mainId);
 | `WidgetNode::colorPicker(label, r, g, b, a)` | Color picker wheel |
 | `WidgetNode::dragFloat(label, value, speed, min, max)` | Drag-to-adjust float |
 | `WidgetNode::dragInt(label, value, speed, min, max)` | Drag-to-adjust int |
+| `WidgetNode::dragFloat3(label, x, y, z, speed, min, max, onChange)` | Drag-to-adjust 3-component float vector (x, y, z) |
+| `WidgetNode::inputTextWithHint(label, hint, value, onChange, onSubmit)` | Text input with placeholder hint |
+| `WidgetNode::sliderAngle(label, valueRadians, minDegrees, maxDegrees, onChange)` | Angle slider (radians internally, degrees displayed) |
+| `WidgetNode::smallButton(label, onClick)` | Compact button (no frame padding) |
+| `WidgetNode::colorButton(label, r, g, b, a, onClick)` | Color swatch display button |
 
 **Phase 7 - Misc:**
 
@@ -737,7 +742,7 @@ finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
 | Callback | Triggers on | Available fields |
 |----------|-------------|------------------|
 | `onClick` | Button click, Image click | - |
-| `onChange` | Value change | `floatValue`, `intValue`, `boolValue`, `stringValue`, `selectedIndex` |
+| `onChange` | Value change | `floatValue`, `intValue`, `boolValue`, `stringValue`, `selectedIndex`, `floatX/Y/Z`, `colorR/G/B/A` |
 | `onSubmit` | Enter in InputText | `stringValue` |
 | `onClose` | Window close button | - |
 | `onFocus` | Widget gains keyboard focus | - |
@@ -1013,6 +1018,11 @@ Builder functions (return widget maps):
 | `ui.color_picker` | `label color_array` | Color picker |
 | `ui.drag_float` | `label value speed min max` | Drag float |
 | `ui.drag_int` | `label value speed min max` | Drag int |
+| `ui.drag_float3` | `label [x y z] speed min max [on_change]` | Drag 3-component float vector |
+| `ui.input_with_hint` | `label hint value [on_change] [on_submit]` | Text input with placeholder hint |
+| `ui.slider_angle` | `label value_rad min_deg max_deg [on_change]` | Angle slider (radians/degrees) |
+| `ui.small_button` | `label [on_click]` | Compact button (no frame padding) |
+| `ui.color_button` | `label [r g b a] [on_click]` | Color swatch display button |
 | `ui.listbox` | `label items selected [height]` | List box |
 | `ui.popup` | `id children` | Popup |
 | `ui.modal` | `title children` | Modal dialog |

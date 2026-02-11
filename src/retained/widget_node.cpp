@@ -515,6 +515,68 @@ WidgetNode WidgetNode::newLine() {
     return n;
 }
 
+// Phase 12 builders
+
+WidgetNode WidgetNode::dragFloat3(std::string label, float x, float y, float z,
+                                   float speed, float min, float max,
+                                   WidgetCallback onChange) {
+    WidgetNode n;
+    n.type = Type::DragFloat3;
+    n.label = std::move(label);
+    n.floatX = x;
+    n.floatY = y;
+    n.floatZ = z;
+    n.dragSpeed = speed;
+    n.minFloat = min;
+    n.maxFloat = max;
+    n.onChange = std::move(onChange);
+    return n;
+}
+
+WidgetNode WidgetNode::inputTextWithHint(std::string label, std::string hint,
+                                          std::string value,
+                                          WidgetCallback onChange, WidgetCallback onSubmit) {
+    WidgetNode n;
+    n.type = Type::InputTextWithHint;
+    n.label = std::move(label);
+    n.hintText = std::move(hint);
+    n.stringValue = std::move(value);
+    n.onChange = std::move(onChange);
+    n.onSubmit = std::move(onSubmit);
+    return n;
+}
+
+WidgetNode WidgetNode::sliderAngle(std::string label, float valueRadians,
+                                    float minDegrees, float maxDegrees,
+                                    WidgetCallback onChange) {
+    WidgetNode n;
+    n.type = Type::SliderAngle;
+    n.label = std::move(label);
+    n.floatValue = valueRadians;
+    n.minFloat = minDegrees;
+    n.maxFloat = maxDegrees;
+    n.onChange = std::move(onChange);
+    return n;
+}
+
+WidgetNode WidgetNode::smallButton(std::string label, WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::SmallButton;
+    n.label = std::move(label);
+    n.onClick = std::move(onClick);
+    return n;
+}
+
+WidgetNode WidgetNode::colorButton(std::string label, float r, float g, float b, float a,
+                                    WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::ColorButton;
+    n.label = std::move(label);
+    n.colorR = r; n.colorG = g; n.colorB = b; n.colorA = a;
+    n.onClick = std::move(onClick);
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -569,6 +631,11 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::PopStyleVar:       return "PopStyleVar";
         case WidgetNode::Type::Dummy:             return "Dummy";
         case WidgetNode::Type::NewLine:           return "NewLine";
+        case WidgetNode::Type::DragFloat3:        return "DragFloat3";
+        case WidgetNode::Type::InputTextWithHint: return "InputTextWithHint";
+        case WidgetNode::Type::SliderAngle:       return "SliderAngle";
+        case WidgetNode::Type::SmallButton:       return "SmallButton";
+        case WidgetNode::Type::ColorButton:       return "ColorButton";
         default:                                  return "Unknown";
     }
 }

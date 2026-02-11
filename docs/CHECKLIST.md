@@ -40,11 +40,11 @@
 - [x] color_picker
 - [x] drag_float
 - [x] drag_int
-- [ ] drag_float3
-- [ ] input_with_hint (placeholder text)
-- [ ] slider_angle
-- [ ] small_button
-- [ ] color_button (color swatch display)
+- [x] drag_float3
+- [x] input_with_hint (placeholder text)
+- [x] slider_angle
+- [x] small_button
+- [x] color_button (color swatch display)
 
 ### Containers
 - [x] window

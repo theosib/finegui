@@ -459,6 +459,7 @@ struct WidgetNode {
         Table, TableColumn, TableRow,
         // Phase 6 - Advanced Input
         ColorEdit, ColorPicker, DragFloat, DragInt,
+        DragFloat3, InputTextWithHint, SliderAngle, SmallButton, ColorButton,
         // Phase 7 - Misc
         ListBox, Popup, Modal,
         // Phase 8 - Custom
@@ -524,7 +525,9 @@ struct WidgetNode {
     int tableFlags = 0;                      // ImGuiTableFlags_*
 
     // Phase 6
-    float dragSpeed = 1.0f;                  // DragFloat, DragInt
+    float dragSpeed = 1.0f;                  // DragFloat, DragInt, DragFloat3
+    float floatX = 0.0f, floatY = 0.0f, floatZ = 0.0f; // DragFloat3
+    std::string hintText;                    // InputTextWithHint placeholder
 
     // Phase 7
     int heightInItems = -1;                  // ListBox (-1 = auto)
@@ -607,6 +610,16 @@ struct WidgetNode {
                                 WidgetCallback onChange={});
     static WidgetNode dragInt(string label, int val, float speed=1, int min=0, int max=0,
                               WidgetCallback onChange={});
+    static WidgetNode dragFloat3(string label, float x, float y, float z,
+                                  float speed=1, float min=0, float max=0,
+                                  WidgetCallback onChange={});
+    static WidgetNode inputTextWithHint(string label, string hint, string value="",
+                                         WidgetCallback onChange={}, WidgetCallback onSubmit={});
+    static WidgetNode sliderAngle(string label, float valueRadians=0, float minDegrees=-360,
+                                   float maxDegrees=360, WidgetCallback onChange={});
+    static WidgetNode smallButton(string label, WidgetCallback onClick={});
+    static WidgetNode colorButton(string label, float r=1, float g=1, float b=1, float a=1,
+                                   WidgetCallback onClick={});
 
     // --- Phase 7 builders ---
     static WidgetNode listBox(string label, vector<string> items, int sel=0, int height=-1,
@@ -901,6 +914,11 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.color_picker` | `ui.color_picker "label" [r g b a] [on_change]` | Color as array |
 | `ui.drag_float` | `ui.drag_float "label" val speed min max [on_change]` | |
 | `ui.drag_int` | `ui.drag_int "label" val speed min max [on_change]` | |
+| `ui.drag_float3` | `ui.drag_float3 "label" [x y z] speed min max [on_change]` | 3-component float vector |
+| `ui.input_with_hint` | `ui.input_with_hint "label" "hint" "value" [on_change] [on_submit]` | Text input with placeholder |
+| `ui.slider_angle` | `ui.slider_angle "label" value_rad min_deg max_deg [on_change]` | Radians stored, degrees displayed |
+| `ui.small_button` | `ui.small_button "label" [on_click]` | Compact button variant |
+| `ui.color_button` | `ui.color_button "label" [r g b a] [on_click]` | Color swatch display |
 | `ui.listbox` | `ui.listbox "label" [items] [selected] [height] [on_change]` | |
 | `ui.popup` | `ui.popup "id" [children]` | |
 | `ui.modal` | `ui.modal "title" [children] [on_close]` | |

@@ -526,6 +526,109 @@ void registerGuiBindings(ScriptEngine& engine) {
             return w;
         }));
 
+    // ui.drag_float3 "label" [x y z] speed min max [on_change]
+    uiMap.set(engine.intern("drag_float3"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "drag_float3");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("speed"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("min"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isNumeric()) {
+                m.set(engine.intern("max"), args[4]);
+            }
+            if (args.size() > 5 && args[5].isCallable()) {
+                m.set(engine.intern("on_change"), args[5]);
+            }
+            return w;
+        }));
+
+    // ui.input_with_hint "label" "hint" [value] [on_change] [on_submit]
+    uiMap.set(engine.intern("input_with_hint"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "input_with_hint");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isString()) {
+                m.set(engine.intern("hint"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isString()) {
+                m.set(engine.intern("value"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isCallable()) {
+                m.set(engine.intern("on_change"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isCallable()) {
+                m.set(engine.intern("on_submit"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.slider_angle "label" value_rad min_deg max_deg [on_change]
+    uiMap.set(engine.intern("slider_angle"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "slider_angle");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isNumeric()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isNumeric()) {
+                m.set(engine.intern("min"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("max"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isCallable()) {
+                m.set(engine.intern("on_change"), args[4]);
+            }
+            return w;
+        }));
+
+    // ui.small_button "label" [on_click]
+    uiMap.set(engine.intern("small_button"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "small_button");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isCallable()) {
+                m.set(engine.intern("on_click"), args[1]);
+            }
+            return w;
+        }));
+
+    // ui.color_button "label" [r g b a] [on_click]
+    uiMap.set(engine.intern("color_button"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "color_button");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("color"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isCallable()) {
+                m.set(engine.intern("on_click"), args[2]);
+            }
+            return w;
+        }));
+
     // =========================================================================
     // Phase 7 - Misc
     // =========================================================================

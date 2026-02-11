@@ -44,7 +44,9 @@ struct WidgetNode {
         // Phase 10 - Style push/pop
         PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar,
         // Phase 11 - Layout helpers
-        Dummy, NewLine
+        Dummy, NewLine,
+        // Phase 12 - Advanced Input (continued)
+        DragFloat3, InputTextWithHint, SliderAngle, SmallButton, ColorButton
     };
 
     Type type;
@@ -133,6 +135,12 @@ struct WidgetNode {
 
     /// Drag widget properties.
     float dragSpeed = 1.0f;
+
+    /// DragFloat3 values (3-component vector).
+    float floatX = 0.0f, floatY = 0.0f, floatZ = 0.0f;
+
+    /// Hint text (for InputTextWithHint placeholder).
+    std::string hintText;
 
     /// ListBox properties.
     int heightInItems = -1;   // -1 = auto height
@@ -285,6 +293,22 @@ struct WidgetNode {
     // Phase 11 - Layout helper builders
     static WidgetNode dummy(float width, float height);
     static WidgetNode newLine();
+
+    // Phase 12 - Advanced Input (continued)
+    static WidgetNode dragFloat3(std::string label, float x, float y, float z,
+                                  float speed = 1.0f, float min = 0.0f, float max = 0.0f,
+                                  WidgetCallback onChange = {});
+    static WidgetNode inputTextWithHint(std::string label, std::string hint,
+                                         std::string value = "",
+                                         WidgetCallback onChange = {},
+                                         WidgetCallback onSubmit = {});
+    static WidgetNode sliderAngle(std::string label, float valueRadians = 0.0f,
+                                   float minDegrees = -360.0f, float maxDegrees = 360.0f,
+                                   WidgetCallback onChange = {});
+    static WidgetNode smallButton(std::string label, WidgetCallback onClick = {});
+    static WidgetNode colorButton(std::string label, float r = 1.0f, float g = 1.0f,
+                                   float b = 1.0f, float a = 1.0f,
+                                   WidgetCallback onClick = {});
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

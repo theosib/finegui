@@ -250,6 +250,12 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         // Phase 11
         else if (sym == syms_.sym_dummy)         renderDummy(m);
         else if (sym == syms_.sym_new_line)      renderNewLine();
+        // Phase 12
+        else if (sym == syms_.sym_drag_float3)       renderDragFloat3(m, ctx);
+        else if (sym == syms_.sym_input_with_hint)   renderInputTextWithHint(m, ctx);
+        else if (sym == syms_.sym_slider_angle)      renderSliderAngle(m, ctx);
+        else if (sym == syms_.sym_small_button)      renderSmallButton(m, ctx);
+        else if (sym == syms_.sym_color_button)      renderColorButton(m, ctx);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1334,6 +1340,113 @@ void MapRenderer::renderDummy(MapData& m) {
 
 void MapRenderer::renderNewLine() {
     ImGui::NewLine();
+}
+
+// -- Phase 12: Advanced Input (continued) -------------------------------------
+
+void MapRenderer::renderDragFloat3(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Drag3");
+    float speed = static_cast<float>(getNumericField(m, syms_.speed, 1.0));
+    float min = static_cast<float>(getNumericField(m, syms_.min, 0.0));
+    float max = static_cast<float>(getNumericField(m, syms_.max, 0.0));
+
+    // Read value from :value array [x, y, z]
+    float v[3] = {0.0f, 0.0f, 0.0f};
+    auto valArr = m.get(syms_.value);
+    if (valArr.isArray()) {
+        const auto& arr = valArr.asArray();
+        if (arr.size() >= 1 && arr[0].isNumeric()) v[0] = static_cast<float>(arr[0].asNumber());
+        if (arr.size() >= 2 && arr[1].isNumeric()) v[1] = static_cast<float>(arr[1].asNumber());
+        if (arr.size() >= 3 && arr[2].isNumeric()) v[2] = static_cast<float>(arr[2].asNumber());
+    }
+
+    if (ImGui::DragFloat3(label.c_str(), v, speed, min, max)) {
+        auto newVal = Value::array({
+            Value::number(v[0]), Value::number(v[1]), Value::number(v[2])
+        });
+        m.set(syms_.value, newVal);
+        invokeCallback(m, syms_.on_change, ctx, {newVal});
+    }
+}
+
+void MapRenderer::renderInputTextWithHint(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Input");
+    auto hint = getStringField(m, syms_.hint, "");
+
+    auto valEntry = m.get(syms_.value);
+    if (!valEntry.isString()) {
+        m.set(syms_.value, Value::string(""));
+        valEntry = m.get(syms_.value);
+    }
+
+    auto& str = valEntry.asStringMut();
+    if (str.capacity() < 256) str.reserve(256);
+    size_t cap = str.capacity();
+    str.resize(cap);
+
+    InputTextCallbackData cbData{&str};
+    ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
+
+    auto onSubmit = m.get(syms_.on_submit);
+    if (onSubmit.isCallable()) {
+        flags |= ImGuiInputTextFlags_EnterReturnsTrue;
+    }
+
+    bool enterPressed = ImGui::InputTextWithHint(
+        label.c_str(), hint.c_str(),
+        str.data(), str.size() + 1,
+        flags, inputTextResizeCallback, &cbData);
+
+    str.resize(std::strlen(str.c_str()));
+
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        invokeCallback(m, syms_.on_change, ctx, {Value::string(str)});
+    }
+
+    if (enterPressed && onSubmit.isCallable()) {
+        invokeCallback(m, syms_.on_submit, ctx, {Value::string(str)});
+    }
+}
+
+void MapRenderer::renderSliderAngle(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Angle");
+    float value = static_cast<float>(getNumericField(m, syms_.value, 0.0));
+    float minDeg = static_cast<float>(getNumericField(m, syms_.min, -360.0));
+    float maxDeg = static_cast<float>(getNumericField(m, syms_.max, 360.0));
+
+    if (ImGui::SliderAngle(label.c_str(), &value, minDeg, maxDeg)) {
+        m.set(syms_.value, Value::number(value));
+        invokeCallback(m, syms_.on_change, ctx, {Value::number(value)});
+    }
+}
+
+void MapRenderer::renderSmallButton(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Button");
+    if (ImGui::SmallButton(label.c_str())) {
+        invokeCallback(m, syms_.on_click, ctx);
+    }
+}
+
+void MapRenderer::renderColorButton(MapData& m, ExecutionContext& ctx) {
+    auto label = getStringField(m, syms_.label, "Color");
+
+    // Read color from :color array [r, g, b, a]
+    ImVec4 col{1.0f, 1.0f, 1.0f, 1.0f};
+    auto colorVal = m.get(syms_.color);
+    if (colorVal.isArray()) {
+        const auto& arr = colorVal.asArray();
+        if (arr.size() >= 3) {
+            col.x = static_cast<float>(arr[0].isNumeric() ? arr[0].asNumber() : 1.0);
+            col.y = static_cast<float>(arr[1].isNumeric() ? arr[1].asNumber() : 1.0);
+            col.z = static_cast<float>(arr[2].isNumeric() ? arr[2].asNumber() : 1.0);
+            if (arr.size() >= 4)
+                col.w = static_cast<float>(arr[3].isNumeric() ? arr[3].asNumber() : 1.0);
+        }
+    }
+
+    if (ImGui::ColorButton(label.c_str(), col)) {
+        invokeCallback(m, syms_.on_click, ctx);
+    }
 }
 
 // -- Phase 10: Style Push/Pop -------------------------------------------------

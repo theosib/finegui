@@ -143,6 +143,13 @@ private:
     void renderDummy(WidgetNode& node);
     void renderNewLine(WidgetNode& node);
 
+    // Phase 12 - Advanced Input (continued)
+    void renderDragFloat3(WidgetNode& node);
+    void renderInputTextWithHint(WidgetNode& node);
+    void renderSliderAngle(WidgetNode& node);
+    void renderSmallButton(WidgetNode& node);
+    void renderColorButton(WidgetNode& node);
+
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);
 };

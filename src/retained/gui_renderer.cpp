@@ -180,6 +180,12 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         // Phase 11
         case WidgetNode::Type::Dummy:             renderDummy(node); break;
         case WidgetNode::Type::NewLine:           renderNewLine(node); break;
+        // Phase 12
+        case WidgetNode::Type::DragFloat3:        renderDragFloat3(node); break;
+        case WidgetNode::Type::InputTextWithHint: renderInputTextWithHint(node); break;
+        case WidgetNode::Type::SliderAngle:       renderSliderAngle(node); break;
+        case WidgetNode::Type::SmallButton:       renderSmallButton(node); break;
+        case WidgetNode::Type::ColorButton:       renderColorButton(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -889,6 +895,74 @@ void GuiRenderer::renderDummy(WidgetNode& node) {
 
 void GuiRenderer::renderNewLine(WidgetNode& /*node*/) {
     ImGui::NewLine();
+}
+
+// -- Phase 12: Advanced Input (continued) -------------------------------------
+
+void GuiRenderer::renderDragFloat3(WidgetNode& node) {
+    float v[3] = {node.floatX, node.floatY, node.floatZ};
+    if (ImGui::DragFloat3(node.label.c_str(), v, node.dragSpeed,
+                          node.minFloat, node.maxFloat)) {
+        node.floatX = v[0];
+        node.floatY = v[1];
+        node.floatZ = v[2];
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderInputTextWithHint(WidgetNode& node) {
+    if (node.stringValue.capacity() < 256) {
+        node.stringValue.reserve(256);
+    }
+    size_t cap = node.stringValue.capacity();
+    node.stringValue.resize(cap);
+
+    InputTextCallbackData cbData{&node.stringValue};
+
+    ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
+    if (node.onSubmit) {
+        flags |= ImGuiInputTextFlags_EnterReturnsTrue;
+    }
+
+    bool enterPressed = ImGui::InputTextWithHint(
+        node.label.c_str(),
+        node.hintText.c_str(),
+        node.stringValue.data(),
+        node.stringValue.size() + 1,
+        flags,
+        inputTextResizeCallback,
+        &cbData
+    );
+
+    node.stringValue.resize(std::strlen(node.stringValue.c_str()));
+
+    if (ImGui::IsItemDeactivatedAfterEdit()) {
+        if (node.onChange) node.onChange(node);
+    }
+
+    if (enterPressed && node.onSubmit) {
+        node.onSubmit(node);
+    }
+}
+
+void GuiRenderer::renderSliderAngle(WidgetNode& node) {
+    if (ImGui::SliderAngle(node.label.c_str(), &node.floatValue,
+                           node.minFloat, node.maxFloat)) {
+        if (node.onChange) node.onChange(node);
+    }
+}
+
+void GuiRenderer::renderSmallButton(WidgetNode& node) {
+    if (ImGui::SmallButton(node.label.c_str())) {
+        if (node.onClick) node.onClick(node);
+    }
+}
+
+void GuiRenderer::renderColorButton(WidgetNode& node) {
+    ImVec4 col{node.colorR, node.colorG, node.colorB, node.colorA};
+    if (ImGui::ColorButton(node.label.c_str(), col)) {
+        if (node.onClick) node.onClick(node);
+    }
 }
 
 // -- Drag and Drop ------------------------------------------------------------
