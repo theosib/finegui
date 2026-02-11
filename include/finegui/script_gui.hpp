@@ -97,8 +97,9 @@ public:
     /// Called by gui.set_focus binding: programmatically focus a widget by ID.
     void scriptSetFocus(const std::string& widgetId);
 
-    /// Called by ui.find binding: find a widget map by its :id string.
+    /// Called by ui.find binding: find a widget map by its :id (string or symbol).
     finescript::Value scriptFindById(const std::string& widgetId);
+    finescript::Value scriptFindById(uint32_t symbolId);
 
 private:
     struct Impl;

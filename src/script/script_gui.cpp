@@ -220,4 +220,8 @@ finescript::Value ScriptGui::scriptFindById(const std::string& widgetId) {
     return impl_->renderer.findById(widgetId);
 }
 
+finescript::Value ScriptGui::scriptFindById(uint32_t symbolId) {
+    return impl_->renderer.findById(symbolId);
+}
+
 } // namespace finegui

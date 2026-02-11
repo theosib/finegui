@@ -812,11 +812,16 @@ if (!found.isNil()) {
 }
 ```
 
-**From scripts** (using `ui.find`):
+**From scripts** (using `ui.find` — accepts strings or symbols):
 ```
 set widget {ui.find "hp_bar"}
 set widget.value 0.5
+
+# Or with symbol syntax (faster if :id is also a symbol):
+set widget {ui.find :hp_bar}
 ```
+
+The `:id` field on a widget map can be a string or a symbol. `findById` matches both — when searching by string it interns to compare with symbol IDs, and when searching by symbol it resolves to string to compare with string IDs.
 
 ### Modals
 
@@ -1034,7 +1039,7 @@ Action functions (require active ScriptGui context):
 | `ui.node` | `gui_id child_index` | Navigate to child map (returns map ref) |
 | `gui.on_message` | `:symbol handler` | Register a message handler |
 | `gui.set_focus` | `"widget_id"` | Programmatically focus a widget by ID |
-| `ui.find` | `"widget_id"` | Find widget map by `:id` string (returns nil if not found) |
+| `ui.find` | `"widget_id"` or `:widget_id` | Find widget map by `:id` string or symbol (nil if not found) |
 
 ### Dynamic Updates from Scripts
 

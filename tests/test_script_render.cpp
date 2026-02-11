@@ -1114,6 +1114,132 @@ void test_script_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 26: findById with symbol :id fields ---
+    std::cout << "\n  26. findById symbol IDs... ";
+    {
+        using finescript::Value;
+
+        // Build a tree where :id fields are symbols (not strings)
+        auto btn = Value::map();
+        btn.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+        btn.asMap().set(engine.intern("label"), Value::string("SymBtn"));
+        btn.asMap().set(engine.intern("id"), Value::symbol(engine.intern("sym_btn")));
+
+        auto text = Value::map();
+        text.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+        text.asMap().set(engine.intern("text"), Value::string("SymText"));
+        text.asMap().set(engine.intern("id"), Value::symbol(engine.intern("sym_text")));
+
+        auto win = Value::map();
+        win.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), Value::string("Symbol IDs"));
+        auto children = Value::array({std::move(btn), std::move(text)});
+        win.asMap().set(engine.intern("children"), std::move(children));
+
+        finescript::ExecutionContext ctx(engine);
+        int symId = mapRenderer.show(std::move(win), ctx);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // Find by string (should match symbol :id via interning)
+        auto found = mapRenderer.findById("sym_btn");
+        assert(!found.isNil());
+        assert(found.isMap());
+
+        // Find by symbol directly
+        auto found2 = mapRenderer.findById(engine.intern("sym_text"));
+        assert(!found2.isNil());
+        assert(found2.isMap());
+
+        // Not found
+        assert(mapRenderer.findById("nonexistent").isNil());
+        assert(mapRenderer.findById(engine.intern("nonexistent_sym")).isNil());
+
+        mapRenderer.hide(symId);
+    }
+    std::cout << "ok";
+
+    // --- Test 27: findById mixed string and symbol IDs ---
+    std::cout << "\n  27. findById mixed IDs... ";
+    {
+        using finescript::Value;
+
+        // One widget with string :id, another with symbol :id
+        auto strWidget = Value::map();
+        strWidget.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+        strWidget.asMap().set(engine.intern("label"), Value::string("StringID"));
+        strWidget.asMap().set(engine.intern("id"), Value::string("str_id_widget"));
+
+        auto symWidget = Value::map();
+        symWidget.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+        symWidget.asMap().set(engine.intern("label"), Value::string("SymbolID"));
+        symWidget.asMap().set(engine.intern("id"), Value::symbol(engine.intern("sym_id_widget")));
+
+        auto win = Value::map();
+        win.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), Value::string("Mixed IDs"));
+        auto children = Value::array({std::move(strWidget), std::move(symWidget)});
+        win.asMap().set(engine.intern("children"), std::move(children));
+
+        finescript::ExecutionContext ctx(engine);
+        int mixId = mapRenderer.show(std::move(win), ctx);
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // String search finds string :id
+        auto f1 = mapRenderer.findById("str_id_widget");
+        assert(!f1.isNil());
+
+        // String search finds symbol :id (via intern)
+        auto f2 = mapRenderer.findById("sym_id_widget");
+        assert(!f2.isNil());
+
+        // Symbol search finds symbol :id
+        auto f3 = mapRenderer.findById(engine.intern("sym_id_widget"));
+        assert(!f3.isNil());
+
+        // Symbol search finds string :id (via lookupSymbol)
+        auto f4 = mapRenderer.findById(engine.intern("str_id_widget"));
+        assert(!f4.isNil());
+
+        mapRenderer.hide(mixId);
+    }
+    std::cout << "ok";
+
+    // --- Test 28: ui.find with symbol argument ---
+    std::cout << "\n  28. ui.find symbol arg... ";
+    {
+        using finescript::Value;
+
+        auto btn = Value::map();
+        btn.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+        btn.asMap().set(engine.intern("label"), Value::string("FindMe"));
+        btn.asMap().set(engine.intern("id"), Value::symbol(engine.intern("find_me_sym")));
+
+        auto win = Value::map();
+        win.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+        win.asMap().set(engine.intern("title"), Value::string("SymFind"));
+        auto children = Value::array({std::move(btn)});
+        win.asMap().set(engine.intern("children"), std::move(children));
+
+        ScriptGui scriptGui(engine, mapRenderer);
+        scriptGui.loadAndRun("set placeholder 0", "sym_find");
+        auto showResult = scriptGui.scriptShow(win);
+        assert(showResult.isInt());
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+
+        // ui.find with symbol arg
+        auto findResult = engine.executeCommand(R"(ui.find :find_me_sym)", *scriptGui.context());
+        assert(findResult.success);
+        assert(findResult.returnValue.isMap());
+
+        // ui.find with string arg (still works)
+        auto findResult2 = engine.executeCommand(R"(ui.find "find_me_sym")", *scriptGui.context());
+        assert(findResult2.success);
+        assert(findResult2.returnValue.isMap());
+
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 

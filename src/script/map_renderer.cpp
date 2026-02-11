@@ -66,15 +66,19 @@ void MapRenderer::setFocus(const std::string& widgetId) {
     pendingFocusId_ = widgetId;
 }
 
-finescript::Value MapRenderer::findByIdRecursive(finescript::Value& node, const std::string& widgetId) {
+finescript::Value MapRenderer::findByIdRecursive(finescript::Value& node, uint32_t symId, const std::string& strId) {
     if (!node.isMap()) return finescript::Value::nil();
     auto& m = node.asMap();
     auto idVal = m.get(syms_.id);
-    if (idVal.isString() && idVal.asString() == widgetId) return node;
+    if (idVal.isSymbol()) {
+        if (idVal.asSymbol() == symId) return node;
+    } else if (idVal.isString()) {
+        if (idVal.asString() == strId) return node;
+    }
     auto childrenVal = m.get(syms_.children);
     if (childrenVal.isArray()) {
         for (auto& child : childrenVal.asArrayMut()) {
-            auto found = findByIdRecursive(child, widgetId);
+            auto found = findByIdRecursive(child, symId, strId);
             if (!found.isNil()) return found;
         }
     }
@@ -83,8 +87,20 @@ finescript::Value MapRenderer::findByIdRecursive(finescript::Value& node, const 
 
 finescript::Value MapRenderer::findById(const std::string& widgetId) {
     if (widgetId.empty()) return finescript::Value::nil();
+    uint32_t sym = engine_.intern(widgetId);
     for (auto& [id, entry] : trees_) {
-        auto found = findByIdRecursive(entry.rootMap, widgetId);
+        auto found = findByIdRecursive(entry.rootMap, sym, widgetId);
+        if (!found.isNil()) return found;
+    }
+    return finescript::Value::nil();
+}
+
+finescript::Value MapRenderer::findById(uint32_t symbolId) {
+    if (symbolId == 0) return finescript::Value::nil();
+    std::string str(engine_.lookupSymbol(symbolId));
+    if (str.empty()) return finescript::Value::nil();
+    for (auto& [id, entry] : trees_) {
+        auto found = findByIdRecursive(entry.rootMap, symbolId, str);
         if (!found.isNil()) return found;
     }
     return finescript::Value::nil();

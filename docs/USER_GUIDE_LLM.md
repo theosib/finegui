@@ -757,7 +757,8 @@ class MapRenderer {
     void setTextureRegistry(TextureRegistry* registry);
     const ConverterSymbols& syms() const;      // Pre-interned symbols
     void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
-    finescript::Value findById(const std::string& widgetId); // Find widget map by :id (nil if not found)
+    finescript::Value findById(const std::string& widgetId); // Find by :id string (matches symbol/string fields)
+    finescript::Value findById(uint32_t symbolId);           // Find by :id symbol (matches symbol/string fields)
 };
 ```
 
@@ -926,7 +927,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.show` | `ui.show widget_map` | Store map in MapRenderer, returns ID |
 | `ui.hide` | `ui.hide` | Remove tree from renderer |
 | `ui.node` | `ui.node gui_id [child_path]` | Navigate map tree, return child map |
-| `ui.find` | `ui.find "widget_id"` | Find widget map by `:id` string (nil if not found) |
+| `ui.find` | `ui.find "id"` or `ui.find :id` | Find widget map by `:id` string or symbol (nil if not found) |
 
 `ui.node` path: integer (direct child index) or array of integers (nested path, e.g., `[2 0]`). No path returns root map.
 
