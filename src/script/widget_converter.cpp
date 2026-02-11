@@ -157,6 +157,10 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_push_var   = engine.intern("push_var");
     sym_pop_var    = engine.intern("pop_var");
 
+    // Type name symbols - Phase 11
+    sym_dummy    = engine.intern("dummy");
+    sym_new_line = engine.intern("new_line");
+
     // Phase 9 field keys
     my_value = engine.intern("my_value");
 

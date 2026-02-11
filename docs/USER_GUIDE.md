@@ -647,6 +647,8 @@ guiRenderer.hide(mainId);
 |---------|-------------|
 | `WidgetNode::sameLine(offsetX)` | Put next widget on same line |
 | `WidgetNode::spacing()` | Vertical spacing |
+| `WidgetNode::dummy(width, height)` | Invisible spacer of given size |
+| `WidgetNode::newLine()` | Force line break after SameLine |
 | `WidgetNode::textColored(r, g, b, a, content)` | Colored text |
 | `WidgetNode::textWrapped(content)` | Auto-wrapping text |
 | `WidgetNode::textDisabled(content)` | Grayed-out text |
@@ -990,6 +992,8 @@ Builder functions (return widget maps):
 | `ui.columns` | `count children` | Multi-column layout |
 | `ui.same_line` | `[offset]` | Same-line layout |
 | `ui.spacing` | *(none)* | Vertical spacing |
+| `ui.dummy` | `width height` | Invisible spacer of given size |
+| `ui.new_line` | *(none)* | Force line break after SameLine |
 | `ui.text_colored` | `color_array text` | Colored text |
 | `ui.text_wrapped` | `text` | Wrapping text |
 | `ui.text_disabled` | `text` | Grayed text |

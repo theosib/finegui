@@ -139,6 +139,10 @@ private:
     void renderPushStyleVar(WidgetNode& node);
     void renderPopStyleVar(WidgetNode& node);
 
+    // Phase 11 - Layout helpers
+    void renderDummy(WidgetNode& node);
+    void renderNewLine(WidgetNode& node);
+
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);
 };

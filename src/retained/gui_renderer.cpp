@@ -177,6 +177,9 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         case WidgetNode::Type::PopStyleColor:     renderPopStyleColor(node); break;
         case WidgetNode::Type::PushStyleVar:      renderPushStyleVar(node); break;
         case WidgetNode::Type::PopStyleVar:       renderPopStyleVar(node); break;
+        // Phase 11
+        case WidgetNode::Type::Dummy:             renderDummy(node); break;
+        case WidgetNode::Type::NewLine:           renderNewLine(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -876,6 +879,16 @@ void GuiRenderer::renderPushStyleVar(WidgetNode& node) {
 
 void GuiRenderer::renderPopStyleVar(WidgetNode& node) {
     ImGui::PopStyleVar(node.intValue);
+}
+
+// -- Phase 11: Layout Helpers -------------------------------------------------
+
+void GuiRenderer::renderDummy(WidgetNode& node) {
+    ImGui::Dummy(ImVec2(node.width, node.height));
+}
+
+void GuiRenderer::renderNewLine(WidgetNode& /*node*/) {
+    ImGui::NewLine();
 }
 
 // -- Drag and Drop ------------------------------------------------------------

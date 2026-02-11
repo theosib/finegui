@@ -501,6 +501,20 @@ WidgetNode WidgetNode::popStyleVar(int count) {
     return n;
 }
 
+WidgetNode WidgetNode::dummy(float width, float height) {
+    WidgetNode n;
+    n.type = Type::Dummy;
+    n.width = width;
+    n.height = height;
+    return n;
+}
+
+WidgetNode WidgetNode::newLine() {
+    WidgetNode n;
+    n.type = Type::NewLine;
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -553,6 +567,8 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::PopStyleColor:     return "PopStyleColor";
         case WidgetNode::Type::PushStyleVar:      return "PushStyleVar";
         case WidgetNode::Type::PopStyleVar:       return "PopStyleVar";
+        case WidgetNode::Type::Dummy:             return "Dummy";
+        case WidgetNode::Type::NewLine:           return "NewLine";
         default:                                  return "Unknown";
     }
 }

@@ -465,7 +465,7 @@ struct WidgetNode {
         Canvas, Tooltip,
         // Phase 9 - New widgets
         RadioButton, Selectable, InputTextMultiline,
-        BulletText, SeparatorText, Indent,
+        BulletText, SeparatorText, Indent, Dummy, NewLine,
         // Phase 10 - Style push/pop
         PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar
     };
@@ -628,6 +628,8 @@ struct WidgetNode {
     static WidgetNode separatorText(string label);
     static WidgetNode indent(float amount=0);
     static WidgetNode unindent(float amount=0);
+    static WidgetNode dummy(float width, float height);
+    static WidgetNode newLine();
 
     // --- Phase 10 builders ---
     static WidgetNode pushStyleColor(int colIdx, float r, float g, float b, float a);
@@ -912,6 +914,8 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.separator_text` | `ui.separator_text "label"` | |
 | `ui.indent` | `ui.indent [amount]` | |
 | `ui.unindent` | `ui.unindent [amount]` | |
+| `ui.dummy` | `ui.dummy width height` | Invisible spacer with explicit size |
+| `ui.new_line` | `ui.new_line` | Force line break |
 | `ui.push_style_color` | `ui.push_style_color col_idx [r g b a]` | Push color override |
 | `ui.pop_style_color` | `ui.pop_style_color [count]` | Pop color overrides |
 | `ui.push_style_var` | `ui.push_style_var var_idx val` or `var_idx [x y]` | Push style var |

@@ -158,6 +158,10 @@ private:
     void renderPushStyleVar(finescript::MapData& m);
     void renderPopStyleVar(finescript::MapData& m);
 
+    // Phase 11 - Layout helpers
+    void renderDummy(finescript::MapData& m);
+    void renderNewLine();
+
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);
 

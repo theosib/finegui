@@ -42,7 +42,9 @@ struct WidgetNode {
         RadioButton, Selectable, InputTextMultiline,
         BulletText, SeparatorText, Indent,
         // Phase 10 - Style push/pop
-        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar
+        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar,
+        // Phase 11 - Layout helpers
+        Dummy, NewLine
     };
 
     Type type;
@@ -279,6 +281,10 @@ struct WidgetNode {
     static WidgetNode pushStyleVar(int varIdx, float val);
     static WidgetNode pushStyleVar(int varIdx, float x, float y);
     static WidgetNode popStyleVar(int count = 1);
+
+    // Phase 11 - Layout helper builders
+    static WidgetNode dummy(float width, float height);
+    static WidgetNode newLine();
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

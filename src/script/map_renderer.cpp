@@ -247,6 +247,9 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else if (sym == syms_.sym_pop_color)     renderPopStyleColor(m);
         else if (sym == syms_.sym_push_var)      renderPushStyleVar(m);
         else if (sym == syms_.sym_pop_var)       renderPopStyleVar(m);
+        // Phase 11
+        else if (sym == syms_.sym_dummy)         renderDummy(m);
+        else if (sym == syms_.sym_new_line)      renderNewLine();
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1319,6 +1322,18 @@ void MapRenderer::renderIndent(MapData& m) {
 void MapRenderer::renderUnindent(MapData& m) {
     float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
     ImGui::Unindent(w > 0 ? w : 0.0f);
+}
+
+// -- Phase 11: Layout Helpers -------------------------------------------------
+
+void MapRenderer::renderDummy(MapData& m) {
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+    ImGui::Dummy(ImVec2(w, h));
+}
+
+void MapRenderer::renderNewLine() {
+    ImGui::NewLine();
 }
 
 // -- Phase 10: Style Push/Pop -------------------------------------------------

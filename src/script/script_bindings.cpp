@@ -821,6 +821,23 @@ void registerGuiBindings(ScriptEngine& engine) {
             return w;
         }));
 
+    // ui.dummy width height
+    uiMap.set(engine.intern("dummy"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "dummy");
+            if (args.size() >= 2 && args[0].isNumeric() && args[1].isNumeric()) {
+                w.asMap().set(engine.intern("width"), args[0]);
+                w.asMap().set(engine.intern("height"), args[1]);
+            }
+            return w;
+        }));
+
+    // ui.new_line
+    uiMap.set(engine.intern("new_line"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>&) -> Value {
+            return makeWidget(engine, "new_line");
+        }));
+
     // =========================================================================
     // Phase 10 - Style Push/Pop
     // =========================================================================

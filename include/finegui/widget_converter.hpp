@@ -97,6 +97,9 @@ struct ConverterSymbols {
     uint32_t sym_push_color = 0, sym_pop_color = 0;
     uint32_t sym_push_var = 0, sym_pop_var = 0;
 
+    // Type name symbols - Phase 11 (Layout helpers)
+    uint32_t sym_dummy = 0, sym_new_line = 0;
+
     // Phase 9 field keys
     uint32_t my_value = 0;
 
