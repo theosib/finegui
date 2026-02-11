@@ -653,6 +653,8 @@ guiRenderer.hide(mainId);
 | `WidgetNode::textWrapped(content)` | Auto-wrapping text |
 | `WidgetNode::textDisabled(content)` | Grayed-out text |
 | `WidgetNode::progressBar(fraction, width, height, overlay)` | Progress bar |
+| `WidgetNode::plotLines(label, values, overlay, scaleMin, scaleMax, width, height)` | Line chart sparkline from float array |
+| `WidgetNode::plotHistogram(label, values, overlay, scaleMin, scaleMax, width, height)` | Bar chart from float array |
 | `WidgetNode::collapsingHeader(label, children, defaultOpen)` | Expandable section |
 
 **Phase 4 - Containers & Menus:**
@@ -1017,6 +1019,8 @@ Builder functions (return widget maps):
 | `ui.text_wrapped` | `text` | Wrapping text |
 | `ui.text_disabled` | `text` | Grayed text |
 | `ui.progress_bar` | `fraction` | Progress bar |
+| `ui.plot_lines` | `label [values] [overlay] [min] [max] [width] [height]` | Line chart sparkline |
+| `ui.plot_histogram` | `label [values] [overlay] [min] [max] [width] [height]` | Bar chart |
 | `ui.collapsing_header` | `label children` | Expandable section |
 | `ui.tab_bar` | `id children` | Tab container |
 | `ui.tab` | `label children` | Tab page |

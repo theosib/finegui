@@ -50,7 +50,9 @@ struct WidgetNode {
         // Phase 13 - Menus & Popups (continued)
         ContextMenu, MainMenuBar,
         // Phase 14 - Tooltips & Images (continued)
-        ItemTooltip, ImageButton
+        ItemTooltip, ImageButton,
+        // Phase 15 - Display (plots)
+        PlotLines, PlotHistogram
     };
 
     Type type;
@@ -145,6 +147,9 @@ struct WidgetNode {
 
     /// Hint text (for InputTextWithHint placeholder).
     std::string hintText;
+
+    /// Plot data values (for PlotLines, PlotHistogram).
+    std::vector<float> plotValues;
 
     /// ListBox properties.
     int heightInItems = -1;   // -1 = auto height
@@ -324,6 +329,16 @@ struct WidgetNode {
     static WidgetNode imageButton(std::string id, TextureHandle texture,
                                    float width, float height,
                                    WidgetCallback onClick = {});
+
+    // Phase 15 - Display (plots)
+    static WidgetNode plotLines(std::string label, std::vector<float> values,
+                                std::string overlay = "",
+                                float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
+                                float width = 0.0f, float height = 0.0f);
+    static WidgetNode plotHistogram(std::string label, std::vector<float> values,
+                                    std::string overlay = "",
+                                    float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
+                                    float width = 0.0f, float height = 0.0f);
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

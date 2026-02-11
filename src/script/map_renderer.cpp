@@ -262,6 +262,9 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         // Phase 14
         else if (sym == syms_.sym_item_tooltip)      renderItemTooltip(m, ctx);
         else if (sym == syms_.sym_image_button)      renderImageButton(m, ctx);
+        // Phase 15
+        else if (sym == syms_.sym_plot_lines)        renderPlotLines(m);
+        else if (sym == syms_.sym_plot_histogram)    renderPlotHistogram(m);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1537,6 +1540,49 @@ void MapRenderer::renderImageButton(MapData& m, ExecutionContext& ctx) {
     if (ImGui::ImageButton(strId.c_str(), static_cast<ImTextureID>(handle), {w, h})) {
         invokeCallback(m, syms_.on_click, ctx);
     }
+}
+
+// -- Phase 15: Display (plots) ------------------------------------------------
+
+static std::vector<float> readFloatArray(finescript::MapData& m, uint32_t key) {
+    std::vector<float> result;
+    auto val = m.get(key);
+    if (val.isArray()) {
+        const auto& arr = val.asArray();
+        result.reserve(arr.size());
+        for (const auto& v : arr) {
+            result.push_back(v.isNumeric() ? static_cast<float>(v.asNumber()) : 0.0f);
+        }
+    }
+    return result;
+}
+
+void MapRenderer::renderPlotLines(finescript::MapData& m) {
+    auto label = getStringField(m, syms_.label, "Lines");
+    auto overlay = getStringField(m, syms_.overlay, "");
+    float scaleMin = static_cast<float>(getNumericField(m, syms_.min, FLT_MAX));
+    float scaleMax = static_cast<float>(getNumericField(m, syms_.max, FLT_MAX));
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+    auto values = readFloatArray(m, syms_.value);
+
+    const char* overlayStr = overlay.empty() ? nullptr : overlay.c_str();
+    ImGui::PlotLines(label.c_str(), values.data(), static_cast<int>(values.size()),
+                     0, overlayStr, scaleMin, scaleMax, {w, h});
+}
+
+void MapRenderer::renderPlotHistogram(finescript::MapData& m) {
+    auto label = getStringField(m, syms_.label, "Histogram");
+    auto overlay = getStringField(m, syms_.overlay, "");
+    float scaleMin = static_cast<float>(getNumericField(m, syms_.min, FLT_MAX));
+    float scaleMax = static_cast<float>(getNumericField(m, syms_.max, FLT_MAX));
+    float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
+    float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+    auto values = readFloatArray(m, syms_.value);
+
+    const char* overlayStr = overlay.empty() ? nullptr : overlay.c_str();
+    ImGui::PlotHistogram(label.c_str(), values.data(), static_cast<int>(values.size()),
+                         0, overlayStr, scaleMin, scaleMax, {w, h});
 }
 
 // -- Phase 10: Style Push/Pop -------------------------------------------------

@@ -375,6 +375,23 @@ int main() {
             finegui::WidgetNode::text("(See offscreen 3D demo for image example)"),
         }));
 
+        // Phase 15: PlotLines & PlotHistogram showcase
+        guiRenderer.show(finegui::WidgetNode::window("Phase 15: Plots", {
+            finegui::WidgetNode::text("PlotLines (FPS sparkline):"),
+            finegui::WidgetNode::plotLines("FPS",
+                {30, 60, 45, 55, 70, 40, 65, 50, 72, 58, 61, 48},
+                "avg: 54", 0.0f, 100.0f, 200.0f, 40.0f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("PlotHistogram (score distribution):"),
+            finegui::WidgetNode::plotHistogram("Scores",
+                {5, 12, 25, 30, 18, 8, 3},
+                "", 0.0f, 35.0f, 200.0f, 60.0f),
+            finegui::WidgetNode::separator(),
+            finegui::WidgetNode::text("Auto-scaled signal:"),
+            finegui::WidgetNode::plotLines("Signal",
+                {-1.0f, 0.5f, 1.0f, -0.5f, 0.0f, 0.8f, -0.3f, 0.6f}),
+        }));
+
         // Phase 13: Context Menu & Main Menu Bar showcase
         // Main menu bar is a top-level widget (not inside a window)
         guiRenderer.show(finegui::WidgetNode::mainMenuBar({

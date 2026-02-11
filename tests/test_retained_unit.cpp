@@ -1860,6 +1860,53 @@ void test_phase14_type_names() {
 }
 
 // ============================================================================
+// Phase 15 - PlotLines & PlotHistogram
+// ============================================================================
+
+void test_plot_lines_builder() {
+    std::cout << "Testing: PlotLines builder... ";
+
+    auto node = WidgetNode::plotLines("FPS", {30.0f, 60.0f, 45.0f, 55.0f},
+                                       "avg: 47.5", 0.0f, 100.0f, 200.0f, 40.0f);
+    assert(node.type == WidgetNode::Type::PlotLines);
+    assert(node.label == "FPS");
+    assert(node.plotValues.size() == 4);
+    assert(node.plotValues[0] == 30.0f);
+    assert(node.plotValues[3] == 55.0f);
+    assert(node.overlayText == "avg: 47.5");
+    assert(node.minFloat == 0.0f);
+    assert(node.maxFloat == 100.0f);
+    assert(node.width == 200.0f);
+    assert(node.height == 40.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_plot_histogram_builder() {
+    std::cout << "Testing: PlotHistogram builder... ";
+
+    auto node = WidgetNode::plotHistogram("Scores", {10.0f, 20.0f, 30.0f});
+    assert(node.type == WidgetNode::Type::PlotHistogram);
+    assert(node.label == "Scores");
+    assert(node.plotValues.size() == 3);
+    assert(node.plotValues[2] == 30.0f);
+    assert(node.overlayText.empty());
+    assert(node.minFloat == FLT_MAX);  // auto-scale
+    assert(node.maxFloat == FLT_MAX);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase15_type_names() {
+    std::cout << "Testing: Phase 15 type names... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::PlotLines)) == "PlotLines");
+    assert(std::string(widgetTypeName(WidgetNode::Type::PlotHistogram)) == "PlotHistogram");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Easing Function Tests (via TweenManager::applyEasing, tested indirectly)
 // ============================================================================
 
@@ -2036,6 +2083,11 @@ int main() {
         test_item_tooltip_rich_builder();
         test_image_button_builder();
         test_phase14_type_names();
+
+        // Phase 15 - PlotLines & PlotHistogram
+        test_plot_lines_builder();
+        test_plot_histogram_builder();
+        test_phase15_type_names();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

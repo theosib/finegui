@@ -177,6 +177,10 @@ private:
     void renderItemTooltip(finescript::MapData& m, finescript::ExecutionContext& ctx);
     void renderImageButton(finescript::MapData& m, finescript::ExecutionContext& ctx);
 
+    // Phase 15 - Display (plots)
+    void renderPlotLines(finescript::MapData& m);
+    void renderPlotHistogram(finescript::MapData& m);
+
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);
 

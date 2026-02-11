@@ -770,6 +770,68 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // =========================================================================
+    // Phase 15 - Display (plots)
+    // =========================================================================
+
+    // ui.plot_lines "label" [values] [overlay] [min] [max] [width] [height]
+    uiMap.set(engine.intern("plot_lines"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "plot_lines");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isString()) {
+                m.set(engine.intern("overlay"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("min"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isNumeric()) {
+                m.set(engine.intern("max"), args[4]);
+            }
+            if (args.size() > 5 && args[5].isNumeric()) {
+                m.set(engine.intern("width"), args[5]);
+            }
+            if (args.size() > 6 && args[6].isNumeric()) {
+                m.set(engine.intern("height"), args[6]);
+            }
+            return w;
+        }));
+
+    // ui.plot_histogram "label" [values] [overlay] [min] [max] [width] [height]
+    uiMap.set(engine.intern("plot_histogram"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "plot_histogram");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isString()) {
+                m.set(engine.intern("label"), args[0]);
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("value"), args[1]);
+            }
+            if (args.size() > 2 && args[2].isString()) {
+                m.set(engine.intern("overlay"), args[2]);
+            }
+            if (args.size() > 3 && args[3].isNumeric()) {
+                m.set(engine.intern("min"), args[3]);
+            }
+            if (args.size() > 4 && args[4].isNumeric()) {
+                m.set(engine.intern("max"), args[4]);
+            }
+            if (args.size() > 5 && args[5].isNumeric()) {
+                m.set(engine.intern("width"), args[5]);
+            }
+            if (args.size() > 6 && args[6].isNumeric()) {
+                m.set(engine.intern("height"), args[6]);
+            }
+            return w;
+        }));
+
+    // =========================================================================
     // Phase 8 - Custom
     // =========================================================================
 

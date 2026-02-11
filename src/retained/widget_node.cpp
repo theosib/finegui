@@ -622,6 +622,40 @@ WidgetNode WidgetNode::imageButton(std::string id, TextureHandle texture,
     return n;
 }
 
+// Phase 15 builders
+
+WidgetNode WidgetNode::plotLines(std::string label, std::vector<float> values,
+                                  std::string overlay,
+                                  float scaleMin, float scaleMax,
+                                  float width, float height) {
+    WidgetNode n;
+    n.type = Type::PlotLines;
+    n.label = std::move(label);
+    n.plotValues = std::move(values);
+    n.overlayText = std::move(overlay);
+    n.minFloat = scaleMin;
+    n.maxFloat = scaleMax;
+    n.width = width;
+    n.height = height;
+    return n;
+}
+
+WidgetNode WidgetNode::plotHistogram(std::string label, std::vector<float> values,
+                                      std::string overlay,
+                                      float scaleMin, float scaleMax,
+                                      float width, float height) {
+    WidgetNode n;
+    n.type = Type::PlotHistogram;
+    n.label = std::move(label);
+    n.plotValues = std::move(values);
+    n.overlayText = std::move(overlay);
+    n.minFloat = scaleMin;
+    n.maxFloat = scaleMax;
+    n.width = width;
+    n.height = height;
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -685,6 +719,8 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::MainMenuBar:      return "MainMenuBar";
         case WidgetNode::Type::ItemTooltip:      return "ItemTooltip";
         case WidgetNode::Type::ImageButton:      return "ImageButton";
+        case WidgetNode::Type::PlotLines:        return "PlotLines";
+        case WidgetNode::Type::PlotHistogram:    return "PlotHistogram";
         default:                                  return "Unknown";
     }
 }

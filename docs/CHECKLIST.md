@@ -18,8 +18,8 @@
 - [x] separator
 - [x] separator_text
 - [x] progress_bar
-- [ ] plot_lines
-- [ ] plot_histogram
+- [x] plot_lines
+- [x] plot_histogram
 
 ### Core Input
 - [x] button

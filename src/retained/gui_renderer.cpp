@@ -192,6 +192,9 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         // Phase 14
         case WidgetNode::Type::ItemTooltip:      renderItemTooltip(node); break;
         case WidgetNode::Type::ImageButton:      renderImageButton(node); break;
+        // Phase 15
+        case WidgetNode::Type::PlotLines:        renderPlotLines(node); break;
+        case WidgetNode::Type::PlotHistogram:    renderPlotHistogram(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -1021,6 +1024,28 @@ void GuiRenderer::renderImageButton(WidgetNode& node) {
                            {node.imageWidth, node.imageHeight})) {
         if (node.onClick) node.onClick(node);
     }
+}
+
+// -- Phase 15: Display (plots) ------------------------------------------------
+
+void GuiRenderer::renderPlotLines(WidgetNode& node) {
+    const char* overlay = node.overlayText.empty() ? nullptr : node.overlayText.c_str();
+    ImGui::PlotLines(node.label.c_str(),
+                     node.plotValues.data(),
+                     static_cast<int>(node.plotValues.size()),
+                     0, overlay,
+                     node.minFloat, node.maxFloat,
+                     {node.width, node.height});
+}
+
+void GuiRenderer::renderPlotHistogram(WidgetNode& node) {
+    const char* overlay = node.overlayText.empty() ? nullptr : node.overlayText.c_str();
+    ImGui::PlotHistogram(node.label.c_str(),
+                         node.plotValues.data(),
+                         static_cast<int>(node.plotValues.size()),
+                         0, overlay,
+                         node.minFloat, node.maxFloat,
+                         {node.width, node.height});
 }
 
 // -- Drag and Drop ------------------------------------------------------------

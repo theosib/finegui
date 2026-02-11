@@ -837,6 +837,24 @@ void test_retained_rendering() {
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
     std::cout << "ok";
 
+    // --- Test 32: Phase 15 PlotLines & PlotHistogram ---
+    std::cout << "\n  32. Phase 15 PlotLines & PlotHistogram... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Plot Test", {
+        WidgetNode::text("PlotLines:"),
+        WidgetNode::plotLines("FPS", {30, 60, 45, 55, 70, 40, 65, 50},
+                              "avg", 0.0f, 100.0f, 200.0f, 40.0f),
+        WidgetNode::separator(),
+        WidgetNode::text("PlotHistogram:"),
+        WidgetNode::plotHistogram("Scores", {10, 25, 15, 30, 20, 35},
+                                  "", FLT_MAX, FLT_MAX, 200.0f, 40.0f),
+        WidgetNode::separator(),
+        WidgetNode::text("Auto-scale plot:"),
+        WidgetNode::plotLines("Signal", {-1.0f, 0.5f, 1.0f, -0.5f, 0.0f}),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

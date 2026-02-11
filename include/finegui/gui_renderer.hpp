@@ -158,6 +158,10 @@ private:
     void renderItemTooltip(WidgetNode& node);
     void renderImageButton(WidgetNode& node);
 
+    // Phase 15 - Display (plots)
+    void renderPlotLines(WidgetNode& node);
+    void renderPlotHistogram(WidgetNode& node);
+
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);
 };

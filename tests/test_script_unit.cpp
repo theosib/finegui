@@ -1831,6 +1831,83 @@ void test_phase14_symbols_interned() {
 }
 
 // ============================================================================
+// Phase 15 - PlotLines & PlotHistogram
+// ============================================================================
+
+void test_binding_ui_plot_lines() {
+    std::cout << "Testing: ui.plot_lines binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.plot_lines "FPS" [30 60 45] "avg" 0 100})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("plot_lines"));
+
+    auto labelVal = m.get(engine.intern("label"));
+    assert(labelVal.isString());
+    assert(labelVal.asString() == "FPS");
+
+    auto valArr = m.get(engine.intern("value"));
+    assert(valArr.isArray());
+    assert(valArr.asArray().size() == 3);
+
+    auto overlayVal = m.get(engine.intern("overlay"));
+    assert(overlayVal.isString());
+    assert(overlayVal.asString() == "avg");
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_plot_histogram() {
+    std::cout << "Testing: ui.plot_histogram binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.plot_histogram "Scores" [10 20 30]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("plot_histogram"));
+
+    auto labelVal = m.get(engine.intern("label"));
+    assert(labelVal.isString());
+    assert(labelVal.asString() == "Scores");
+
+    auto valArr = m.get(engine.intern("value"));
+    assert(valArr.isArray());
+    assert(valArr.asArray().size() == 3);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase15_symbols_interned() {
+    std::cout << "Testing: Phase 15 symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.sym_plot_lines != 0);
+    assert(syms.sym_plot_histogram != 0);
+    assert(syms.sym_plot_lines == engine.intern("plot_lines"));
+    assert(syms.sym_plot_histogram == engine.intern("plot_histogram"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1948,6 +2025,11 @@ int main() {
         test_binding_ui_item_tooltip();
         test_binding_ui_image_button();
         test_phase14_symbols_interned();
+
+        // Phase 15 - PlotLines & PlotHistogram
+        test_binding_ui_plot_lines();
+        test_binding_ui_plot_histogram();
+        test_phase15_symbols_interned();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

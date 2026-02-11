@@ -444,6 +444,7 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `ui.close_popup` must be called during popup rendering (e.g., from a button callback inside a popup/modal)
 - `ItemTooltip` must be placed immediately after the target widget in the children list (same rule as `Tooltip`)
 - `ImageButton` requires a valid TextureHandle; skips rendering silently if texture is invalid
+- `PlotLines`/`PlotHistogram`: `plotValues` stores float array data; `minFloat`/`maxFloat` = FLT_MAX for auto-scaling; `overlayText` for optional text overlay; `width`/`height` for graph size (0 = auto)
 
 ## WidgetNode (Retained Mode)
 
@@ -477,7 +478,9 @@ struct WidgetNode {
         // Phase 13 - Menus & Popups
         ContextMenu, MainMenuBar,
         // Phase 14 - Tooltips & Images (continued)
-        ItemTooltip, ImageButton
+        ItemTooltip, ImageButton,
+        // Phase 15 - Plots
+        PlotLines, PlotHistogram
     };
 
     Type type;
@@ -568,6 +571,9 @@ struct WidgetNode {
     float scaleX = 1.0f;           // Window scale X (1.0=normal, 0.0=collapsed to center)
     float scaleY = 1.0f;           // Window scale Y (1.0=normal, 0.0=collapsed to center)
     float rotationY = 0.0f;        // Y-axis rotation in radians (0=facing forward, PI=flipped)
+
+    // Phase 15
+    std::vector<float> plotValues; // PlotLines, PlotHistogram data
 
     // --- Static builders (Phase 1) ---
     static WidgetNode window(string title, vector<WidgetNode> children = {}, int flags = 0);
@@ -668,6 +674,14 @@ struct WidgetNode {
     static WidgetNode itemTooltip(string text);
     static WidgetNode itemTooltip(vector<WidgetNode> children);
     static WidgetNode imageButton(string id, TextureHandle texture, float width, float height, WidgetCallback onClick={});
+
+    // --- Phase 15 builders ---
+    static WidgetNode plotLines(std::string label, std::vector<float> values,
+                                std::string overlay = "", float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
+                                float width = 0.0f, float height = 0.0f);
+    static WidgetNode plotHistogram(std::string label, std::vector<float> values,
+                                   std::string overlay = "", float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
+                                   float width = 0.0f, float height = 0.0f);
 };
 ```
 
@@ -961,6 +975,8 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.main_menu_bar` | `ui.main_menu_bar [children]` | Top-level app menu bar; must be a top-level tree (not inside a window) |
 | `ui.item_tooltip` | `ui.item_tooltip "text"` or `ui.item_tooltip [children]` | Hover tooltip on previous widget |
 | `ui.image_button` | `ui.image_button "id" "texture_name" [w] [h] [on_click]` | Clickable image button |
+| `ui.plot_lines` | `ui.plot_lines "label" [values] "overlay" min max width height` | Line graph from array of floats |
+| `ui.plot_histogram` | `ui.plot_histogram "label" [values] "overlay" min max width height` | Histogram from array of floats |
 
 ### Canvas Draw Commands (returned by ui.draw_*)
 
