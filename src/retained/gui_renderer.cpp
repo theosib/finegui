@@ -58,10 +58,18 @@ void GuiRenderer::setDragDropManager(DragDropManager* manager) {
     dndManager_ = manager;
 }
 
+void GuiRenderer::setFocus(const std::string& widgetId) {
+    pendingFocusId_ = widgetId;
+}
+
 void GuiRenderer::renderAll() {
+    currentFocusedId_.clear();
     for (auto& [id, tree] : trees_) {
         renderNode(tree);
     }
+    // Fire blur callback if the previously-focused widget lost focus
+    // (onBlur is fired in renderNode when a widget loses focus)
+    lastFocusedId_ = currentFocusedId_;
 }
 
 // -- Dispatch -----------------------------------------------------------------
@@ -78,6 +86,19 @@ void GuiRenderer::renderNode(WidgetNode& node) {
     bool pushId = !node.id.empty();
     if (pushId) {
         ImGui::PushID(node.id.c_str());
+    }
+
+    // Focus: exclude from tab navigation if not focusable
+    bool pushedNoTabStop = false;
+    if (!node.focusable) {
+        ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+        pushedNoTabStop = true;
+    }
+
+    // Focus: programmatic focus request
+    if (!pendingFocusId_.empty() && !node.id.empty() && node.id == pendingFocusId_) {
+        ImGui::SetKeyboardFocusHere(0);
+        pendingFocusId_.clear();
     }
 
     switch (node.type) {
@@ -134,9 +155,35 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         case WidgetNode::Type::BulletText:        renderBulletText(node); break;
         case WidgetNode::Type::SeparatorText:     renderSeparatorText(node); break;
         case WidgetNode::Type::Indent:            renderIndent(node); break;
+        // Phase 10
+        case WidgetNode::Type::PushStyleColor:    renderPushStyleColor(node); break;
+        case WidgetNode::Type::PopStyleColor:     renderPopStyleColor(node); break;
+        case WidgetNode::Type::PushStyleVar:      renderPushStyleVar(node); break;
+        case WidgetNode::Type::PopStyleVar:       renderPopStyleVar(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
+    }
+
+    // Focus: auto-focus on first appearance
+    if (node.autoFocus) {
+        ImGui::SetItemDefaultFocus();
+    }
+
+    // Focus: track focus changes for onFocus/onBlur callbacks
+    if (!node.id.empty()) {
+        if (ImGui::IsItemFocused()) {
+            currentFocusedId_ = node.id;
+            if (node.id != lastFocusedId_ && node.onFocus) {
+                node.onFocus(node);
+            }
+        } else if (node.id == lastFocusedId_ && node.onBlur) {
+            node.onBlur(node);
+        }
+    }
+
+    if (pushedNoTabStop) {
+        ImGui::PopItemFlag();
     }
 
     // DnD handling (after widget is rendered so ImGui has the item rect)
@@ -567,6 +614,12 @@ void GuiRenderer::renderModal(WidgetNode& node) {
 
     bool open = true;
     if (ImGui::BeginPopupModal(title, &open)) {
+        // Escape key closes the modal (ImGui doesn't do this for modals by default)
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            open = false;
+            ImGui::CloseCurrentPopup();
+        }
+
         for (auto& child : node.children) {
             renderNode(child);
         }
@@ -700,6 +753,49 @@ void GuiRenderer::renderIndent(WidgetNode& node) {
     } else {
         ImGui::Indent(node.width > 0 ? node.width : 0.0f);
     }
+}
+
+// -- Phase 10: Style Push/Pop -------------------------------------------------
+
+static bool isStyleVarVec2(int idx) {
+    switch (idx) {
+        case ImGuiStyleVar_WindowPadding:
+        case ImGuiStyleVar_WindowMinSize:
+        case ImGuiStyleVar_WindowTitleAlign:
+        case ImGuiStyleVar_FramePadding:
+        case ImGuiStyleVar_ItemSpacing:
+        case ImGuiStyleVar_ItemInnerSpacing:
+        case ImGuiStyleVar_CellPadding:
+        case ImGuiStyleVar_TableAngledHeadersTextAlign:
+        case ImGuiStyleVar_ButtonTextAlign:
+        case ImGuiStyleVar_SelectableTextAlign:
+        case ImGuiStyleVar_SeparatorTextAlign:
+        case ImGuiStyleVar_SeparatorTextPadding:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void GuiRenderer::renderPushStyleColor(WidgetNode& node) {
+    ImGui::PushStyleColor(node.intValue,
+        ImVec4(node.colorR, node.colorG, node.colorB, node.colorA));
+}
+
+void GuiRenderer::renderPopStyleColor(WidgetNode& node) {
+    ImGui::PopStyleColor(node.intValue);
+}
+
+void GuiRenderer::renderPushStyleVar(WidgetNode& node) {
+    if (isStyleVarVec2(node.intValue)) {
+        ImGui::PushStyleVar(node.intValue, ImVec2(node.width, node.height));
+    } else {
+        ImGui::PushStyleVar(node.intValue, node.floatValue);
+    }
+}
+
+void GuiRenderer::renderPopStyleVar(WidgetNode& node) {
+    ImGui::PopStyleVar(node.intValue);
 }
 
 // -- Drag and Drop ------------------------------------------------------------

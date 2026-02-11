@@ -291,6 +291,193 @@ void test_offscreen_texture_in_gui() {
     std::cout << "PASSED\n";
 }
 
+void test_handle_input_event_auto_mode() {
+    std::cout << "Testing: handleInputEvent Auto mode... ";
+
+    auto ctx = TestContext::create("test_handle_input_auto");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    // Default mode should be Auto
+    assert(gui.guiMode() == GuiMode::Auto);
+
+    // Run a frame so ImGui has valid state (no windows → WantCapture* = false)
+    gui.beginFrame();
+    gui.endFrame();
+
+    // Create a synthetic finevk InputEvent (key press)
+    finevk::InputEvent keyEvent{};
+    keyEvent.type = finevk::InputEventType::KeyPress;
+    keyEvent.key = GLFW_KEY_W;
+    keyEvent.scancode = 0;
+
+    // In Auto mode with no active ImGui widget, key should be rejected
+    auto result = gui.handleInputEvent(keyEvent);
+    assert(result == finevk::ListenerResult::Reject);
+
+    // Mouse move should return Used (not Reject) in Auto mode when not captured
+    finevk::InputEvent moveEvent{};
+    moveEvent.type = finevk::InputEventType::MouseMove;
+    moveEvent.state.mousePosition = {100.0f, 100.0f};
+
+    result = gui.handleInputEvent(moveEvent);
+    assert(result == finevk::ListenerResult::Used);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
+void test_handle_input_event_passive_mode() {
+    std::cout << "Testing: handleInputEvent Passive mode... ";
+
+    auto ctx = TestContext::create("test_handle_input_passive");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    gui.setGuiMode(GuiMode::Passive);
+    assert(gui.guiMode() == GuiMode::Passive);
+
+    gui.beginFrame();
+    gui.endFrame();
+
+    // In Passive mode, all events should return Used
+    finevk::InputEvent keyEvent{};
+    keyEvent.type = finevk::InputEventType::KeyPress;
+    keyEvent.key = GLFW_KEY_W;
+
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Used);
+
+    finevk::InputEvent mouseEvent{};
+    mouseEvent.type = finevk::InputEventType::MouseButtonPress;
+    mouseEvent.mouseButton = GLFW_MOUSE_BUTTON_LEFT;
+
+    assert(gui.handleInputEvent(mouseEvent) == finevk::ListenerResult::Used);
+
+    finevk::InputEvent scrollEvent{};
+    scrollEvent.type = finevk::InputEventType::MouseScroll;
+    scrollEvent.state.scrollDelta = {0.0f, 1.0f};
+
+    assert(gui.handleInputEvent(scrollEvent) == finevk::ListenerResult::Used);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
+void test_handle_input_event_exclusive_mode() {
+    std::cout << "Testing: handleInputEvent Exclusive mode... ";
+
+    auto ctx = TestContext::create("test_handle_input_exclusive");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    gui.setGuiMode(GuiMode::Exclusive);
+    assert(gui.guiMode() == GuiMode::Exclusive);
+
+    gui.beginFrame();
+    gui.endFrame();
+
+    // In Exclusive mode, all events should return Consumed
+    finevk::InputEvent keyEvent{};
+    keyEvent.type = finevk::InputEventType::KeyPress;
+    keyEvent.key = GLFW_KEY_W;
+
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Consumed);
+
+    finevk::InputEvent moveEvent{};
+    moveEvent.type = finevk::InputEventType::MouseMove;
+    moveEvent.state.mousePosition = {200.0f, 200.0f};
+
+    assert(gui.handleInputEvent(moveEvent) == finevk::ListenerResult::Consumed);
+
+    finevk::InputEvent scrollEvent{};
+    scrollEvent.type = finevk::InputEventType::MouseScroll;
+    scrollEvent.state.scrollDelta = {0.0f, -1.0f};
+
+    assert(gui.handleInputEvent(scrollEvent) == finevk::ListenerResult::Consumed);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
+void test_gui_mode_switching() {
+    std::cout << "Testing: GuiMode switching... ";
+
+    auto ctx = TestContext::create("test_gui_mode_switching");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    gui.beginFrame();
+    gui.endFrame();
+
+    finevk::InputEvent keyEvent{};
+    keyEvent.type = finevk::InputEventType::KeyPress;
+    keyEvent.key = GLFW_KEY_W;
+
+    // Auto mode: no widget focused → Reject
+    gui.setGuiMode(GuiMode::Auto);
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Reject);
+
+    // Switch to Exclusive → Consumed
+    gui.setGuiMode(GuiMode::Exclusive);
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Consumed);
+
+    // Switch to Passive → Used
+    gui.setGuiMode(GuiMode::Passive);
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Used);
+
+    // Back to Auto → Reject
+    gui.setGuiMode(GuiMode::Auto);
+    assert(gui.handleInputEvent(keyEvent) == finevk::ListenerResult::Reject);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
+void test_connect_disconnect_input_manager() {
+    std::cout << "Testing: connectToInputManager / disconnectFromInputManager... ";
+
+    auto ctx = TestContext::create("test_connect_disconnect");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    // Create InputManager
+    auto input = finevk::InputManager::create(ctx->window.get());
+
+    // Connect
+    int listenerId = gui.connectToInputManager(*input);
+    assert(listenerId >= 0);
+
+    // Run a frame to verify no crashes
+    gui.beginFrame();
+    ImGui::Begin("Test");
+    ImGui::Text("Connected");
+    ImGui::End();
+    gui.endFrame();
+
+    // Disconnect
+    gui.disconnectFromInputManager();
+
+    // Can reconnect at different priority
+    listenerId = gui.connectToInputManager(*input, finevk::InputPriority::Menu);
+    assert(listenerId >= 0);
+
+    // Disconnect again
+    gui.disconnectFromInputManager();
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
 // ============================================================================
 // Main
 // ============================================================================
@@ -304,6 +491,11 @@ int main() {
         test_input_processing();
         test_state_updates();
         test_offscreen_texture_in_gui();
+        test_handle_input_event_auto_mode();
+        test_handle_input_event_passive_mode();
+        test_handle_input_event_exclusive_mode();
+        test_gui_mode_switching();
+        test_connect_disconnect_input_manager();
 
         std::cout << "\n=== All Phase 2 tests PASSED ===\n";
     } catch (const std::exception& e) {

@@ -107,13 +107,6 @@ public:
     static InputEvent fromFineVK(const finevk::InputEvent& event);
 
     /**
-     * @brief Process finevk InputManager and extract all pending events
-     * @param input The finevk input manager
-     * @return Vector of converted finegui input events
-     */
-    static std::vector<InputEvent> fromInputManager(finevk::InputManager& input);
-
-    /**
      * @brief Convert GLFW key code to ImGui key code
      * @param glfwKey GLFW key constant (GLFW_KEY_*)
      * @return ImGui key code (ImGuiKey_*)

@@ -22,6 +22,17 @@
 namespace finegui {
 
 /**
+ * @brief Controls how the GUI listener handles input consumption
+ *
+ * Determines whether events are consumed (blocked from game) or passed through.
+ */
+enum class GuiMode {
+    Auto,       ///< Use ImGui's WantCapture* flags to decide (default)
+    Passive,    ///< Feed to ImGui, but always pass through (never block game)
+    Exclusive   ///< Consume all input (menu/inventory mode — block everything)
+};
+
+/**
  * @brief Main GUI system - wraps Dear ImGui with finevk backend
  *
  * Provides a clean interface for creating interactive GUI in finevk applications.
@@ -157,6 +168,52 @@ public:
             processInput(e);
         }
     }
+
+    // ========================================================================
+    // InputManager Integration
+    // ========================================================================
+
+    /**
+     * @brief Register as a listener on a finevk InputManager
+     *
+     * The GUI will receive events, feed them to ImGui, and return
+     * Consumed/Reject based on GuiMode and ImGui's WantCapture* state.
+     *
+     * @param input The finevk InputManager to connect to
+     * @param priority Listener priority (default: HUD = 300)
+     * @return Listener ID for manual removal, or -1 if already connected
+     */
+    int connectToInputManager(finevk::InputManager& input, int priority = 300);
+
+    /**
+     * @brief Disconnect from the currently connected InputManager
+     */
+    void disconnectFromInputManager();
+
+    /**
+     * @brief Handle a finevk input event directly
+     *
+     * Converts the event, feeds to ImGui, and returns a ListenerResult
+     * based on the current GuiMode and ImGui's capture state.
+     * This is called by the registered listener, but can also be called
+     * directly for testing or custom integration.
+     *
+     * @param event The finevk input event
+     * @return ListenerResult indicating consumption
+     */
+    finevk::ListenerResult handleInputEvent(const finevk::InputEvent& event);
+
+    /**
+     * @brief Set the GUI input mode
+     * @param mode The input consumption mode
+     */
+    void setGuiMode(GuiMode mode);
+
+    /**
+     * @brief Get the current GUI input mode
+     * @return Current GuiMode
+     */
+    [[nodiscard]] GuiMode guiMode() const;
 
     // ========================================================================
     // Per-Frame: State Updates

@@ -286,6 +286,57 @@ void test_retained_rendering() {
     guiRenderer.setDragDropManager(nullptr);  // cleanup
     std::cout << "ok";
 
+    // --- Test 13: Style push/pop rendering ---
+    std::cout << "\n  13. Style push/pop... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Style Test", {
+        // Push red button color
+        WidgetNode::pushStyleColor(ImGuiCol_Button, 0.8f, 0.1f, 0.1f, 1.0f),
+        WidgetNode::pushStyleColor(ImGuiCol_ButtonHovered, 1.0f, 0.2f, 0.2f, 1.0f),
+        WidgetNode::pushStyleVar(ImGuiStyleVar_FrameRounding, 8.0f),
+        WidgetNode::pushStyleVar(ImGuiStyleVar_FramePadding, 10.0f, 5.0f),
+        WidgetNode::button("Red Round Button"),
+        WidgetNode::popStyleVar(2),
+        WidgetNode::popStyleColor(2),
+        // Normal button after pop
+        WidgetNode::button("Normal Button"),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
+    // --- Test 14: Focus management rendering ---
+    std::cout << "\n  14. Focus management... ";
+    guiRenderer.hideAll();
+
+    auto focusInput = WidgetNode::inputText("Name", "");
+    focusInput.id = "name_input";
+    focusInput.autoFocus = true;
+
+    auto noTabInput = WidgetNode::inputText("Skip", "");
+    noTabInput.id = "skip_input";
+    noTabInput.focusable = false;
+
+    bool focusFired = false;
+    auto trackedInput = WidgetNode::inputText("Tracked", "");
+    trackedInput.id = "tracked_input";
+    trackedInput.onFocus = [&focusFired](WidgetNode&) { focusFired = true; };
+    trackedInput.onBlur = [](WidgetNode&) {};
+
+    guiRenderer.show(WidgetNode::window("Focus Test", {
+        std::move(focusInput),
+        std::move(noTabInput),
+        std::move(trackedInput),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+
+    // Test setFocus (just verify no crash, focus won't actually fire
+    // without real input events driving ImGui's navigation)
+    guiRenderer.setFocus("name_input");
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+
+    guiRenderer.setFocus("tracked_input");
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 3);
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 }

@@ -94,6 +94,9 @@ public:
     /// Called by gui.on_message binding: register a message handler.
     void registerMessageHandler(uint32_t messageType, finescript::Value handler);
 
+    /// Called by gui.set_focus binding: programmatically focus a widget by ID.
+    void scriptSetFocus(const std::string& widgetId);
+
 private:
     struct Impl;
     std::unique_ptr<Impl> impl_;

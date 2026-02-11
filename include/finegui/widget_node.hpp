@@ -39,7 +39,9 @@ struct WidgetNode {
         Canvas, Tooltip,
         // Phase 9 - New widgets
         RadioButton, Selectable, InputTextMultiline,
-        BulletText, SeparatorText, Indent
+        BulletText, SeparatorText, Indent,
+        // Phase 10 - Style push/pop
+        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar
     };
 
     Type type;
@@ -148,6 +150,21 @@ struct WidgetNode {
     ///            2 = click-to-pick-up only.
     int dragMode = 0;
 
+    // -- Focus management ----------------------------------------------------
+
+    /// Whether this widget participates in tab navigation (default: true).
+    /// Set to false to skip this widget when tabbing.
+    bool focusable = true;
+
+    /// Focus this widget when its parent window first appears.
+    bool autoFocus = false;
+
+    /// Called when this widget gains keyboard focus.
+    WidgetCallback onFocus;
+
+    /// Called when this widget loses keyboard focus.
+    WidgetCallback onBlur;
+
     // -- Convenience builders ------------------------------------------------
 
     static WidgetNode window(std::string title, std::vector<WidgetNode> children = {},
@@ -243,6 +260,13 @@ struct WidgetNode {
     static WidgetNode separatorText(std::string label);
     static WidgetNode indent(float width = 0.0f);
     static WidgetNode unindent(float width = 0.0f);
+
+    // Phase 10 - Style push/pop builders
+    static WidgetNode pushStyleColor(int colIdx, float r, float g, float b, float a);
+    static WidgetNode popStyleColor(int count = 1);
+    static WidgetNode pushStyleVar(int varIdx, float val);
+    static WidgetNode pushStyleVar(int varIdx, float x, float y);
+    static WidgetNode popStyleVar(int count = 1);
 };
 
 /// Returns a human-readable name for a widget type (for debug/placeholder text).

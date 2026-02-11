@@ -1595,6 +1595,131 @@ void test_texture_registry_clear() {
 }
 
 // ============================================================================
+// Phase 10 - Style Push/Pop Builders
+// ============================================================================
+
+void test_push_style_color_builder() {
+    std::cout << "Testing: WidgetNode::pushStyleColor builder... ";
+
+    auto w = WidgetNode::pushStyleColor(21, 0.2f, 0.1f, 0.1f, 1.0f);
+    assert(w.type == WidgetNode::Type::PushStyleColor);
+    assert(w.intValue == 21);
+    assert(w.colorR == 0.2f);
+    assert(w.colorG == 0.1f);
+    assert(w.colorB == 0.1f);
+    assert(w.colorA == 1.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_pop_style_color_builder() {
+    std::cout << "Testing: WidgetNode::popStyleColor builder... ";
+
+    auto w = WidgetNode::popStyleColor(3);
+    assert(w.type == WidgetNode::Type::PopStyleColor);
+    assert(w.intValue == 3);
+
+    // Default count = 1
+    auto w2 = WidgetNode::popStyleColor();
+    assert(w2.intValue == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_push_style_var_float_builder() {
+    std::cout << "Testing: WidgetNode::pushStyleVar (float) builder... ";
+
+    auto w = WidgetNode::pushStyleVar(11, 8.0f);  // ImGuiStyleVar_FrameRounding
+    assert(w.type == WidgetNode::Type::PushStyleVar);
+    assert(w.intValue == 11);
+    assert(w.floatValue == 8.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_push_style_var_vec2_builder() {
+    std::cout << "Testing: WidgetNode::pushStyleVar (Vec2) builder... ";
+
+    auto w = WidgetNode::pushStyleVar(2, 12.0f, 12.0f);  // ImGuiStyleVar_WindowPadding
+    assert(w.type == WidgetNode::Type::PushStyleVar);
+    assert(w.intValue == 2);
+    assert(w.width == 12.0f);
+    assert(w.height == 12.0f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_pop_style_var_builder() {
+    std::cout << "Testing: WidgetNode::popStyleVar builder... ";
+
+    auto w = WidgetNode::popStyleVar(2);
+    assert(w.type == WidgetNode::Type::PopStyleVar);
+    assert(w.intValue == 2);
+
+    // Default count = 1
+    auto w2 = WidgetNode::popStyleVar();
+    assert(w2.intValue == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_phase10_type_names() {
+    std::cout << "Testing: Phase 10 widgetTypeName... ";
+
+    assert(std::string(widgetTypeName(WidgetNode::Type::PushStyleColor)) == "PushStyleColor");
+    assert(std::string(widgetTypeName(WidgetNode::Type::PopStyleColor)) == "PopStyleColor");
+    assert(std::string(widgetTypeName(WidgetNode::Type::PushStyleVar)) == "PushStyleVar");
+    assert(std::string(widgetTypeName(WidgetNode::Type::PopStyleVar)) == "PopStyleVar");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Focus Management Tests
+// ============================================================================
+
+void test_focus_field_defaults() {
+    std::cout << "Testing: Focus field defaults... ";
+
+    WidgetNode n;
+    n.type = WidgetNode::Type::Button;
+    assert(n.focusable == true);
+    assert(n.autoFocus == false);
+    assert(!n.onFocus);
+    assert(!n.onBlur);
+
+    std::cout << "PASSED\n";
+}
+
+void test_focus_field_setting() {
+    std::cout << "Testing: Focus field setting... ";
+
+    auto input = WidgetNode::inputText("Name", "Alice");
+    input.id = "name_input";
+    input.focusable = false;
+    input.autoFocus = true;
+
+    assert(input.focusable == false);
+    assert(input.autoFocus == true);
+
+    bool focusCalled = false;
+    bool blurCalled = false;
+    input.onFocus = [&focusCalled](WidgetNode&) { focusCalled = true; };
+    input.onBlur = [&blurCalled](WidgetNode&) { blurCalled = true; };
+
+    assert(input.onFocus);
+    assert(input.onBlur);
+
+    // Invoke callbacks manually
+    input.onFocus(input);
+    assert(focusCalled);
+    input.onBlur(input);
+    assert(blurCalled);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1717,6 +1842,18 @@ int main() {
         test_texture_registry_unregister();
         test_texture_registry_overwrite();
         test_texture_registry_clear();
+
+        // Phase 10 - Style push/pop builders
+        test_push_style_color_builder();
+        test_pop_style_color_builder();
+        test_push_style_var_float_builder();
+        test_push_style_var_vec2_builder();
+        test_pop_style_var_builder();
+        test_phase10_type_names();
+
+        // Focus management
+        test_focus_field_defaults();
+        test_focus_field_setting();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

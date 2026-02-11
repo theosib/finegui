@@ -47,7 +47,19 @@ struct GuiSystem::Impl {
     Clock::time_point lastFrameTime = Clock::now();
     bool firstFrame = true;
 
+    // InputManager integration
+    GuiMode guiMode = GuiMode::Auto;
+    finevk::InputManager* connectedInput = nullptr;
+    int listenerId = -1;
+
     ~Impl() {
+        // Disconnect from InputManager before cleanup
+        if (connectedInput && listenerId >= 0) {
+            connectedInput->removeListener(listenerId);
+            connectedInput = nullptr;
+            listenerId = -1;
+        }
+
         // Destroy backend first while ImGui context is still valid
         // This allows proper cleanup of GPU resources for ImGui textures
         backend.reset();
@@ -260,6 +272,77 @@ void GuiSystem::processInput(const InputEvent& event) {
             io.DisplaySize = ImVec2(impl_->displayWidth, impl_->displayHeight);
             break;
     }
+}
+
+// ============================================================================
+// InputManager integration
+// ============================================================================
+
+int GuiSystem::connectToInputManager(finevk::InputManager& input, int priority) {
+    // Disconnect from any existing connection first
+    disconnectFromInputManager();
+
+    impl_->connectedInput = &input;
+    impl_->listenerId = input.addListener(
+        [this](const finevk::InputEvent& event) {
+            return handleInputEvent(event);
+        },
+        priority);
+
+    return impl_->listenerId;
+}
+
+void GuiSystem::disconnectFromInputManager() {
+    if (impl_->connectedInput && impl_->listenerId >= 0) {
+        impl_->connectedInput->removeListener(impl_->listenerId);
+    }
+    impl_->connectedInput = nullptr;
+    impl_->listenerId = -1;
+}
+
+finevk::ListenerResult GuiSystem::handleInputEvent(const finevk::InputEvent& fvEvent) {
+    // 1. Convert and feed to ImGui (always)
+    auto event = InputAdapter::fromFineVK(fvEvent);
+    processInput(event);
+
+    // 2. Decide based on mode
+    ImGui::SetCurrentContext(impl_->context);
+    ImGuiIO& io = ImGui::GetIO();
+
+    switch (impl_->guiMode) {
+        case GuiMode::Passive:
+            return finevk::ListenerResult::Used;
+        case GuiMode::Exclusive:
+            return finevk::ListenerResult::Consumed;
+        case GuiMode::Auto:
+        default:
+            break;
+    }
+
+    // Auto mode: check event category vs WantCapture*
+    bool isKeyEvent = (fvEvent.type == finevk::InputEventType::KeyPress ||
+                       fvEvent.type == finevk::InputEventType::KeyRelease ||
+                       fvEvent.type == finevk::InputEventType::KeyRepeat ||
+                       fvEvent.type == finevk::InputEventType::CharInput);
+    bool isMouseEvent = (fvEvent.type == finevk::InputEventType::MouseButtonPress ||
+                         fvEvent.type == finevk::InputEventType::MouseButtonRelease ||
+                         fvEvent.type == finevk::InputEventType::MouseScroll);
+    bool isMouseMove = (fvEvent.type == finevk::InputEventType::MouseMove);
+
+    if (isKeyEvent && io.WantCaptureKeyboard) return finevk::ListenerResult::Consumed;
+    if (isMouseEvent && io.WantCaptureMouse) return finevk::ListenerResult::Consumed;
+    if (isMouseMove && io.WantCaptureMouse) return finevk::ListenerResult::Consumed;
+    if (isMouseMove) return finevk::ListenerResult::Used;  // Always pass moves along
+
+    return finevk::ListenerResult::Reject;
+}
+
+void GuiSystem::setGuiMode(GuiMode mode) {
+    impl_->guiMode = mode;
+}
+
+GuiMode GuiSystem::guiMode() const {
+    return impl_->guiMode;
 }
 
 // ============================================================================

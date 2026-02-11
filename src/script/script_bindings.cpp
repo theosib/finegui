@@ -3,6 +3,8 @@
 #include <finescript/execution_context.h>
 #include <finescript/map_data.h>
 #include <finescript/native_function.h>
+#include <imgui.h>
+#include <unordered_map>
 
 namespace finegui {
 
@@ -820,6 +822,176 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // =========================================================================
+    // Phase 10 - Style Push/Pop
+    // =========================================================================
+
+    // Build color symbol → ImGuiCol_ lookup map
+    std::unordered_map<uint32_t, int> colorSymbolMap;
+    auto addCol = [&](const char* name, int val) {
+        colorSymbolMap[engine.intern(name)] = val;
+    };
+    addCol("text", ImGuiCol_Text);
+    addCol("text_disabled", ImGuiCol_TextDisabled);
+    addCol("window_bg", ImGuiCol_WindowBg);
+    addCol("child_bg", ImGuiCol_ChildBg);
+    addCol("popup_bg", ImGuiCol_PopupBg);
+    addCol("border", ImGuiCol_Border);
+    addCol("border_shadow", ImGuiCol_BorderShadow);
+    addCol("frame_bg", ImGuiCol_FrameBg);
+    addCol("frame_bg_hovered", ImGuiCol_FrameBgHovered);
+    addCol("frame_bg_active", ImGuiCol_FrameBgActive);
+    addCol("title_bg", ImGuiCol_TitleBg);
+    addCol("title_bg_active", ImGuiCol_TitleBgActive);
+    addCol("title_bg_collapsed", ImGuiCol_TitleBgCollapsed);
+    addCol("menu_bar_bg", ImGuiCol_MenuBarBg);
+    addCol("scrollbar_bg", ImGuiCol_ScrollbarBg);
+    addCol("scrollbar_grab", ImGuiCol_ScrollbarGrab);
+    addCol("scrollbar_grab_hovered", ImGuiCol_ScrollbarGrabHovered);
+    addCol("scrollbar_grab_active", ImGuiCol_ScrollbarGrabActive);
+    addCol("check_mark", ImGuiCol_CheckMark);
+    addCol("slider_grab", ImGuiCol_SliderGrab);
+    addCol("slider_grab_active", ImGuiCol_SliderGrabActive);
+    addCol("button", ImGuiCol_Button);
+    addCol("button_hovered", ImGuiCol_ButtonHovered);
+    addCol("button_active", ImGuiCol_ButtonActive);
+    addCol("header", ImGuiCol_Header);
+    addCol("header_hovered", ImGuiCol_HeaderHovered);
+    addCol("header_active", ImGuiCol_HeaderActive);
+    addCol("separator", ImGuiCol_Separator);
+    addCol("separator_hovered", ImGuiCol_SeparatorHovered);
+    addCol("separator_active", ImGuiCol_SeparatorActive);
+    addCol("resize_grip", ImGuiCol_ResizeGrip);
+    addCol("resize_grip_hovered", ImGuiCol_ResizeGripHovered);
+    addCol("resize_grip_active", ImGuiCol_ResizeGripActive);
+    addCol("input_text_cursor", ImGuiCol_InputTextCursor);
+    addCol("tab", ImGuiCol_Tab);
+    addCol("tab_hovered", ImGuiCol_TabHovered);
+    addCol("tab_selected", ImGuiCol_TabSelected);
+    addCol("tab_selected_overline", ImGuiCol_TabSelectedOverline);
+    addCol("tab_dimmed", ImGuiCol_TabDimmed);
+    addCol("tab_dimmed_selected", ImGuiCol_TabDimmedSelected);
+    addCol("tab_dimmed_selected_overline", ImGuiCol_TabDimmedSelectedOverline);
+    addCol("plot_lines", ImGuiCol_PlotLines);
+    addCol("plot_lines_hovered", ImGuiCol_PlotLinesHovered);
+    addCol("plot_histogram", ImGuiCol_PlotHistogram);
+    addCol("plot_histogram_hovered", ImGuiCol_PlotHistogramHovered);
+    addCol("table_header_bg", ImGuiCol_TableHeaderBg);
+    addCol("table_border_strong", ImGuiCol_TableBorderStrong);
+    addCol("table_border_light", ImGuiCol_TableBorderLight);
+    addCol("table_row_bg", ImGuiCol_TableRowBg);
+    addCol("table_row_bg_alt", ImGuiCol_TableRowBgAlt);
+    addCol("text_link", ImGuiCol_TextLink);
+    addCol("text_selected_bg", ImGuiCol_TextSelectedBg);
+    addCol("tree_lines", ImGuiCol_TreeLines);
+    addCol("drag_drop_target", ImGuiCol_DragDropTarget);
+    addCol("drag_drop_target_bg", ImGuiCol_DragDropTargetBg);
+    addCol("unsaved_marker", ImGuiCol_UnsavedMarker);
+    addCol("nav_cursor", ImGuiCol_NavCursor);
+    addCol("nav_windowing_highlight", ImGuiCol_NavWindowingHighlight);
+    addCol("nav_windowing_dim_bg", ImGuiCol_NavWindowingDimBg);
+    addCol("modal_window_dim_bg", ImGuiCol_ModalWindowDimBg);
+
+    // Build var symbol → ImGuiStyleVar_ lookup map
+    std::unordered_map<uint32_t, int> varSymbolMap;
+    auto addVar = [&](const char* name, int val) {
+        varSymbolMap[engine.intern(name)] = val;
+    };
+    addVar("alpha", ImGuiStyleVar_Alpha);
+    addVar("disabled_alpha", ImGuiStyleVar_DisabledAlpha);
+    addVar("window_padding", ImGuiStyleVar_WindowPadding);
+    addVar("window_rounding", ImGuiStyleVar_WindowRounding);
+    addVar("window_border_size", ImGuiStyleVar_WindowBorderSize);
+    addVar("window_min_size", ImGuiStyleVar_WindowMinSize);
+    addVar("window_title_align", ImGuiStyleVar_WindowTitleAlign);
+    addVar("child_rounding", ImGuiStyleVar_ChildRounding);
+    addVar("child_border_size", ImGuiStyleVar_ChildBorderSize);
+    addVar("popup_rounding", ImGuiStyleVar_PopupRounding);
+    addVar("popup_border_size", ImGuiStyleVar_PopupBorderSize);
+    addVar("frame_padding", ImGuiStyleVar_FramePadding);
+    addVar("frame_rounding", ImGuiStyleVar_FrameRounding);
+    addVar("frame_border_size", ImGuiStyleVar_FrameBorderSize);
+    addVar("item_spacing", ImGuiStyleVar_ItemSpacing);
+    addVar("item_inner_spacing", ImGuiStyleVar_ItemInnerSpacing);
+    addVar("indent_spacing", ImGuiStyleVar_IndentSpacing);
+    addVar("cell_padding", ImGuiStyleVar_CellPadding);
+    addVar("scrollbar_size", ImGuiStyleVar_ScrollbarSize);
+    addVar("scrollbar_rounding", ImGuiStyleVar_ScrollbarRounding);
+    addVar("scrollbar_padding", ImGuiStyleVar_ScrollbarPadding);
+    addVar("grab_min_size", ImGuiStyleVar_GrabMinSize);
+    addVar("grab_rounding", ImGuiStyleVar_GrabRounding);
+    addVar("image_rounding", ImGuiStyleVar_ImageRounding);
+    addVar("image_border_size", ImGuiStyleVar_ImageBorderSize);
+    addVar("tab_rounding", ImGuiStyleVar_TabRounding);
+    addVar("tab_border_size", ImGuiStyleVar_TabBorderSize);
+    addVar("tab_min_width_base", ImGuiStyleVar_TabMinWidthBase);
+    addVar("tab_min_width_shrink", ImGuiStyleVar_TabMinWidthShrink);
+    addVar("tab_bar_border_size", ImGuiStyleVar_TabBarBorderSize);
+    addVar("tab_bar_overline_size", ImGuiStyleVar_TabBarOverlineSize);
+    addVar("table_angled_headers_angle", ImGuiStyleVar_TableAngledHeadersAngle);
+    addVar("table_angled_headers_text_align", ImGuiStyleVar_TableAngledHeadersTextAlign);
+    addVar("tree_lines_size", ImGuiStyleVar_TreeLinesSize);
+    addVar("tree_lines_rounding", ImGuiStyleVar_TreeLinesRounding);
+    addVar("button_text_align", ImGuiStyleVar_ButtonTextAlign);
+    addVar("selectable_text_align", ImGuiStyleVar_SelectableTextAlign);
+    addVar("separator_text_border_size", ImGuiStyleVar_SeparatorTextBorderSize);
+    addVar("separator_text_align", ImGuiStyleVar_SeparatorTextAlign);
+    addVar("separator_text_padding", ImGuiStyleVar_SeparatorTextPadding);
+
+    // ui.push_color :symbol [r g b a]
+    uiMap.set(engine.intern("push_color"), makeFn(
+        [&engine, colorSymbolMap](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "push_color");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isSymbol()) {
+                auto it = colorSymbolMap.find(args[0].asSymbol());
+                if (it != colorSymbolMap.end()) {
+                    m.set(engine.intern("value"), Value::integer(it->second));
+                }
+            }
+            if (args.size() > 1 && args[1].isArray()) {
+                m.set(engine.intern("color"), args[1]);
+            }
+            return w;
+        }));
+
+    // ui.pop_color [count]
+    uiMap.set(engine.intern("pop_color"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "pop_color");
+            if (args.size() > 0 && args[0].isNumeric()) {
+                w.asMap().set(engine.intern("count"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.push_var :symbol value_or_array
+    uiMap.set(engine.intern("push_var"), makeFn(
+        [&engine, varSymbolMap](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "push_var");
+            auto& m = w.asMap();
+            if (args.size() > 0 && args[0].isSymbol()) {
+                auto it = varSymbolMap.find(args[0].asSymbol());
+                if (it != varSymbolMap.end()) {
+                    m.set(engine.intern("value"), Value::integer(it->second));
+                }
+            }
+            if (args.size() > 1) {
+                m.set(engine.intern("size"), args[1]);
+            }
+            return w;
+        }));
+
+    // ui.pop_var [count]
+    uiMap.set(engine.intern("pop_var"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "pop_var");
+            if (args.size() > 0 && args[0].isNumeric()) {
+                w.asMap().set(engine.intern("count"), args[0]);
+            }
+            return w;
+        }));
+
+    // =========================================================================
     // Phase 5 - Tables
     // =========================================================================
 
@@ -919,6 +1091,16 @@ void registerGuiBindings(ScriptEngine& engine) {
                 return Value::nil();
             }
             sg->registerMessageHandler(args[0].asSymbol(), args[1]);
+            return Value::nil();
+        }));
+
+    // gui.set_focus "widget_id"  ->  programmatically focus a widget by ID
+    guiMap.set(engine.intern("set_focus"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* sg = static_cast<ScriptGui*>(ctx.userData());
+            if (sg && !args.empty() && args[0].isString()) {
+                sg->scriptSetFocus(std::string(args[0].asString()));
+            }
             return Value::nil();
         }));
 

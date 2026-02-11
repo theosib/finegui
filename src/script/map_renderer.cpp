@@ -61,12 +61,18 @@ Value* MapRenderer::get(int id) {
     return nullptr;
 }
 
+void MapRenderer::setFocus(const std::string& widgetId) {
+    pendingFocusId_ = widgetId;
+}
+
 void MapRenderer::renderAll() {
+    currentFocusedId_.clear();
     for (auto& [id, entry] : trees_) {
         if (entry.rootMap.isMap()) {
             renderNode(entry.rootMap.asMap(), *entry.ctx);
         }
     }
+    lastFocusedId_ = currentFocusedId_;
 }
 
 // -- Helpers ------------------------------------------------------------------
@@ -118,6 +124,22 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
     bool pushId = idVal.isString() && !idVal.asString().empty();
     if (pushId) {
         ImGui::PushID(idVal.asString().c_str());
+    }
+
+    // Focus: exclude from tab navigation if not focusable
+    bool pushedNoTabStop = false;
+    bool isFocusable = getBoolField(m, syms_.focusable, true);
+    if (!isFocusable) {
+        ImGui::PushItemFlag(ImGuiItemFlags_NoTabStop, true);
+        pushedNoTabStop = true;
+    }
+
+    // Focus: programmatic focus request
+    std::string widgetId;
+    if (idVal.isString()) widgetId = std::string(idVal.asString());
+    if (!pendingFocusId_.empty() && !widgetId.empty() && widgetId == pendingFocusId_) {
+        ImGui::SetKeyboardFocusHere(0);
+        pendingFocusId_.clear();
     }
 
     // Dispatch by type symbol
@@ -178,9 +200,36 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else if (sym == syms_.sym_separator_text)  renderSeparatorText(m);
         else if (sym == syms_.sym_indent)          renderIndent(m);
         else if (sym == syms_.sym_unindent)        renderUnindent(m);
+        // Phase 10
+        else if (sym == syms_.sym_push_color)    renderPushStyleColor(m);
+        else if (sym == syms_.sym_pop_color)     renderPopStyleColor(m);
+        else if (sym == syms_.sym_push_var)      renderPushStyleVar(m);
+        else if (sym == syms_.sym_pop_var)       renderPopStyleVar(m);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
+    }
+
+    // Focus: auto-focus on first appearance
+    bool wantAutoFocus = getBoolField(m, syms_.auto_focus, false);
+    if (wantAutoFocus) {
+        ImGui::SetItemDefaultFocus();
+    }
+
+    // Focus: track focus changes for on_focus/on_blur callbacks
+    if (!widgetId.empty()) {
+        if (ImGui::IsItemFocused()) {
+            currentFocusedId_ = widgetId;
+            if (widgetId != lastFocusedId_) {
+                invokeCallback(m, syms_.on_focus, ctx);
+            }
+        } else if (widgetId == lastFocusedId_) {
+            invokeCallback(m, syms_.on_blur, ctx);
+        }
+    }
+
+    if (pushedNoTabStop) {
+        ImGui::PopItemFlag();
     }
 
     // DnD handling (after widget is rendered so ImGui has the item rect)
@@ -903,6 +952,12 @@ void MapRenderer::renderModal(MapData& m, ExecutionContext& ctx) {
 
     bool open = true;
     if (ImGui::BeginPopupModal(title.c_str(), &open)) {
+        // Escape key closes the modal (ImGui doesn't do this for modals by default)
+        if (ImGui::IsKeyPressed(ImGuiKey_Escape)) {
+            open = false;
+            ImGui::CloseCurrentPopup();
+        }
+
         auto childrenVal = m.get(syms_.children);
         if (childrenVal.isArray()) {
             for (auto& child : childrenVal.asArrayMut()) {
@@ -1155,6 +1210,77 @@ void MapRenderer::renderIndent(MapData& m) {
 void MapRenderer::renderUnindent(MapData& m) {
     float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
     ImGui::Unindent(w > 0 ? w : 0.0f);
+}
+
+// -- Phase 10: Style Push/Pop -------------------------------------------------
+
+static bool isStyleVarVec2(int idx) {
+    switch (idx) {
+        case ImGuiStyleVar_WindowPadding:
+        case ImGuiStyleVar_WindowMinSize:
+        case ImGuiStyleVar_WindowTitleAlign:
+        case ImGuiStyleVar_FramePadding:
+        case ImGuiStyleVar_ItemSpacing:
+        case ImGuiStyleVar_ItemInnerSpacing:
+        case ImGuiStyleVar_CellPadding:
+        case ImGuiStyleVar_TableAngledHeadersTextAlign:
+        case ImGuiStyleVar_ButtonTextAlign:
+        case ImGuiStyleVar_SelectableTextAlign:
+        case ImGuiStyleVar_SeparatorTextAlign:
+        case ImGuiStyleVar_SeparatorTextPadding:
+            return true;
+        default:
+            return false;
+    }
+}
+
+void MapRenderer::renderPushStyleColor(MapData& m) {
+    int colIdx = static_cast<int>(getNumericField(m, syms_.value, 0));
+
+    // Read color from :color field — expects array [r, g, b, a]
+    ImVec4 col{1.0f, 1.0f, 1.0f, 1.0f};
+    auto colorVal = m.get(syms_.color);
+    if (colorVal.isArray()) {
+        const auto& arr = colorVal.asArray();
+        if (arr.size() >= 3) {
+            col.x = static_cast<float>(arr[0].isNumeric() ? arr[0].asNumber() : 1.0);
+            col.y = static_cast<float>(arr[1].isNumeric() ? arr[1].asNumber() : 1.0);
+            col.z = static_cast<float>(arr[2].isNumeric() ? arr[2].asNumber() : 1.0);
+            if (arr.size() >= 4)
+                col.w = static_cast<float>(arr[3].isNumeric() ? arr[3].asNumber() : 1.0);
+        }
+    }
+
+    ImGui::PushStyleColor(colIdx, col);
+}
+
+void MapRenderer::renderPopStyleColor(MapData& m) {
+    int count = static_cast<int>(getNumericField(m, syms_.count, 1));
+    ImGui::PopStyleColor(count);
+}
+
+void MapRenderer::renderPushStyleVar(MapData& m) {
+    int varIdx = static_cast<int>(getNumericField(m, syms_.value, 0));
+
+    // Read from :size field — number for float vars, array [x, y] for Vec2 vars
+    auto sizeVal = m.get(syms_.size);
+    if (isStyleVarVec2(varIdx)) {
+        float x = 0.0f, y = 0.0f;
+        if (sizeVal.isArray() && sizeVal.asArray().size() >= 2) {
+            const auto& arr = sizeVal.asArray();
+            x = static_cast<float>(arr[0].isNumeric() ? arr[0].asNumber() : 0.0);
+            y = static_cast<float>(arr[1].isNumeric() ? arr[1].asNumber() : 0.0);
+        }
+        ImGui::PushStyleVar(varIdx, ImVec2(x, y));
+    } else {
+        float val = sizeVal.isNumeric() ? static_cast<float>(sizeVal.asNumber()) : 0.0f;
+        ImGui::PushStyleVar(varIdx, val);
+    }
+}
+
+void MapRenderer::renderPopStyleVar(MapData& m) {
+    int count = static_cast<int>(getNumericField(m, syms_.count, 1));
+    ImGui::PopStyleVar(count);
 }
 
 int MapRenderer::parseWindowFlags(MapData& m) {

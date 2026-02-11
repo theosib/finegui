@@ -3,6 +3,7 @@
 #include "widget_node.hpp"
 #include "drag_drop_manager.hpp"
 #include <map>
+#include <string>
 
 namespace finegui {
 
@@ -49,11 +50,20 @@ public:
     /// Pass nullptr to disable click-to-pick-up (traditional DnD still works).
     void setDragDropManager(DragDropManager* manager);
 
+    /// Programmatically focus a widget by its ID string.
+    /// The focus will be applied during the next renderAll() call.
+    void setFocus(const std::string& widgetId);
+
 private:
     DragDropManager* dndManager_ = nullptr;
     GuiSystem& gui_;
     int nextId_ = 1;
     std::map<int, WidgetNode> trees_;
+
+    // Focus tracking
+    std::string pendingFocusId_;
+    std::string lastFocusedId_;
+    std::string currentFocusedId_;
 
     void renderNode(WidgetNode& node);
     void renderWindow(WidgetNode& node);
@@ -116,6 +126,12 @@ private:
     void renderBulletText(WidgetNode& node);
     void renderSeparatorText(WidgetNode& node);
     void renderIndent(WidgetNode& node);
+
+    // Phase 10 - Style push/pop
+    void renderPushStyleColor(WidgetNode& node);
+    void renderPopStyleColor(WidgetNode& node);
+    void renderPushStyleVar(WidgetNode& node);
+    void renderPopStyleVar(WidgetNode& node);
 
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);

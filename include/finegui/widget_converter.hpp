@@ -93,11 +93,19 @@ struct ConverterSymbols {
     uint32_t sym_bullet_text = 0, sym_separator_text = 0;
     uint32_t sym_indent = 0, sym_unindent = 0;
 
+    // Type name symbols - Phase 10 (Style push/pop)
+    uint32_t sym_push_color = 0, sym_pop_color = 0;
+    uint32_t sym_push_var = 0, sym_pop_var = 0;
+
     // Phase 9 field keys
     uint32_t my_value = 0;
 
     // Image field keys
     uint32_t texture = 0;
+
+    // Focus management field keys
+    uint32_t focusable = 0, auto_focus = 0;
+    uint32_t on_focus = 0, on_blur = 0;
 
     // DnD field keys
     uint32_t drag_type = 0, drag_data = 0, drop_accept = 0;

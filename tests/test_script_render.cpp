@@ -969,6 +969,49 @@ void test_script_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 23: Style push/pop via script ---
+    {
+        std::cout << "\n  23. Style push/pop... ";
+        ScriptGui scriptGui(engine, mapRenderer);
+
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Styled" [
+                {ui.push_color :button [0.8 0.1 0.1 1.0]}
+                {ui.push_var :frame_rounding 8.0}
+                {ui.button "Red Round"}
+                {ui.pop_var 1}
+                {ui.pop_color 1}
+                {ui.button "Normal"}
+            ]}
+        )", "test23_style");
+        assert(ok);
+        assert(scriptGui.isActive());
+
+        // Verify map has correct type symbols
+        auto* tree23 = scriptGui.mapTree();
+        assert(tree23 != nullptr);
+        auto children23 = tree23->asMap().get(mapRenderer.syms().children);
+        assert(children23.isArray());
+        assert(children23.asArray().size() == 6);
+
+        // First child should be push_color
+        auto& pushCol = children23.asArray()[0];
+        assert(pushCol.isMap());
+        assert(pushCol.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_push_color);
+
+        // Second child should be push_var
+        auto& pushVar = children23.asArray()[1];
+        assert(pushVar.isMap());
+        assert(pushVar.asMap().get(mapRenderer.syms().type).asSymbol()
+               == mapRenderer.syms().sym_push_var);
+
+        // Render frames - should not crash
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 5);
+        scriptGui.close();
+    }
+    std::cout << "ok";
+
     renderer->waitIdle();
     std::cout << "\nPASSED\n";
 

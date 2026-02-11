@@ -212,4 +212,8 @@ void ScriptGui::registerMessageHandler(uint32_t messageType, finescript::Value h
     impl_->messageHandlers[messageType] = std::move(handler);
 }
 
+void ScriptGui::scriptSetFocus(const std::string& widgetId) {
+    impl_->renderer.setFocus(widgetId);
+}
+
 } // namespace finegui

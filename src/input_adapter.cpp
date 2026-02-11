@@ -234,15 +234,4 @@ InputEvent InputAdapter::fromFineVK(const finevk::InputEvent& fvEvent) {
     return event;
 }
 
-std::vector<InputEvent> InputAdapter::fromInputManager(finevk::InputManager& input) {
-    std::vector<InputEvent> events;
-
-    finevk::InputEvent fvEvent;
-    while (input.pollEvent(fvEvent)) {
-        events.push_back(fromFineVK(fvEvent));
-    }
-
-    return events;
-}
-
 } // namespace finegui

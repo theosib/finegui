@@ -95,9 +95,38 @@ while (input->pollEvent(event)) {
 }
 ```
 
+### InputManager Integration
+
+The simplest way to connect GUI input is via `connectToInputManager()`, which registers the GUI as a prioritized listener:
+
+```cpp
+auto input = finevk::InputManager::create(window.get());
+gui.connectToInputManager(*input);
+
+// In your game loop — no manual polling needed:
+input->update();
+// Events are automatically forwarded to the GUI
+```
+
+The GUI listener uses `GuiMode` to control input consumption:
+
+| Mode | Behavior |
+|------|----------|
+| `GuiMode::Auto` (default) | Uses ImGui's `WantCapture*` flags — consumes only when GUI is active |
+| `GuiMode::Passive` | Feeds events to ImGui but never blocks game input |
+| `GuiMode::Exclusive` | Consumes all input (for menus, inventory screens, etc.) |
+
+```cpp
+// Switch to exclusive mode when opening inventory
+gui.setGuiMode(finegui::GuiMode::Exclusive);
+
+// Back to auto when closing
+gui.setGuiMode(finegui::GuiMode::Auto);
+```
+
 ### Input Capture
 
-Check whether the GUI wants to consume mouse/keyboard input before forwarding to your game:
+When using manual event polling instead of `connectToInputManager()`, check whether the GUI wants to consume mouse/keyboard input before forwarding to your game:
 
 ```cpp
 if (!gui.wantCaptureMouse()) {
@@ -508,6 +537,11 @@ gui.applyState(stats);
 | `render(cmd, frameIndex)` | Record draw commands (explicit frame index) |
 | `registerTexture(texture, sampler)` | Register a texture, returns `TextureHandle` |
 | `unregisterTexture(handle)` | Unregister a texture |
+| `connectToInputManager(input, priority)` | Register as a listener on a finevk InputManager |
+| `disconnectFromInputManager()` | Disconnect from the InputManager |
+| `handleInputEvent(event)` | Handle a finevk event directly (returns ListenerResult) |
+| `setGuiMode(mode)` | Set input consumption mode (Auto/Passive/Exclusive) |
+| `guiMode()` | Get current GuiMode |
 | `wantCaptureMouse()` | Does the GUI want mouse input? |
 | `wantCaptureKeyboard()` | Does the GUI want keyboard input? |
 | `imguiContext()` | Access the raw ImGui context |
@@ -676,6 +710,16 @@ guiRenderer.hide(mainId);
 | `WidgetNode::indent(amount)` / `WidgetNode::unindent(amount)` | Indentation |
 | `WidgetNode::window(title, children, flags)` | Window now accepts ImGuiWindowFlags |
 
+**Phase 10 - Style Push/Pop:**
+
+| Builder | Description |
+|---------|-------------|
+| `WidgetNode::pushStyleColor(colIdx, r, g, b, a)` | Push ImGui color override |
+| `WidgetNode::popStyleColor(count)` | Pop color overrides |
+| `WidgetNode::pushStyleVar(varIdx, val)` | Push style var (single float) |
+| `WidgetNode::pushStyleVar(varIdx, x, y)` | Push style var (ImVec2) |
+| `WidgetNode::popStyleVar(count)` | Pop style var overrides |
+
 ### Callbacks
 
 Callbacks receive a reference to the widget node that triggered them:
@@ -694,6 +738,41 @@ finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
 | `onChange` | Value change | `floatValue`, `intValue`, `boolValue`, `stringValue`, `selectedIndex` |
 | `onSubmit` | Enter in InputText | `stringValue` |
 | `onClose` | Window close button | - |
+| `onFocus` | Widget gains keyboard focus | - |
+| `onBlur` | Widget loses keyboard focus | - |
+
+### Focus Management
+
+Widgets support keyboard focus control through tab navigation and programmatic focus:
+
+```cpp
+// Skip a widget in tab navigation
+auto btn = WidgetNode::button("Background");
+btn.focusable = false;  // Tab skips this widget
+
+// Auto-focus when window first appears
+auto input = WidgetNode::inputText("Name", "");
+input.autoFocus = true;
+
+// Focus/blur callbacks
+input.onFocus = [](WidgetNode& w) { /* widget gained focus */ };
+input.onBlur = [](WidgetNode& w) { /* widget lost focus */ };
+
+// Programmatic focus by widget ID
+input.id = "name_input";
+guiRenderer.setFocus("name_input");  // Focuses on next renderAll()
+```
+
+| Field | Default | Description |
+|-------|---------|-------------|
+| `focusable` | `true` | Set false to skip in tab navigation |
+| `autoFocus` | `false` | Focus when parent window first appears |
+| `onFocus` | *(none)* | Callback when widget gains keyboard focus |
+| `onBlur` | *(none)* | Callback when widget loses keyboard focus |
+
+### Modals
+
+Modal dialogs block interaction with the rest of the UI. Press **Escape** to close any modal (equivalent to clicking the X button). The `onClose` callback fires in both cases.
 
 ### Drag-and-Drop
 
@@ -889,6 +968,10 @@ Builder functions (return widget maps):
 | `ui.indent` | `[amount]` | Indent |
 | `ui.unindent` | `[amount]` | Unindent |
 | `ui.image` | `texture_name [width] [height] [on_click]` | Image from TextureRegistry |
+| `ui.push_style_color` | `col_idx [r g b a]` | Push ImGui color override |
+| `ui.pop_style_color` | `[count]` | Pop color overrides |
+| `ui.push_style_var` | `var_idx value` | Push style var (float or `[x y]`) |
+| `ui.pop_style_var` | `[count]` | Pop style var overrides |
 
 Action functions (require active ScriptGui context):
 
@@ -902,6 +985,7 @@ Action functions (require active ScriptGui context):
 | `ui.hide` | `[id]` | Hide a tree (or close this GUI if no ID) |
 | `ui.node` | `gui_id child_index` | Navigate to child map (returns map ref) |
 | `gui.on_message` | `:symbol handler` | Register a message handler |
+| `gui.set_focus` | `"widget_id"` | Programmatically focus a widget by ID |
 
 ### Dynamic Updates from Scripts
 

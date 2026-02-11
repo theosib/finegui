@@ -67,6 +67,16 @@ struct GuiConfig {
 };
 ```
 
+## GuiMode
+
+```cpp
+enum class GuiMode {
+    Auto,       // Use ImGui's WantCapture* flags (default)
+    Passive,    // Feed to ImGui, always pass through (never block game)
+    Exclusive   // Consume all input (menu/inventory mode)
+};
+```
+
 ## GuiSystem
 
 ```cpp
@@ -88,6 +98,13 @@ class GuiSystem {
     // Input
     void processInput(const InputEvent& event);
     template<typename C> void processInputBatch(const C& events);
+
+    // InputManager integration
+    int connectToInputManager(finevk::InputManager& input, int priority = 300);
+    void disconnectFromInputManager();
+    finevk::ListenerResult handleInputEvent(const finevk::InputEvent& event);
+    void setGuiMode(GuiMode mode);  // Auto, Passive, Exclusive
+    GuiMode guiMode() const;
 
     // State updates (message-passing)
     template<typename T> void applyState(const T& update);
@@ -414,6 +431,9 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `waitIdle()` only in destructor (shutdown, acceptable)
 - ScriptEngine must outlive Vulkan resources (declare it first)
 - ScriptGui::close() removes tree before destroying context (closure safety)
+- Modal dialogs close on Escape key (fires onClose callback)
+- `connectToInputManager()` replaces manual event polling for simpler integration
+- Focus management: `focusable`, `autoFocus`, `onFocus`, `onBlur` on WidgetNode; `setFocus()` on renderers
 
 ## WidgetNode (Retained Mode)
 
@@ -440,7 +460,9 @@ struct WidgetNode {
         Canvas, Tooltip,
         // Phase 9 - New widgets
         RadioButton, Selectable, InputTextMultiline,
-        BulletText, SeparatorText, Indent
+        BulletText, SeparatorText, Indent,
+        // Phase 10 - Style push/pop
+        PushStyleColor, PopStyleColor, PushStyleVar, PopStyleVar
     };
 
     Type type;
@@ -516,6 +538,12 @@ struct WidgetNode {
     WidgetCallback onDragBegin;     // called on drag source when drag starts
     int dragMode = 0;               // 0=both, 1=drag-only, 2=click-to-pick-up only
 
+    // Focus management
+    bool focusable = true;          // false → skip in tab navigation
+    bool autoFocus = false;         // focus when parent window first appears
+    WidgetCallback onFocus;         // called when widget gains keyboard focus
+    WidgetCallback onBlur;          // called when widget loses keyboard focus
+
     // --- Static builders (Phase 1) ---
     static WidgetNode window(string title, vector<WidgetNode> children = {}, int flags = 0);
     static WidgetNode text(string content);
@@ -587,6 +615,13 @@ struct WidgetNode {
     static WidgetNode separatorText(string label);
     static WidgetNode indent(float amount=0);
     static WidgetNode unindent(float amount=0);
+
+    // --- Phase 10 builders ---
+    static WidgetNode pushStyleColor(int colIdx, float r, float g, float b, float a);
+    static WidgetNode popStyleColor(int count=1);
+    static WidgetNode pushStyleVar(int varIdx, float val);
+    static WidgetNode pushStyleVar(int varIdx, float x, float y);
+    static WidgetNode popStyleVar(int count=1);
 };
 ```
 
@@ -603,6 +638,7 @@ class GuiRenderer {
     WidgetNode* get(int guiId);              // Get for direct mutation (nullptr if not found)
     void renderAll();                        // Call between beginFrame/endFrame
     void setDragDropManager(DragDropManager* manager); // Enable click-to-pick-up DnD
+    void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
 };
 ```
 
@@ -707,6 +743,7 @@ class MapRenderer {
     void setDragDropManager(DragDropManager* mgr);
     void setTextureRegistry(TextureRegistry* registry);
     const ConverterSymbols& syms() const;      // Pre-interned symbols
+    void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
 };
 ```
 
@@ -764,6 +801,7 @@ class ScriptGui {
     // Internal (called by script bindings via ctx.userData())
     Value scriptShow(const Value& map);
     void scriptHide();
+    void scriptSetFocus(const std::string& widgetId);
     void registerMessageHandler(uint32_t messageType, Value handler);
 };
 ```
@@ -852,6 +890,10 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.separator_text` | `ui.separator_text "label"` | |
 | `ui.indent` | `ui.indent [amount]` | |
 | `ui.unindent` | `ui.unindent [amount]` | |
+| `ui.push_style_color` | `ui.push_style_color col_idx [r g b a]` | Push color override |
+| `ui.pop_style_color` | `ui.pop_style_color [count]` | Pop color overrides |
+| `ui.push_style_var` | `ui.push_style_var var_idx val` or `var_idx [x y]` | Push style var |
+| `ui.pop_style_var` | `ui.pop_style_var [count]` | Pop style var overrides |
 
 ### Canvas Draw Commands (returned by ui.draw_*)
 
@@ -878,6 +920,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | Function | Script Syntax | Description |
 |----------|---------------|-------------|
 | `gui.on_message` | `gui.on_message :symbol handler` | Register message handler |
+| `gui.set_focus` | `gui.set_focus "widget_id"` | Programmatically focus a widget |
 
 ## Map-Based Mutation
 

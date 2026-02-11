@@ -1451,6 +1451,248 @@ void test_dnd_convert_to_widget() {
 }
 
 // ============================================================================
+// Phase 10 - Style Push/Pop Bindings
+// ============================================================================
+
+void test_binding_ui_push_color() {
+    std::cout << "Testing: ui.push_color binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"(ui.push_color :button [0.2 0.1 0.1 1.0])", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("push_color"));
+
+    // Value should be the integer ImGuiCol_Button (21)
+    auto valVal = m.get(engine.intern("value"));
+    assert(valVal.isInt());
+    assert(valVal.asInt() == 21);  // ImGuiCol_Button
+
+    // Color should be the array
+    auto colorVal = m.get(engine.intern("color"));
+    assert(colorVal.isArray());
+    assert(colorVal.asArray().size() == 4);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_pop_color() {
+    std::cout << "Testing: ui.pop_color binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"(ui.pop_color 2)", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("pop_color"));
+
+    auto countVal = m.get(engine.intern("count"));
+    assert(countVal.isInt());
+    assert(countVal.asInt() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_push_var_float() {
+    std::cout << "Testing: ui.push_var (float) binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"(ui.push_var :frame_rounding 8.0)", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.asSymbol() == engine.intern("push_var"));
+
+    auto valVal = m.get(engine.intern("value"));
+    assert(valVal.isInt());
+    // ImGuiStyleVar_FrameRounding = 12
+    assert(valVal.asInt() == 12);
+
+    auto sizeVal = m.get(engine.intern("size"));
+    assert(sizeVal.isNumeric());
+    assert(sizeVal.asNumber() == 8.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_push_var_vec2() {
+    std::cout << "Testing: ui.push_var (Vec2) binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"(ui.push_var :window_padding [12 12])", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto valVal = m.get(engine.intern("value"));
+    assert(valVal.isInt());
+    // ImGuiStyleVar_WindowPadding = 2
+    assert(valVal.asInt() == 2);
+
+    auto sizeVal = m.get(engine.intern("size"));
+    assert(sizeVal.isArray());
+    assert(sizeVal.asArray().size() == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_pop_var() {
+    std::cout << "Testing: ui.pop_var binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"(ui.pop_var 3)", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.asSymbol() == engine.intern("pop_var"));
+
+    auto countVal = m.get(engine.intern("count"));
+    assert(countVal.isInt());
+    assert(countVal.asInt() == 3);
+
+    std::cout << "PASSED\n";
+}
+
+void test_style_symbols_interned() {
+    std::cout << "Testing: Style push/pop type symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.sym_push_color != 0);
+    assert(syms.sym_pop_color != 0);
+    assert(syms.sym_push_var != 0);
+    assert(syms.sym_pop_var != 0);
+    // All should be different
+    assert(syms.sym_push_color != syms.sym_pop_color);
+    assert(syms.sym_push_var != syms.sym_pop_var);
+    assert(syms.sym_push_color != syms.sym_push_var);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Focus Management Tests
+// ============================================================================
+
+void test_focus_symbols_interned() {
+    std::cout << "Testing: Focus symbols interning... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.focusable != 0);
+    assert(syms.auto_focus != 0);
+    assert(syms.on_focus != 0);
+    assert(syms.on_blur != 0);
+
+    assert(syms.focusable == engine.intern("focusable"));
+    assert(syms.auto_focus == engine.intern("auto_focus"));
+    assert(syms.on_focus == engine.intern("on_focus"));
+    assert(syms.on_blur == engine.intern("on_blur"));
+
+    std::cout << "PASSED\n";
+}
+
+void test_convert_focusable_false() {
+    std::cout << "Testing: convertToWidget with focusable=false... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    auto map = Value::map();
+    auto& m = map.asMap();
+    m.set(syms.type, Value::symbol(syms.sym_button));
+    m.set(syms.label, Value::string("Skip Me"));
+    m.set(syms.focusable, Value::boolean(false));
+    m.set(syms.auto_focus, Value::boolean(true));
+
+    auto node = convertToWidget(map, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::Button);
+    assert(node.label == "Skip Me");
+    assert(node.focusable == false);
+    assert(node.autoFocus == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_convert_focus_callbacks() {
+    std::cout << "Testing: convertToWidget with on_focus/on_blur callbacks... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+    ExecutionContext ctx(engine);
+
+    // Create closures
+    ctx.set("focus_fired", Value::boolean(false));
+    ctx.set("blur_fired", Value::boolean(false));
+
+    auto focusResult = engine.executeCommand(R"(
+        fn [] do
+            set focus_fired true
+        end
+    )", ctx);
+    assert(focusResult.success);
+
+    auto blurResult = engine.executeCommand(R"(
+        fn [] do
+            set blur_fired true
+        end
+    )", ctx);
+    assert(blurResult.success);
+
+    auto map = Value::map();
+    auto& m = map.asMap();
+    m.set(syms.type, Value::symbol(syms.sym_input_text));
+    m.set(syms.label, Value::string("Name"));
+    m.set(syms.on_focus, focusResult.returnValue);
+    m.set(syms.on_blur, blurResult.returnValue);
+
+    auto node = convertToWidget(map, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::InputText);
+    assert(node.onFocus);
+    assert(node.onBlur);
+
+    // Invoke and verify
+    node.onFocus(node);
+    assert(ctx.get("focus_fired").asBool() == true);
+
+    node.onBlur(node);
+    assert(ctx.get("blur_fired").asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -1545,6 +1787,19 @@ int main() {
         test_dnd_symbols_interned();
         test_dnd_map_fields();
         test_dnd_convert_to_widget();
+
+        // Phase 10 - Style push/pop
+        test_binding_ui_push_color();
+        test_binding_ui_pop_color();
+        test_binding_ui_push_var_float();
+        test_binding_ui_push_var_vec2();
+        test_binding_ui_pop_var();
+        test_style_symbols_interned();
+
+        // Focus management tests
+        test_focus_symbols_interned();
+        test_convert_focusable_false();
+        test_convert_focus_callbacks();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

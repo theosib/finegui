@@ -7,6 +7,7 @@
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
 #include <map>
+#include <string>
 #include <vector>
 
 namespace finegui {
@@ -54,6 +55,10 @@ public:
     /// Access the pre-interned symbols (for navigation by other classes).
     const ConverterSymbols& syms() const { return syms_; }
 
+    /// Programmatically focus a widget by its ID string.
+    /// The focus will be applied during the next renderAll() call.
+    void setFocus(const std::string& widgetId);
+
 private:
     DragDropManager* dndManager_ = nullptr;
     TextureRegistry* textureRegistry_ = nullptr;
@@ -66,6 +71,11 @@ private:
     ConverterSymbols syms_;
     int nextId_ = 1;
     std::map<int, Entry> trees_;
+
+    // Focus tracking
+    std::string pendingFocusId_;
+    std::string lastFocusedId_;
+    std::string currentFocusedId_;
 
     void renderNode(finescript::MapData& map, finescript::ExecutionContext& ctx);
 
@@ -133,6 +143,12 @@ private:
     void renderSeparatorText(finescript::MapData& m);
     void renderIndent(finescript::MapData& m);
     void renderUnindent(finescript::MapData& m);
+
+    // Phase 10 - Style push/pop
+    void renderPushStyleColor(finescript::MapData& m);
+    void renderPopStyleColor(finescript::MapData& m);
+    void renderPushStyleVar(finescript::MapData& m);
+    void renderPopStyleVar(finescript::MapData& m);
 
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);

@@ -292,6 +292,9 @@ int main() {
         finegui::GuiSystem gui(renderer->device(), guiConfig);
         gui.initialize(renderer.get());
 
+        // Connect GUI to input manager — events flow automatically via listener chain
+        gui.connectToInputManager(*input);
+
         // Create C++ retained-mode renderer
         finegui::GuiRenderer guiRenderer(gui);
 
@@ -371,12 +374,8 @@ int main() {
         while (window->isOpen()) {
             window->pollEvents();
 
-            // Process input events
+            // InputManager listener chain handles events during pollEvents()
             input->update();
-            finevk::InputEvent event;
-            while (input->pollEvent(event)) {
-                gui.processInput(finegui::InputAdapter::fromFineVK(event));
-            }
 
             if (auto frame = renderer->beginFrame()) {
                 gui.beginFrame();

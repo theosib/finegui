@@ -151,6 +151,12 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_indent         = engine.intern("indent");
     sym_unindent       = engine.intern("unindent");
 
+    // Type name symbols - Phase 10
+    sym_push_color = engine.intern("push_color");
+    sym_pop_color  = engine.intern("pop_color");
+    sym_push_var   = engine.intern("push_var");
+    sym_pop_var    = engine.intern("pop_var");
+
     // Phase 9 field keys
     my_value = engine.intern("my_value");
 
@@ -175,6 +181,12 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_flag_always_auto_resize = engine.intern("always_auto_resize");
     sym_flag_no_background    = engine.intern("no_background");
     sym_flag_menu_bar         = engine.intern("menu_bar");
+
+    // Focus management field keys
+    focusable  = engine.intern("focusable");
+    auto_focus = engine.intern("auto_focus");
+    on_focus   = engine.intern("on_focus");
+    on_blur    = engine.intern("on_blur");
 }
 
 // -- Type mapping -------------------------------------------------------------
@@ -369,6 +381,28 @@ WidgetNode convertToWidget(const finescript::Value& map,
     auto onDragVal = m.get(syms.on_drag);
     if (onDragVal.isCallable()) {
         node.onDragBegin = [&engine, &ctx, closure = onDragVal](WidgetNode&) {
+            engine.callFunction(closure, {}, ctx);
+        };
+    }
+
+    // Focus management fields
+    auto focusableVal = m.get(syms.focusable);
+    if (focusableVal.isBool()) {
+        node.focusable = focusableVal.asBool();
+    }
+    auto autoFocusVal = m.get(syms.auto_focus);
+    if (autoFocusVal.isBool()) {
+        node.autoFocus = autoFocusVal.asBool();
+    }
+    auto onFocusVal = m.get(syms.on_focus);
+    if (onFocusVal.isCallable()) {
+        node.onFocus = [&engine, &ctx, closure = onFocusVal](WidgetNode&) {
+            engine.callFunction(closure, {}, ctx);
+        };
+    }
+    auto onBlurVal = m.get(syms.on_blur);
+    if (onBlurVal.isCallable()) {
+        node.onBlur = [&engine, &ctx, closure = onBlurVal](WidgetNode&) {
             engine.callFunction(closure, {}, ctx);
         };
     }

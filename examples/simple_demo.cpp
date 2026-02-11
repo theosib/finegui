@@ -52,6 +52,9 @@ int main() {
         finegui::GuiSystem gui(renderer->device(), guiConfig);
         gui.initialize(renderer.get());
 
+        // Connect GUI to input manager — events flow automatically via listener chain
+        gui.connectToInputManager(*input);
+
         std::cout << "finegui demo started. Close window to exit.\n";
         if (window->isHighDPI()) {
             std::cout << "High-DPI display detected (scale: " << contentScale.x << "x)\n";
@@ -67,12 +70,8 @@ int main() {
         while (window->isOpen()) {
             window->pollEvents();
 
-            // Process input events and forward to GUI
+            // InputManager listener chain handles events during pollEvents()
             input->update();
-            finevk::InputEvent event;
-            while (input->pollEvent(event)) {
-                gui.processInput(finegui::InputAdapter::fromFineVK(event));
-            }
 
             if (auto frame = renderer->beginFrame()) {
                 // beginFrame() auto-gets delta time and frame index from renderer

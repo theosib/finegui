@@ -460,6 +460,47 @@ WidgetNode WidgetNode::unindent(float width) {
     return n;
 }
 
+// Phase 10 - Style push/pop builders
+
+WidgetNode WidgetNode::pushStyleColor(int colIdx, float r, float g, float b, float a) {
+    WidgetNode n;
+    n.type = Type::PushStyleColor;
+    n.intValue = colIdx;
+    n.colorR = r; n.colorG = g; n.colorB = b; n.colorA = a;
+    return n;
+}
+
+WidgetNode WidgetNode::popStyleColor(int count) {
+    WidgetNode n;
+    n.type = Type::PopStyleColor;
+    n.intValue = count;
+    return n;
+}
+
+WidgetNode WidgetNode::pushStyleVar(int varIdx, float val) {
+    WidgetNode n;
+    n.type = Type::PushStyleVar;
+    n.intValue = varIdx;
+    n.floatValue = val;
+    return n;
+}
+
+WidgetNode WidgetNode::pushStyleVar(int varIdx, float x, float y) {
+    WidgetNode n;
+    n.type = Type::PushStyleVar;
+    n.intValue = varIdx;
+    n.width = x;
+    n.height = y;
+    return n;
+}
+
+WidgetNode WidgetNode::popStyleVar(int count) {
+    WidgetNode n;
+    n.type = Type::PopStyleVar;
+    n.intValue = count;
+    return n;
+}
+
 const char* widgetTypeName(WidgetNode::Type type) {
     switch (type) {
         case WidgetNode::Type::Window:            return "Window";
@@ -508,6 +549,10 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::BulletText:        return "BulletText";
         case WidgetNode::Type::SeparatorText:     return "SeparatorText";
         case WidgetNode::Type::Indent:            return "Indent";
+        case WidgetNode::Type::PushStyleColor:    return "PushStyleColor";
+        case WidgetNode::Type::PopStyleColor:     return "PopStyleColor";
+        case WidgetNode::Type::PushStyleVar:      return "PushStyleVar";
+        case WidgetNode::Type::PopStyleVar:       return "PopStyleVar";
         default:                                  return "Unknown";
     }
 }
