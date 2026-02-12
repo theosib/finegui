@@ -386,16 +386,16 @@ void test_binding_ui_slider() {
     auto& engine = testEngine();
     ExecutionContext ctx(engine);
 
-    auto result = engine.executeCommand(R"(ui.slider "Volume" 0.0 1.0 0.5)", ctx);
+    auto result = engine.executeCommand(R"(ui.slider "Volume" 0.5 0.0 1.0)", ctx);
     assert(result.success);
     assert(result.returnValue.isMap());
 
     auto& m = result.returnValue.asMap();
     assert(m.get(engine.intern("type")).asSymbol() == engine.intern("slider"));
     assert(m.get(engine.intern("label")).asString() == "Volume");
+    assert(m.get(engine.intern("value")).asNumber() == 0.5);
     assert(m.get(engine.intern("min")).asNumber() == 0.0);
     assert(m.get(engine.intern("max")).asNumber() == 1.0);
-    assert(m.get(engine.intern("value")).asNumber() == 0.5);
 
     std::cout << "PASSED\n";
 }
@@ -517,7 +517,7 @@ void test_binding_roundtrip() {
     auto result = engine.executeCommand(
         R"(ui.window "Settings" [
             {ui.text "Audio"}
-            {ui.slider "Volume" 0.0 1.0 0.5}
+            {ui.slider "Volume" 0.5 0.0 1.0}
             {ui.checkbox "Mute" false}
             {ui.separator}
             {ui.button "Apply"}
@@ -2286,6 +2286,259 @@ void test_serialize_state_with_arrays() {
 }
 
 // ============================================================================
+// Options Map (keyword-style) Tests
+// ============================================================================
+
+void test_options_map_slider() {
+    std::cout << "Testing: options map with ui.slider... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Keyword-style: label + options map
+    auto result = engine.executeCommand(
+        R"({ui.slider "Volume" {=value 0.5 =min 0.0 =max 1.0}})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("slider"));
+    assert(m.get(engine.intern("label")).asString() == "Volume");
+    assert(m.get(engine.intern("value")).asNumber() == 0.5);
+    assert(m.get(engine.intern("min")).asNumber() == 0.0);
+    assert(m.get(engine.intern("max")).asNumber() == 1.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_options_map_button_with_id() {
+    std::cout << "Testing: options map with ui.button adding id... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Use options map to add an id to a button
+    auto result = engine.executeCommand(
+        R"({ui.button "Save" {=id "save_btn" =enabled false}})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("button"));
+    assert(m.get(engine.intern("label")).asString() == "Save");
+    assert(m.get(engine.intern("id")).asString() == "save_btn");
+    assert(m.get(engine.intern("enabled")).asBool() == false);
+
+    std::cout << "PASSED\n";
+}
+
+void test_options_map_checkbox() {
+    std::cout << "Testing: options map with ui.checkbox... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Minimal positional + options map
+    auto result = engine.executeCommand(
+        R"({ui.checkbox "Enable" {=value true =id "enable_cb"}})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("checkbox"));
+    assert(m.get(engine.intern("label")).asString() == "Enable");
+    assert(m.get(engine.intern("value")).asBool() == true);
+    assert(m.get(engine.intern("id")).asString() == "enable_cb");
+
+    std::cout << "PASSED\n";
+}
+
+void test_options_map_window_flags() {
+    std::cout << "Testing: options map with ui.window for flags... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Window with options map for flags and size
+    auto result = engine.executeCommand(
+        R"({ui.window "Test" [] {=window_size_w 400 =window_size_h 300}})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("window"));
+    assert(m.get(engine.intern("title")).asString() == "Test");
+    assert(m.get(engine.intern("window_size_w")).asNumber() == 400.0);
+    assert(m.get(engine.intern("window_size_h")).asNumber() == 300.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_options_map_overrides_positional() {
+    std::cout << "Testing: options map overrides positional args... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Positional sets value to 0.5, but options map overrides to 0.8
+    auto result = engine.executeCommand(
+        R"({ui.slider "Vol" 0.5 0.0 1.0 {=value 0.8}})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    // Options map is applied last, so value should be 0.8
+    assert(m.get(engine.intern("value")).asNumber() == 0.8);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Native kwargs (no-braces) tests
+// ============================================================================
+
+void test_kwargs_slider() {
+    std::cout << "Testing: native kwargs with ui.slider (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // No-braces: named args collected into trailing map by evaluator
+    auto result = engine.executeCommand(
+        R"({ui.slider "Volume" =value 0.5 =min 0.0 =max 1.0})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("slider"));
+    assert(m.get(engine.intern("label")).asString() == "Volume");
+    assert(m.get(engine.intern("value")).asNumber() == 0.5);
+    assert(m.get(engine.intern("min")).asNumber() == 0.0);
+    assert(m.get(engine.intern("max")).asNumber() == 1.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_button() {
+    std::cout << "Testing: native kwargs with ui.button (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.button "Save" =id "save_btn" =enabled false})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("button"));
+    assert(m.get(engine.intern("label")).asString() == "Save");
+    assert(m.get(engine.intern("id")).asString() == "save_btn");
+    assert(m.get(engine.intern("enabled")).asBool() == false);
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_checkbox() {
+    std::cout << "Testing: native kwargs with ui.checkbox (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.checkbox "Enable" =value true =id "enable_cb"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("checkbox"));
+    assert(m.get(engine.intern("label")).asString() == "Enable");
+    assert(m.get(engine.intern("value")).asBool() == true);
+    assert(m.get(engine.intern("id")).asString() == "enable_cb");
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_mixed_positional_and_named() {
+    std::cout << "Testing: kwargs mixed with positional args... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Positional label + value, named min/max
+    auto result = engine.executeCommand(
+        R"({ui.slider "Vol" 0.5 =min 0.0 =max 1.0})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("label")).asString() == "Vol");
+    assert(m.get(engine.intern("value")).asNumber() == 0.5);
+    assert(m.get(engine.intern("min")).asNumber() == 0.0);
+    assert(m.get(engine.intern("max")).asNumber() == 1.0);
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_overrides_positional() {
+    std::cout << "Testing: kwargs override positional args (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Positional sets value to 0.5, kwargs overrides to 0.8
+    auto result = engine.executeCommand(
+        R"({ui.slider "Vol" 0.5 0.0 1.0 =value 0.8})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("value")).asNumber() == 0.8);
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_color_edit() {
+    std::cout << "Testing: native kwargs with ui.color_edit (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.color_edit "BG Color" =id "bg_col" =alpha true})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("color_edit"));
+    assert(m.get(engine.intern("label")).asString() == "BG Color");
+    assert(m.get(engine.intern("id")).asString() == "bg_col");
+    assert(m.get(engine.intern("alpha")).asBool() == true);
+
+    std::cout << "PASSED\n";
+}
+
+void test_kwargs_input() {
+    std::cout << "Testing: native kwargs with ui.input (no braces)... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.input "Name" =value "Alice" =hint "Enter name"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("input_text"));
+    assert(m.get(engine.intern("label")).asString() == "Name");
+    assert(m.get(engine.intern("value")).asString() == "Alice");
+    assert(m.get(engine.intern("hint")).asString() == "Enter name");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -2427,6 +2680,22 @@ int main() {
         test_map_load_state_applies_values();
         test_serialize_state_produces_parseable_output();
         test_serialize_state_with_arrays();
+
+        // Options-map (keyword-style) tests
+        test_options_map_slider();
+        test_options_map_button_with_id();
+        test_options_map_checkbox();
+        test_options_map_window_flags();
+        test_options_map_overrides_positional();
+
+        // Native kwargs (no-braces) tests
+        test_kwargs_slider();
+        test_kwargs_button();
+        test_kwargs_checkbox();
+        test_kwargs_mixed_positional_and_named();
+        test_kwargs_overrides_positional();
+        test_kwargs_color_edit();
+        test_kwargs_input();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

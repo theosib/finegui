@@ -1222,7 +1222,7 @@ set name "Player"
 ui.show {ui.window "Settings" [
     {ui.text "Game Settings"}
     {ui.separator}
-    {ui.slider "Volume" 0.0 1.0 volume fn [v] do
+    {ui.slider "Volume" volume 0.0 1.0 fn [v] do
         set volume v
     end}
     {ui.input "Name" name fn [v] do
@@ -1260,6 +1260,57 @@ ui.text "HP: {format \"%d/%d\" hp max_hp}"
 
 Use `\{` and `\}` for literal braces in strings.
 
+### Named Arguments (Keyword-Style Parameters)
+
+All `ui.*` builder functions support **named arguments** using finescript's `=name value` syntax. Named args are collected into a map and merged into the widget, so any field a widget recognizes (`:id`, `:enabled`, `:visible`, `:on_change`, etc.) can be set this way:
+
+```
+# Positional only (traditional):
+{ui.slider "Volume" 0.5 0.0 1.0}
+
+# Named arguments (recommended):
+{ui.slider "Volume" =value 0.5 =min 0.0 =max 1.0}
+
+# Mix positional + named:
+{ui.button "Save" =id "save_btn" =enabled true =on_click fn [] do save() end}
+```
+
+If both a positional argument and a named argument set the same field, the **named argument wins**.
+
+> **Note:** You can also pass an explicit options map as the last positional argument: `{ui.slider "Volume" {=value 0.5 =min 0.0}}`. Both forms work identically — the no-braces named-args syntax is preferred for readability.
+
+Common fields useful with named arguments:
+
+| Field | Description |
+|-------|-------------|
+| `:id` | Widget ID for `ui.find`, serialization, and focus |
+| `:enabled` | Enable/disable the widget |
+| `:visible` | Show/hide the widget |
+| `:on_click` | Click callback |
+| `:on_change` | Value change callback |
+| `:on_submit` | Submit callback (text inputs) |
+| `:on_close` | Close callback (windows, modals) |
+| `:drag_type`, `:drag_data`, `:drop_accept` | Drag-and-drop |
+| `:focusable` | Tab-navigation control |
+| `:window_flags` | Window flag symbols array |
+
+**Named callbacks** (recommended style for readability):
+
+```
+{ui.slider "Volume"
+    =value 0.5
+    =min 0.0
+    =max 1.0
+    =on_change fn [v] do
+        set volume v
+    end}
+
+{ui.window "Settings" [
+    {ui.text "Game Settings"}
+    {ui.checkbox "Fullscreen" =value false =id "fullscreen"}
+] =window_flags [:no_resize]}
+```
+
 ### Script Widget Functions
 
 Builder functions (return widget maps):
@@ -1270,8 +1321,8 @@ Builder functions (return widget maps):
 | `ui.text` | `content` | Static text |
 | `ui.button` | `label [on_click]` | Button with optional callback |
 | `ui.checkbox` | `label value [on_change]` | Boolean toggle |
-| `ui.slider` | `label min max value [on_change]` | Float slider |
-| `ui.slider_int` | `label min max value [on_change]` | Integer slider |
+| `ui.slider` | `label value min max [on_change]` | Float slider |
+| `ui.slider_int` | `label value min max [on_change]` | Integer slider |
 | `ui.input` | `label value [on_change] [on_submit]` | Text input |
 | `ui.input_int` | `label value [on_change]` | Integer input |
 | `ui.input_float` | `label value [on_change]` | Float input |
@@ -1364,7 +1415,23 @@ Action functions (require active ScriptGui context):
 
 ### Dynamic Updates from Scripts
 
-**Preferred: Node mutation.** Use `ui.set_text`, `ui.set_value`, or `ui.set_label` to change individual widget fields without rebuilding the tree. This preserves callbacks and is more efficient:
+**Preferred: Map-direct-mutation.** Scripts create maps that ARE the widget data (shared_ptr semantics via finescript's MapData). Mutate widget properties directly — changes are visible on the next frame without calling any mutation functions:
+
+```
+set count 0
+set count_text {ui.text "Count: 0"}
+set gui_id {ui.show {ui.window "Counter" [
+    count_text
+    {ui.button "Increment" fn [] do
+        set count (count + 1)
+        set count_text.text ("Count: " + {to_str count})
+    end}
+]}}
+```
+
+Hold references to widgets you want to update later, then mutate their fields directly with `set widget.field value`. This is the simplest and most efficient approach.
+
+**Alternative: Index-based mutation.** Use `ui.set_text`, `ui.set_value`, or `ui.set_label` to change individual widget fields by child index. This works without holding references but is fragile if the tree structure changes:
 
 ```
 set count 0
@@ -1396,7 +1463,7 @@ ui.update gui_id {ui.window "Counter" [
 ]}
 ```
 
-**Map-direct-mutation (MapRenderer path).** When using MapRenderer (see below), scripts create maps that ARE the widget data (shared_ptr semantics). You can mutate widget properties directly without calling mutation functions:
+**Map-direct-mutation details.** When using MapRenderer (see below), scripts create maps that ARE the widget data (shared_ptr semantics). You can mutate widget properties directly without calling mutation functions:
 
 ```
 set text_widget {ui.text "Initial"}
@@ -1487,7 +1554,7 @@ guiRenderer.show(finegui::WidgetNode::window("Control Panel", {
 
 // Script-driven window
 mgr.showFromSource(R"SCRIPT(
-    ui.show {ui.window "Settings" [{ui.slider "Volume" 0.0 1.0 0.5}]}
+    ui.show {ui.window "Settings" [{ui.slider "Volume" 0.5 0.0 1.0}]}
 )SCRIPT", "settings");
 
 // Both render together
@@ -1758,7 +1825,7 @@ Widgets in scripts must have an `:id` field to be included:
 
 ```
 ui.show {ui.window "Settings" [
-    {ui.slider "Volume" 0.0 1.0 0.5 :id "volume"}
+    {ui.slider "Volume" 0.5 0.0 1.0 :id "volume"}
     {ui.checkbox "Fullscreen" false :id "fullscreen"}
     {ui.combo "Quality" ["Low" "Medium" "High"] 1 :id "quality"}
 ]}

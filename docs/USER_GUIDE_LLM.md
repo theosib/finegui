@@ -1050,8 +1050,8 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.text` | `ui.text "content"` | |
 | `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end` |
 | `ui.checkbox` | `ui.checkbox "label" value [on_change]` | on_change receives bool |
-| `ui.slider` | `ui.slider "label" min max value [on_change]` | on_change receives float |
-| `ui.slider_int` | `ui.slider_int "label" min max value [on_change]` | on_change receives int |
+| `ui.slider` | `ui.slider "label" value min max [on_change]` | on_change receives float |
+| `ui.slider_int` | `ui.slider_int "label" value min max [on_change]` | on_change receives int |
 | `ui.input` | `ui.input "label" value [on_change] [on_submit]` | |
 | `ui.input_int` | `ui.input_int "label" value [on_change]` | |
 | `ui.input_float` | `ui.input_float "label" value [on_change]` | |
@@ -1115,6 +1115,30 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.push_theme` | `ui.push_theme "name"` | Push named theme preset (see Style & Theming) |
 | `ui.pop_theme` | `ui.pop_theme "name"` | Pop named theme preset (must match push) |
 
+### Named Arguments (Keyword-Style Parameters)
+
+All `ui.*` builders support **named arguments** (`=name value` syntax). Named args are merged into the widget map, overriding positional args for the same field:
+
+```
+# Positional only:
+{ui.slider "Volume" 0.5 0.0 1.0}
+
+# Named arguments (recommended):
+{ui.slider "Volume" =value 0.5 =min 0.0 =max 1.0}
+
+# Mix positional + named:
+{ui.button "Save" =id "save_btn" =on_click fn [] do save() end}
+```
+
+An explicit options map as last positional arg also works: `{ui.slider "Volume" {=value 0.5}}`. Both forms are equivalent; prefer no-braces.
+
+Useful fields: `:id`, `:enabled`, `:visible`, `:on_click`, `:on_change`, `:on_submit`, `:on_close`, `:drag_type`, `:drag_data`, `:drop_accept`, `:focusable`, `:window_flags`.
+
+Named callbacks (recommended style):
+```
+{ui.slider "Volume" =value 0.5 =min 0.0 =max 1.0 =on_change fn [v] do set volume v end}
+```
+
 ### String Interpolation in Widget Text
 
 finescript supports string interpolation with `{expr}` in all widget string fields (labels, titles, text content):
@@ -1168,22 +1192,28 @@ ui.text "Literal brace: \{ \}"      # escape with backslash
 | `gui.open_popup` | `gui.open_popup "id"` | Open a popup by string ID |
 | `gui.close_popup` | `gui.close_popup` | Close current popup |
 
-## Map-Based Mutation
+## Map-Based Mutation (Preferred)
 
-With MapRenderer, widget data is stored as finescript maps with shared_ptr semantics. Mutations to maps are visible immediately to the renderer (no `ui.update` needed).
+Widget data is stored as finescript maps with shared_ptr semantics. Direct mutation is the **preferred** approach for updating widgets — changes are visible immediately to the renderer without calling mutation functions.
 
 ```
-# Build and show
-set text_widget {ui.text "Initial"}
-set gui_id {ui.show {ui.window "W" [text_widget]}}
+# Hold references to widgets you want to update later
+set count 0
+set count_text {ui.text "Count: 0"}
+set gui_id {ui.show {ui.window "Counter" [
+    count_text
+    {ui.button "+" fn [] do
+        set count (count + 1)
+        set count_text.text ("Count: " + {to_str count})
+    end}
+]}}
 
-# Direct mutation -- changes are visible next frame
-set text_widget.text "Updated!"
-
-# Navigation: get child maps by index
+# Navigation: get child maps by index (alternative to holding references)
 set child {ui.node gui_id 0}         # First child of root
 set nested {ui.node gui_id [2 0]}    # children[2].children[0]
 ```
+
+Index-based mutation (`ui.set_text`, `ui.set_value`, `ui.set_label`) also works but is more fragile (breaks if tree structure changes). Full tree rebuild with `ui.update` is available for major layout changes but loses callbacks.
 
 ## Script Example
 

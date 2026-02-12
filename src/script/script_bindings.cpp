@@ -25,6 +25,21 @@ static Value makeWidget(ScriptEngine& engine, const char* typeName) {
     return w;
 }
 
+// Helper: if the last arg is a map, merge its keys into the widget map.
+// This enables keyword-style parameters: {ui.slider "Vol" {=value 0.5 =min 0 =max 1}}
+static void mergeOptions(const std::vector<Value>& args, Value& widget, ScriptEngine& engine) {
+    if (!args.empty() && args.back().isMap()) {
+        auto& opts = args.back().asMap();
+        auto& w = widget.asMap();
+        uint32_t typeSym = engine.intern("type");
+        for (auto key : opts.keys()) {
+            if (key != typeSym) {
+                w.set(key, opts.get(key));
+            }
+        }
+    }
+}
+
 void registerGuiBindings(ScriptEngine& engine) {
 
     // =========================================================================
@@ -45,6 +60,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -55,6 +71,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("text"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -69,10 +86,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isCallable()) {
                 m.set(engine.intern("on_click"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.checkbox "label" value [on_change]
+    // ui.checkbox "label" [value] [on_change]
     uiMap.set(engine.intern("checkbox"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "checkbox");
@@ -86,10 +104,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_change"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.slider "label" min max value [on_change]
+    // ui.slider "label" [value] [min] [max] [on_change]
     uiMap.set(engine.intern("slider"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "slider");
@@ -98,21 +117,22 @@ void registerGuiBindings(ScriptEngine& engine) {
                 m.set(engine.intern("label"), args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("min"), args[1]);
+                m.set(engine.intern("value"), args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("max"), args[2]);
+                m.set(engine.intern("min"), args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("value"), args[3]);
+                m.set(engine.intern("max"), args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_change"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.slider_int "label" min max value [on_change]
+    // ui.slider_int "label" [value] [min] [max] [on_change]
     uiMap.set(engine.intern("slider_int"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "slider_int");
@@ -121,21 +141,22 @@ void registerGuiBindings(ScriptEngine& engine) {
                 m.set(engine.intern("label"), args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("min"), args[1]);
+                m.set(engine.intern("value"), args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("max"), args[2]);
+                m.set(engine.intern("min"), args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("value"), args[3]);
+                m.set(engine.intern("max"), args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_change"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.input "label" value [on_change] [on_submit]
+    // ui.input "label" [value] [on_change] [on_submit]
     uiMap.set(engine.intern("input"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "input_text");
@@ -152,10 +173,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isCallable()) {
                 m.set(engine.intern("on_submit"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.input_int "label" value [on_change]
+    // ui.input_int "label" [value] [on_change]
     uiMap.set(engine.intern("input_int"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "input_int");
@@ -169,10 +191,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_change"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.input_float "label" value [on_change]
+    // ui.input_float "label" [value] [on_change]
     uiMap.set(engine.intern("input_float"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "input_float");
@@ -186,10 +209,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_change"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.combo "label" items selected [on_change]
+    // ui.combo "label" [items] [selected] [on_change]
     uiMap.set(engine.intern("combo"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "combo");
@@ -206,6 +230,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isCallable()) {
                 m.set(engine.intern("on_change"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -222,6 +247,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isArray()) {
                 w.asMap().set(engine.intern("children"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -236,6 +262,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -256,6 +283,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isCallable()) {
                 m.set(engine.intern("on_click"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -263,13 +291,14 @@ void registerGuiBindings(ScriptEngine& engine) {
     // Phase 3 - Layout & Display
     // =========================================================================
 
-    // ui.same_line [=offset x]
+    // ui.same_line [offset]
     uiMap.set(engine.intern("same_line"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "same_line");
             if (args.size() > 0 && args[0].isNumeric()) {
                 w.asMap().set(engine.intern("offset"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -290,6 +319,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isString()) {
                 m.set(engine.intern("text"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -300,6 +330,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("text"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -310,10 +341,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("text"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.progress_bar fraction [=overlay text] [=size [w h]]
+    // ui.progress_bar fraction
     uiMap.set(engine.intern("progress_bar"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "progress_bar");
@@ -321,10 +353,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isNumeric()) {
                 m.set(engine.intern("value"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.collapsing_header "label" [children] [=default_open bool]
+    // ui.collapsing_header "label" [children]
     uiMap.set(engine.intern("collapsing_header"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "collapsing_header");
@@ -335,6 +368,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -353,6 +387,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -367,6 +402,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -381,6 +417,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -395,6 +432,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -405,6 +443,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isArray()) {
                 w.asMap().set(engine.intern("children"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -419,6 +458,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -433,6 +473,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isCallable()) {
                 m.set(engine.intern("on_click"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -440,7 +481,7 @@ void registerGuiBindings(ScriptEngine& engine) {
     // Phase 6 - Advanced Input
     // =========================================================================
 
-    // ui.color_edit "label" [r g b a] [on_change]
+    // ui.color_edit "label" [color] [on_change]
     uiMap.set(engine.intern("color_edit"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "color_edit");
@@ -454,10 +495,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_change"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.color_picker "label" [r g b a] [on_change]
+    // ui.color_picker "label" [color] [on_change]
     uiMap.set(engine.intern("color_picker"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "color_picker");
@@ -471,10 +513,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_change"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.drag_float "label" value speed min max [on_change]
+    // ui.drag_float "label" [value] [speed] [min] [max] [on_change]
     uiMap.set(engine.intern("drag_float"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "drag_float");
@@ -497,10 +540,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 5 && args[5].isCallable()) {
                 m.set(engine.intern("on_change"), args[5]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.drag_int "label" value speed min max [on_change]
+    // ui.drag_int "label" [value] [speed] [min] [max] [on_change]
     uiMap.set(engine.intern("drag_int"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "drag_int");
@@ -523,10 +567,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 5 && args[5].isCallable()) {
                 m.set(engine.intern("on_change"), args[5]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.drag_float3 "label" [x y z] speed min max [on_change]
+    // ui.drag_float3 "label" [value] [speed] [min] [max] [on_change]
     uiMap.set(engine.intern("drag_float3"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "drag_float3");
@@ -549,6 +594,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 5 && args[5].isCallable()) {
                 m.set(engine.intern("on_change"), args[5]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -572,10 +618,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_submit"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.slider_angle "label" value_rad min_deg max_deg [on_change]
+    // ui.slider_angle "label" [value_rad] [min_deg] [max_deg] [on_change]
     uiMap.set(engine.intern("slider_angle"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "slider_angle");
@@ -595,6 +642,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_change"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -609,10 +657,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isCallable()) {
                 m.set(engine.intern("on_click"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.color_button "label" [r g b a] [on_click]
+    // ui.color_button "label" [color] [on_click]
     uiMap.set(engine.intern("color_button"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "color_button");
@@ -626,6 +675,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_click"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -633,7 +683,7 @@ void registerGuiBindings(ScriptEngine& engine) {
     // Phase 7 - Misc
     // =========================================================================
 
-    // ui.listbox "label" items [selected] [height_in_items] [on_change]
+    // ui.listbox "label" [items] [selected] [height_in_items] [on_change]
     uiMap.set(engine.intern("listbox"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "listbox");
@@ -653,6 +703,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_change"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -667,6 +718,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("children"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -684,6 +736,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_close"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -713,6 +766,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isArray()) {
                 m.set(engine.intern("children"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -724,6 +778,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isArray()) {
                 m.set(engine.intern("children"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -743,6 +798,7 @@ void registerGuiBindings(ScriptEngine& engine) {
                     m.set(engine.intern("children"), args[0]);
                 }
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -766,6 +822,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_click"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -799,6 +856,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 6 && args[6].isNumeric()) {
                 m.set(engine.intern("height"), args[6]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -828,6 +886,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 6 && args[6].isNumeric()) {
                 m.set(engine.intern("height"), args[6]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -852,6 +911,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isArray()) {
                 m.set(engine.intern("commands"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -867,6 +927,7 @@ void registerGuiBindings(ScriptEngine& engine) {
                     m.set(engine.intern("children"), args[0]);
                 }
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -883,6 +944,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isNumeric()) {
                 m.set(engine.intern("thickness"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -900,6 +962,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isNumeric()) {
                 m.set(engine.intern("thickness"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -919,6 +982,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isNumeric()) {
                 m.set(engine.intern("thickness"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -932,6 +996,7 @@ void registerGuiBindings(ScriptEngine& engine) {
                 m.set(engine.intern("text"), args[1]);
             }
             if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -950,6 +1015,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 5 && args[5].isNumeric()) {
                 m.set(engine.intern("thickness"), args[5]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -957,7 +1023,7 @@ void registerGuiBindings(ScriptEngine& engine) {
     // Phase 9 - New widgets
     // =========================================================================
 
-    // ui.radio_button "label" active_value my_value [on_change]
+    // ui.radio_button "label" [active_value] [my_value] [on_change]
     uiMap.set(engine.intern("radio_button"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "radio_button");
@@ -974,6 +1040,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 3 && args[3].isCallable()) {
                 m.set(engine.intern("on_change"), args[3]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -991,10 +1058,11 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isCallable()) {
                 m.set(engine.intern("on_click"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
-    // ui.input_multiline "label" value [width] [height] [on_change]
+    // ui.input_multiline "label" [value] [width] [height] [on_change]
     uiMap.set(engine.intern("input_multiline"), makeFn(
         [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
             auto w = makeWidget(engine, "input_multiline");
@@ -1014,6 +1082,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 4 && args[4].isCallable()) {
                 m.set(engine.intern("on_change"), args[4]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1024,6 +1093,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("text"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1034,6 +1104,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("label"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1044,6 +1115,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isNumeric()) {
                 w.asMap().set(engine.intern("width"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1054,6 +1126,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isNumeric()) {
                 w.asMap().set(engine.intern("width"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1065,6 +1138,7 @@ void registerGuiBindings(ScriptEngine& engine) {
                 w.asMap().set(engine.intern("width"), args[0]);
                 w.asMap().set(engine.intern("height"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1204,6 +1278,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1 && args[1].isArray()) {
                 m.set(engine.intern("color"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1214,6 +1289,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isNumeric()) {
                 w.asMap().set(engine.intern("count"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1231,6 +1307,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 1) {
                 m.set(engine.intern("size"), args[1]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1241,6 +1318,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isNumeric()) {
                 w.asMap().set(engine.intern("count"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1255,6 +1333,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("label"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1265,6 +1344,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isString()) {
                 w.asMap().set(engine.intern("label"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1302,6 +1382,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 2 && args[2].isArray()) {
                 m.set(engine.intern("children"), args[2]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
@@ -1312,6 +1393,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (args.size() > 0 && args[0].isArray()) {
                 w.asMap().set(engine.intern("children"), args[0]);
             }
+            mergeOptions(args, w, engine);
             return w;
         }));
 
