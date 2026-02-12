@@ -195,6 +195,9 @@ void GuiRenderer::renderNode(WidgetNode& node) {
         // Phase 15
         case WidgetNode::Type::PlotLines:        renderPlotLines(node); break;
         case WidgetNode::Type::PlotHistogram:    renderPlotHistogram(node); break;
+        // Style & Theming
+        case WidgetNode::Type::PushTheme:        renderPushTheme(node); break;
+        case WidgetNode::Type::PopTheme:         renderPopTheme(node); break;
         default:
             ImGui::TextColored({1, 0, 0, 1}, "[TODO: %s]", widgetTypeName(node.type));
             break;
@@ -767,6 +770,14 @@ void GuiRenderer::renderCanvas(WidgetNode& node) {
             {canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y}, borderCol);
     }
 
+    // Draw texture if set (e.g. from SceneTexture offscreen render)
+    if (node.texture.valid()) {
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        drawList->AddImage(static_cast<ImTextureID>(node.texture),
+                           canvasPos,
+                           {canvasPos.x + canvasSize.x, canvasPos.y + canvasSize.y});
+    }
+
     // Custom draw callback
     if (node.onDraw) {
         node.onDraw(node);
@@ -1053,6 +1064,75 @@ void GuiRenderer::renderPlotHistogram(WidgetNode& node) {
                          {node.width, node.height});
 }
 
+// -- Style & Theming: Named presets -------------------------------------------
+
+// Returns the number of style colors pushed for a given theme preset name.
+// Each preset pushes a fixed set of ImGuiCol values.
+static int pushThemePreset(const std::string& name) {
+    if (name == "danger") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.70f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.85f, 0.20f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.55f, 0.10f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(1.00f, 0.90f, 0.90f, 1.0f));
+        return 4;
+    }
+    if (name == "success") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.60f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.20f, 0.75f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.10f, 0.45f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 1.00f, 0.90f, 1.0f));
+        return 4;
+    }
+    if (name == "warning") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.80f, 0.55f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.90f, 0.65f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.65f, 0.45f, 0.05f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(1.00f, 0.95f, 0.85f, 1.0f));
+        return 4;
+    }
+    if (name == "info") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.40f, 0.75f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.25f, 0.50f, 0.85f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.10f, 0.30f, 0.60f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 0.95f, 1.00f, 1.0f));
+        return 4;
+    }
+    if (name == "dark") {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,      ImVec4(0.10f, 0.10f, 0.12f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.16f, 0.16f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 0.90f, 0.90f, 1.0f));
+        return 3;
+    }
+    if (name == "light") {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,      ImVec4(0.95f, 0.95f, 0.96f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(1.00f, 1.00f, 1.00f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.10f, 0.10f, 0.10f, 1.0f));
+        return 3;
+    }
+    // Unknown preset: push nothing
+    return 0;
+}
+
+// Returns the number of style colors that a given preset pushes (without actually pushing).
+static int themePresetColorCount(const std::string& name) {
+    if (name == "danger" || name == "success" || name == "warning" || name == "info")
+        return 4;
+    if (name == "dark" || name == "light")
+        return 3;
+    return 0;
+}
+
+void GuiRenderer::renderPushTheme(WidgetNode& node) {
+    pushThemePreset(node.label);
+}
+
+void GuiRenderer::renderPopTheme(WidgetNode& node) {
+    int count = themePresetColorCount(node.label);
+    if (count > 0) {
+        ImGui::PopStyleColor(count);
+    }
+}
+
 // -- Drag and Drop ------------------------------------------------------------
 
 void GuiRenderer::handleDragDrop(WidgetNode& node) {
@@ -1148,6 +1228,168 @@ void GuiRenderer::handleDragDrop(WidgetNode& node) {
                 }
             }
         }
+    }
+}
+
+// -- State serialization ------------------------------------------------------
+
+void GuiRenderer::collectState(WidgetNode& node, WidgetStateMap& out) {
+    // Only save widgets with an explicit, non-empty ID
+    if (!node.id.empty()) {
+        switch (node.type) {
+            case WidgetNode::Type::Checkbox:
+            case WidgetNode::Type::Selectable:
+                out[node.id] = node.boolValue;
+                break;
+
+            case WidgetNode::Type::SliderInt:
+            case WidgetNode::Type::InputInt:
+            case WidgetNode::Type::DragInt:
+            case WidgetNode::Type::RadioButton:
+                out[node.id] = node.intValue;
+                break;
+
+            case WidgetNode::Type::Slider:
+            case WidgetNode::Type::InputFloat:
+            case WidgetNode::Type::DragFloat:
+            case WidgetNode::Type::SliderAngle:
+            case WidgetNode::Type::ProgressBar:
+                out[node.id] = static_cast<double>(node.floatValue);
+                break;
+
+            case WidgetNode::Type::InputText:
+            case WidgetNode::Type::InputTextMultiline:
+            case WidgetNode::Type::InputTextWithHint:
+                out[node.id] = node.stringValue;
+                break;
+
+            case WidgetNode::Type::Combo:
+            case WidgetNode::Type::ListBox:
+                out[node.id] = node.selectedIndex;
+                break;
+
+            case WidgetNode::Type::ColorEdit:
+            case WidgetNode::Type::ColorPicker:
+                out[node.id] = std::vector<float>{
+                    node.colorR, node.colorG, node.colorB, node.colorA};
+                break;
+
+            case WidgetNode::Type::DragFloat3:
+                out[node.id] = std::vector<float>{
+                    node.floatX, node.floatY, node.floatZ};
+                break;
+
+            default:
+                break;
+        }
+    }
+
+    // Recurse into children
+    for (auto& child : node.children) {
+        collectState(child, out);
+    }
+}
+
+void GuiRenderer::applyState(WidgetNode& node, const WidgetStateMap& state) {
+    if (!node.id.empty()) {
+        auto it = state.find(node.id);
+        if (it != state.end()) {
+            const auto& val = it->second;
+            switch (node.type) {
+                case WidgetNode::Type::Checkbox:
+                case WidgetNode::Type::Selectable:
+                    if (auto* b = std::get_if<bool>(&val))
+                        node.boolValue = *b;
+                    break;
+
+                case WidgetNode::Type::SliderInt:
+                case WidgetNode::Type::InputInt:
+                case WidgetNode::Type::DragInt:
+                case WidgetNode::Type::RadioButton:
+                    if (auto* i = std::get_if<int>(&val))
+                        node.intValue = *i;
+                    break;
+
+                case WidgetNode::Type::Slider:
+                case WidgetNode::Type::InputFloat:
+                case WidgetNode::Type::DragFloat:
+                case WidgetNode::Type::SliderAngle:
+                case WidgetNode::Type::ProgressBar:
+                    if (auto* d = std::get_if<double>(&val))
+                        node.floatValue = static_cast<float>(*d);
+                    break;
+
+                case WidgetNode::Type::InputText:
+                case WidgetNode::Type::InputTextMultiline:
+                case WidgetNode::Type::InputTextWithHint:
+                    if (auto* s = std::get_if<std::string>(&val))
+                        node.stringValue = *s;
+                    break;
+
+                case WidgetNode::Type::Combo:
+                case WidgetNode::Type::ListBox:
+                    if (auto* i = std::get_if<int>(&val))
+                        node.selectedIndex = *i;
+                    break;
+
+                case WidgetNode::Type::ColorEdit:
+                case WidgetNode::Type::ColorPicker:
+                    if (auto* v = std::get_if<std::vector<float>>(&val)) {
+                        if (v->size() >= 4) {
+                            node.colorR = (*v)[0]; node.colorG = (*v)[1];
+                            node.colorB = (*v)[2]; node.colorA = (*v)[3];
+                        }
+                    }
+                    break;
+
+                case WidgetNode::Type::DragFloat3:
+                    if (auto* v = std::get_if<std::vector<float>>(&val)) {
+                        if (v->size() >= 3) {
+                            node.floatX = (*v)[0];
+                            node.floatY = (*v)[1];
+                            node.floatZ = (*v)[2];
+                        }
+                    }
+                    break;
+
+                default:
+                    break;
+            }
+        }
+    }
+
+    for (auto& child : node.children) {
+        applyState(child, state);
+    }
+}
+
+WidgetStateMap GuiRenderer::saveState(int guiId) {
+    WidgetStateMap result;
+    auto* tree = get(guiId);
+    if (tree) {
+        collectState(*tree, result);
+    }
+    return result;
+}
+
+WidgetStateMap GuiRenderer::saveState() {
+    WidgetStateMap result;
+    for (auto& [id, tree] : trees_) {
+        collectState(tree, result);
+    }
+    return result;
+}
+
+void GuiRenderer::loadState(int guiId, const WidgetStateMap& state) {
+    auto* tree = get(guiId);
+    if (tree) {
+        applyState(*tree, state);
+    }
+}
+
+void GuiRenderer::loadState(const WidgetStateMap& state) {
+    for (auto& [id, tree] : trees_) {
+        applyState(tree, state);
     }
 }
 

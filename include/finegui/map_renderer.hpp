@@ -65,8 +65,29 @@ public:
     finescript::Value findById(const std::string& widgetId);
     finescript::Value findById(uint32_t symbolId);
 
+    /// Save the state of all widgets with explicit :id in a specific tree.
+    /// Returns a finescript map: {"widget_id" => value, ...}.
+    finescript::Value saveState(int id);
+
+    /// Save state across all trees.
+    finescript::Value saveState();
+
+    /// Restore widget state from a finescript map.
+    /// Widgets are matched by :id; missing IDs are silently skipped.
+    void loadState(int id, const finescript::Value& stateMap);
+
+    /// Restore state across all trees.
+    void loadState(const finescript::Value& stateMap);
+
+    /// Serialize a state map to a human-readable finescript source string.
+    /// The output can be parsed back by the script engine to get the map.
+    static std::string serializeState(const finescript::Value& stateMap,
+                                      finescript::Interner& interner);
+
 private:
     finescript::Value findByIdRecursive(finescript::Value& node, uint32_t symId, const std::string& strId);
+    void collectMapState(finescript::Value& node, finescript::Value& out);
+    void applyMapState(finescript::Value& node, const finescript::MapData& stateMap);
 
     DragDropManager* dndManager_ = nullptr;
     TextureRegistry* textureRegistry_ = nullptr;
@@ -180,6 +201,10 @@ private:
     // Phase 15 - Display (plots)
     void renderPlotLines(finescript::MapData& m);
     void renderPlotHistogram(finescript::MapData& m);
+
+    // Style & Theming - Named presets
+    void renderPushTheme(finescript::MapData& m);
+    void renderPopTheme(finescript::MapData& m);
 
     // Window flags parsing
     int parseWindowFlags(finescript::MapData& m);

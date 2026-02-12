@@ -113,6 +113,9 @@ struct ConverterSymbols {
     // Type name symbols - Phase 15 (Display plots)
     uint32_t sym_plot_lines = 0, sym_plot_histogram = 0;
 
+    // Type name symbols - Style & Theming (Named presets)
+    uint32_t sym_push_theme = 0, sym_pop_theme = 0;
+
     // Phase 12 field keys
     uint32_t hint = 0;
 

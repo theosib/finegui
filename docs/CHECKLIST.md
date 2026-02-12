@@ -116,9 +116,9 @@
 ## Style & Theming
 - [x] PushStyleColor / PopStyleColor (retained mode)
 - [x] PushStyleVar / PopStyleVar (retained mode)
-- [ ] Named theme presets (push_theme / pop_theme)
-- [ ] Script-accessible theme switching (Dark/Light/Classic)
-- [ ] Textured skin system (9-slice, SkinAtlas, SkinnedRenderer) — Phase B, future
+- [x] Named theme presets (push_theme / pop_theme)
+- [x] Script-accessible theme switching (Dark/Light/Classic)
+- [ ] Textured skin system (9-slice, SkinAtlas, SkinnedRenderer) — Phase B, planned. See [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md)
 
 ## Script Integration
 - [x] finescript ui.* builder functions
@@ -127,8 +127,8 @@
 - [x] Callback support (on_click, on_change, on_submit, on_close, on_select)
 - [x] Canvas draw commands in script
 - [x] Symbol ID support in findById / ui.find
-- [ ] ui.open_popup / ui.close_popup functions
-- [ ] String interpolation in widget text (requires finescript feature)
+- [x] ui.open_popup / ui.close_popup functions
+- [x] String interpolation in widget text (via finescript native `{expr}` syntax)
 
 ## Rendering & Backend
 - [x] Vulkan (finevk) backend
@@ -139,10 +139,10 @@
 - [x] RenderSurface abstraction
 
 ## 3D in GUI
-- [ ] Offscreen render to texture (render 3D scene to finevk RenderTarget, display via Image widget)
-- [ ] Custom render pass in Canvas
+- [x] Offscreen render to texture (render 3D scene to finevk RenderTarget, display via Image widget)
+- [x] Custom render pass in Canvas
 
 ## General Polish
-- [ ] Keyboard shortcuts / hotkeys (bind keys to actions)
-- [ ] Serialization (save/load UI layout state)
-- [ ] API reference documentation for all widget types and script bindings
+- [x] Keyboard shortcuts / hotkeys (bind keys to actions)
+- [x] Serialization (save/load UI layout state)
+- [x] API reference documentation for all widget types and script bindings

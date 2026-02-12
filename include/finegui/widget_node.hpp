@@ -52,7 +52,9 @@ struct WidgetNode {
         // Phase 14 - Tooltips & Images (continued)
         ItemTooltip, ImageButton,
         // Phase 15 - Display (plots)
-        PlotLines, PlotHistogram
+        PlotLines, PlotHistogram,
+        // Style & Theming - Named presets
+        PushTheme, PopTheme
     };
 
     Type type;
@@ -273,6 +275,10 @@ struct WidgetNode {
     static WidgetNode canvas(std::string id, float width, float height,
                              WidgetCallback onDraw = {},
                              WidgetCallback onClick = {});
+    /// Canvas with a texture (e.g. from SceneTexture offscreen render)
+    static WidgetNode canvas(std::string id, float width, float height,
+                             TextureHandle texture,
+                             WidgetCallback onClick = {});
     static WidgetNode tooltip(std::string text);
     static WidgetNode tooltip(std::vector<WidgetNode> children);
 
@@ -334,6 +340,10 @@ struct WidgetNode {
     static WidgetNode imageButton(std::string id, TextureHandle texture,
                                    float width, float height,
                                    WidgetCallback onClick = {});
+
+    // Style & Theming - Named presets
+    static WidgetNode pushTheme(std::string name);
+    static WidgetNode popTheme(std::string name);
 
     // Phase 15 - Display (plots)
     static WidgetNode plotLines(std::string label, std::vector<float> values,

@@ -12,6 +12,7 @@
 namespace finegui {
 
 class MapRenderer;
+class HotkeyManager;
 
 /// A single GUI driven by a finescript script.
 ///
@@ -100,6 +101,21 @@ public:
     /// Called by ui.find binding: find a widget map by its :id (string or symbol).
     finescript::Value scriptFindById(const std::string& widgetId);
     finescript::Value scriptFindById(uint32_t symbolId);
+
+    /// Called by ui.save_state binding: collect state of all widgets with :id.
+    finescript::Value scriptSaveState();
+
+    /// Called by ui.load_state binding: restore widget state from a map.
+    void scriptLoadState(const finescript::Value& stateMap);
+
+    /// Set the HotkeyManager for key binding support.
+    void setHotkeyManager(HotkeyManager* mgr);
+
+    /// Called by gui.bind_key binding: parse chord string and bind callback.
+    int scriptBindKey(const std::string& chord, finescript::Value callback);
+
+    /// Called by gui.unbind_key binding: unbind by ID.
+    void scriptUnbindKey(int id);
 
 private:
     struct Impl;

@@ -11,6 +11,7 @@
 
 #include <finegui/widget_converter.hpp>
 #include <finegui/script_bindings.hpp>
+#include <finegui/map_renderer.hpp>
 #include <finegui/widget_node.hpp>
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
@@ -1907,6 +1908,65 @@ void test_phase15_symbols_interned() {
     std::cout << "PASSED\n";
 }
 
+void test_binding_ui_push_theme() {
+    std::cout << "Testing: ui.push_theme binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"(ui.push_theme "danger")", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("push_theme"));
+    auto labelVal = m.get(engine.intern("label"));
+    assert(labelVal.isString());
+    assert(std::string(labelVal.asString()) == "danger");
+
+    std::cout << "PASSED\n";
+}
+
+void test_binding_ui_pop_theme() {
+    std::cout << "Testing: ui.pop_theme binding... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"(ui.pop_theme "danger")", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto typeVal = m.get(engine.intern("type"));
+    assert(typeVal.isSymbol());
+    assert(typeVal.asSymbol() == engine.intern("pop_theme"));
+    auto labelVal = m.get(engine.intern("label"));
+    assert(labelVal.isString());
+    assert(std::string(labelVal.asString()) == "danger");
+
+    std::cout << "PASSED\n";
+}
+
+void test_theme_symbols_interned() {
+    std::cout << "Testing: Theme symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    assert(syms.sym_push_theme != 0);
+    assert(syms.sym_pop_theme != 0);
+    assert(syms.sym_push_theme == engine.intern("push_theme"));
+    assert(syms.sym_pop_theme == engine.intern("pop_theme"));
+
+    std::cout << "PASSED\n";
+}
+
 void test_window_control_symbols_interned() {
     std::cout << "Testing: Window control symbols interned... ";
 
@@ -1925,6 +1985,302 @@ void test_window_control_symbols_interned() {
     assert(syms.window_size_h != 0);
     assert(syms.window_size_w == engine.intern("window_size_w"));
     assert(syms.window_size_h == engine.intern("window_size_h"));
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// String Interpolation in Widget Text
+// ============================================================================
+
+void test_string_interpolation_in_text() {
+    std::cout << "Testing: String interpolation in widget text... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Set a variable, then create a text widget with interpolation
+    auto result = engine.executeCommand(R"(
+        set player_name "Alice"
+        ui.text "Hello {player_name}!"
+    )", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto textVal = m.get(engine.intern("text"));
+    assert(textVal.isString());
+    assert(std::string(textVal.asString()) == "Hello Alice!");
+
+    std::cout << "PASSED\n";
+}
+
+void test_string_interpolation_in_button() {
+    std::cout << "Testing: String interpolation in button label... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"(
+        set count 42
+        ui.button "Items: {count}"
+    )", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto labelVal = m.get(engine.intern("label"));
+    assert(labelVal.isString());
+    assert(std::string(labelVal.asString()) == "Items: 42");
+
+    std::cout << "PASSED\n";
+}
+
+void test_string_interpolation_in_window_title() {
+    std::cout << "Testing: String interpolation in window title... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"(
+        set level 5
+        set area "Dungeon"
+        ui.window "Level {level} - {area}" []
+    )", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    auto titleVal = m.get(engine.intern("title"));
+    assert(titleVal.isString());
+    assert(std::string(titleVal.asString()) == "Level 5 - Dungeon");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// State Serialization Tests
+// ============================================================================
+
+void test_map_save_state_collects_values() {
+    std::cout << "Testing: MapRenderer saveState collects :id widgets... ";
+
+    auto& engine = testEngine();
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    // Build a map tree manually with widgets that have :id
+    auto window = Value::map();
+    auto& wm = window.asMap();
+    wm.set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    wm.set(engine.intern("title"), Value::string("Test"));
+
+    auto cb = Value::map();
+    cb.asMap().set(engine.intern("type"), Value::symbol(engine.intern("checkbox")));
+    cb.asMap().set(engine.intern("id"), Value::string("music_on"));
+    cb.asMap().set(engine.intern("value"), Value::boolean(true));
+
+    auto slider = Value::map();
+    slider.asMap().set(engine.intern("type"), Value::symbol(engine.intern("slider")));
+    slider.asMap().set(engine.intern("id"), Value::string("volume"));
+    slider.asMap().set(engine.intern("value"), Value::number(0.75));
+
+    auto combo = Value::map();
+    combo.asMap().set(engine.intern("type"), Value::symbol(engine.intern("combo")));
+    combo.asMap().set(engine.intern("id"), Value::string("resolution"));
+    combo.asMap().set(engine.intern("selected"), Value::integer(2));
+
+    auto color = Value::map();
+    color.asMap().set(engine.intern("type"), Value::symbol(engine.intern("color_edit")));
+    color.asMap().set(engine.intern("id"), Value::string("player_color"));
+    auto colorArr = Value::array({Value::number(1.0), Value::number(0.5),
+                                   Value::number(0.0), Value::number(1.0)});
+    color.asMap().set(engine.intern("color"), colorArr);
+
+    auto noId = Value::map();
+    noId.asMap().set(engine.intern("type"), Value::symbol(engine.intern("slider")));
+    noId.asMap().set(engine.intern("value"), Value::number(0.3));
+    // No :id — should be skipped
+
+    auto children = Value::array({cb, slider, combo, color, noId});
+    wm.set(engine.intern("children"), children);
+
+    // Use MapRenderer to save state
+    MapRenderer renderer(engine);
+    ExecutionContext ctx(engine);
+    int id = renderer.show(window, ctx);
+
+    auto state = renderer.saveState(id);
+    assert(state.isMap());
+    auto& sm = state.asMap();
+
+    // Check music_on
+    auto musicVal = sm.get(engine.intern("music_on"));
+    assert(musicVal.isBool());
+    assert(musicVal.asBool() == true);
+
+    // Check volume
+    auto volVal = sm.get(engine.intern("volume"));
+    assert(volVal.isNumeric());
+    assert(volVal.asNumber() == 0.75);
+
+    // Check resolution
+    auto resVal = sm.get(engine.intern("resolution"));
+    assert(resVal.isNumeric());
+    assert(static_cast<int>(resVal.asNumber()) == 2);
+
+    // Check player_color
+    auto colVal = sm.get(engine.intern("player_color"));
+    assert(colVal.isArray());
+    assert(colVal.asArray().size() == 4);
+    assert(colVal.asArray()[1].asNumber() == 0.5);
+
+    // Verify no-ID widget was not saved (state map should have exactly 4 entries)
+    assert(sm.keys().size() == 4);
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_map_load_state_applies_values() {
+    std::cout << "Testing: MapRenderer loadState applies to widgets... ";
+
+    auto& engine = testEngine();
+
+    // Build a map tree with a checkbox and slider
+    auto window = Value::map();
+    auto& wm = window.asMap();
+    wm.set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    wm.set(engine.intern("title"), Value::string("Test"));
+
+    auto cb = Value::map();
+    cb.asMap().set(engine.intern("type"), Value::symbol(engine.intern("checkbox")));
+    cb.asMap().set(engine.intern("id"), Value::string("music"));
+    cb.asMap().set(engine.intern("value"), Value::boolean(false));
+
+    auto slider = Value::map();
+    slider.asMap().set(engine.intern("type"), Value::symbol(engine.intern("slider")));
+    slider.asMap().set(engine.intern("id"), Value::string("vol"));
+    slider.asMap().set(engine.intern("value"), Value::number(0.0));
+
+    auto children = Value::array({cb, slider});
+    wm.set(engine.intern("children"), children);
+
+    MapRenderer renderer(engine);
+    ExecutionContext ctx(engine);
+    int id = renderer.show(window, ctx);
+
+    // Create state map with new values
+    auto state = Value::map();
+    state.asMap().set(engine.intern("music"), Value::boolean(true));
+    state.asMap().set(engine.intern("vol"), Value::number(0.9));
+    state.asMap().set(engine.intern("nonexistent"), Value::number(42.0)); // should be ignored
+
+    renderer.loadState(id, state);
+
+    // Verify values were applied (read back from the live map tree)
+    auto* root = renderer.get(id);
+    assert(root && root->isMap());
+    auto childrenVal = root->asMap().get(engine.intern("children"));
+    assert(childrenVal.isArray());
+    auto& arr = childrenVal.asArray();
+
+    // checkbox should now be true
+    auto musicVal = arr[0].asMap().get(engine.intern("value"));
+    assert(musicVal.isBool());
+    assert(musicVal.asBool() == true);
+
+    // slider should now be 0.9
+    auto volVal = arr[1].asMap().get(engine.intern("value"));
+    assert(volVal.isNumeric());
+    assert(volVal.asNumber() == 0.9);
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_serialize_state_produces_parseable_output() {
+    std::cout << "Testing: serializeState produces parseable finescript... ";
+
+    auto& engine = testEngine();
+
+    // Build a state map
+    auto state = Value::map();
+    state.asMap().set(engine.intern("music_on"), Value::boolean(true));
+    state.asMap().set(engine.intern("volume"), Value::number(0.75));
+    state.asMap().set(engine.intern("name"), Value::string("Alice"));
+    state.asMap().set(engine.intern("resolution"), Value::integer(2));
+
+    // Serialize
+    std::string text = MapRenderer::serializeState(state, engine.interner());
+    assert(!text.empty());
+
+    // The output should contain our values
+    assert(text.find("true") != std::string::npos);
+    assert(text.find("0.75") != std::string::npos);
+    assert(text.find("\"Alice\"") != std::string::npos);
+    assert(text.find("2") != std::string::npos);
+
+    // Parse it back with the script engine
+    ExecutionContext ctx(engine);
+    auto result = engine.executeCommand(text, ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    // Verify round-trip
+    auto& rm = result.returnValue.asMap();
+    auto musicVal = rm.get(engine.intern("music_on"));
+    assert(musicVal.isBool());
+    assert(musicVal.asBool() == true);
+
+    auto volVal = rm.get(engine.intern("volume"));
+    assert(volVal.isNumeric());
+    assert(volVal.asNumber() == 0.75);
+
+    auto nameVal = rm.get(engine.intern("name"));
+    assert(nameVal.isString());
+    assert(std::string(nameVal.asString()) == "Alice");
+
+    auto resVal = rm.get(engine.intern("resolution"));
+    assert(resVal.isNumeric());
+    assert(static_cast<int>(resVal.asNumber()) == 2);
+
+    std::cout << "PASSED\n";
+}
+
+void test_serialize_state_with_arrays() {
+    std::cout << "Testing: serializeState with array values (color, float3)... ";
+
+    auto& engine = testEngine();
+
+    auto state = Value::map();
+    auto colorArr = Value::array({Value::number(1.0), Value::number(0.5),
+                                   Value::number(0.0), Value::number(0.8)});
+    state.asMap().set(engine.intern("player_color"), colorArr);
+
+    auto vecArr = Value::array({Value::number(10.0), Value::number(20.0),
+                                 Value::number(30.0)});
+    state.asMap().set(engine.intern("position"), vecArr);
+
+    std::string text = MapRenderer::serializeState(state, engine.interner());
+
+    // Parse it back
+    ExecutionContext ctx(engine);
+    auto result = engine.executeCommand(text, ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& rm = result.returnValue.asMap();
+    auto colVal = rm.get(engine.intern("player_color"));
+    assert(colVal.isArray());
+    assert(colVal.asArray().size() == 4);
+    assert(colVal.asArray()[0].asNumber() == 1.0);
+    assert(colVal.asArray()[1].asNumber() == 0.5);
+
+    auto posVal = rm.get(engine.intern("position"));
+    assert(posVal.isArray());
+    assert(posVal.asArray().size() == 3);
+    assert(posVal.asArray()[2].asNumber() == 30.0);
 
     std::cout << "PASSED\n";
 }
@@ -2055,6 +2411,22 @@ int main() {
 
         // Window Control
         test_window_control_symbols_interned();
+
+        // Style & Theming
+        test_binding_ui_push_theme();
+        test_binding_ui_pop_theme();
+        test_theme_symbols_interned();
+
+        // String interpolation in widget text
+        test_string_interpolation_in_text();
+        test_string_interpolation_in_button();
+        test_string_interpolation_in_window_title();
+
+        // State Serialization
+        test_map_save_state_collects_values();
+        test_map_load_state_applies_values();
+        test_serialize_state_produces_parseable_output();
+        test_serialize_state_with_arrays();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

@@ -10,6 +10,7 @@
 #include <finegui/gui_renderer.hpp>
 #include <finegui/drag_drop_manager.hpp>
 #include <finegui/tween_manager.hpp>
+#include <finegui/scene_texture.hpp>
 
 #include <finevk/finevk.hpp>
 
@@ -867,6 +868,87 @@ void test_retained_rendering() {
         WidgetNode::text("This window has NoNav | NoInputs flags."),
     }, ImGuiWindowFlags_NoNav | ImGuiWindowFlags_NoInputs));
     runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
+    // --- Test 34: PushTheme/PopTheme (named presets) ---
+    std::cout << "\n  34. PushTheme/PopTheme (named presets)... ";
+    guiRenderer.hideAll();
+    guiRenderer.show(WidgetNode::window("Theme Test", {
+        WidgetNode::pushTheme("danger"),
+        WidgetNode::button("Delete"),
+        WidgetNode::popTheme("danger"),
+        WidgetNode::pushTheme("success"),
+        WidgetNode::button("Save"),
+        WidgetNode::popTheme("success"),
+        WidgetNode::pushTheme("warning"),
+        WidgetNode::button("Caution"),
+        WidgetNode::popTheme("warning"),
+        WidgetNode::pushTheme("info"),
+        WidgetNode::button("Help"),
+        WidgetNode::popTheme("info"),
+        WidgetNode::pushTheme("dark"),
+        WidgetNode::text("Dark section"),
+        WidgetNode::popTheme("dark"),
+        WidgetNode::pushTheme("light"),
+        WidgetNode::text("Light section"),
+        WidgetNode::popTheme("light"),
+    }, ImGuiWindowFlags_AlwaysAutoResize));
+    runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+    std::cout << "ok";
+
+    // --- Test 35: Canvas with SceneTexture (offscreen render to texture) ---
+    std::cout << "\n  35. Canvas with SceneTexture (offscreen render)... ";
+    guiRenderer.hideAll();
+    {
+        // Create a SceneTexture for offscreen rendering
+        finegui::SceneTexture scene(gui, 64, 64, false);
+
+        // Render a frame to the offscreen surface (just a clear color)
+        scene.beginScene(0.2f, 0.4f, 0.8f, 1.0f);
+        // No actual 3D geometry - just test the pipeline works
+        scene.endScene();
+
+        // Verify the texture handle is valid
+        auto handle = scene.textureHandle();
+        assert(handle.valid());
+        assert(handle.width == 64);
+        assert(handle.height == 64);
+
+        // Display in a Canvas widget
+        guiRenderer.show(WidgetNode::window("3D Viewport", {
+            WidgetNode::text("Offscreen render result:"),
+            WidgetNode::canvas("##viewport", 64.0f, 64.0f, handle),
+        }, ImGuiWindowFlags_AlwaysAutoResize));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+
+        // Also test display via Image widget
+        guiRenderer.hideAll();
+        guiRenderer.show(WidgetNode::window("Image Viewport", {
+            WidgetNode::image(handle, 64.0f, 64.0f),
+        }, ImGuiWindowFlags_AlwaysAutoResize));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+
+        // Test resize (wait for GPU to finish using old descriptor set)
+        renderer->waitIdle();
+        scene.resize(128, 128);
+        scene.beginScene(0.8f, 0.2f, 0.4f, 1.0f);
+        scene.endScene();
+        auto handle2 = scene.textureHandle();
+        assert(handle2.valid());
+        assert(handle2.width == 128);
+        assert(handle2.height == 128);
+        // Old handle should be different from new
+        assert(handle2.id != handle.id);
+
+        guiRenderer.hideAll();
+        guiRenderer.show(WidgetNode::window("Resized Viewport", {
+            WidgetNode::canvas("##viewport2", 128.0f, 128.0f, handle2),
+        }, ImGuiWindowFlags_AlwaysAutoResize));
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, 5);
+
+        // Wait for GPU to finish before SceneTexture destructor frees descriptor set
+        renderer->waitIdle();
+    }
     std::cout << "ok";
 
     renderer->waitIdle();

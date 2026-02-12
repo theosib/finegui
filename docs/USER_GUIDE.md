@@ -770,6 +770,8 @@ Available script flag symbols: `:no_title_bar`, `:no_resize`, `:no_move`, `:no_s
 | `WidgetNode::pushStyleVar(varIdx, val)` | Push style var (single float) |
 | `WidgetNode::pushStyleVar(varIdx, x, y)` | Push style var (ImVec2) |
 | `WidgetNode::popStyleVar(count)` | Pop style var overrides |
+| `WidgetNode::pushTheme(name)` | Push a named theme preset (see Style & Theming below) |
+| `WidgetNode::popTheme(name)` | Pop a named theme preset (must match the push) |
 
 **Phase 13 - Menus & Popups:**
 
@@ -931,6 +933,206 @@ dndManager.renderCursorItem();  // draws floating icon at cursor
 
 Image widgets with valid textures automatically show image previews during drag.
 
+### Style & Theming
+
+#### Named Theme Presets (pushTheme / popTheme)
+
+Named theme presets let you apply predefined color schemes to a group of widgets without manually specifying individual `ImGuiCol` values. Each preset pushes a set of ImGui style colors that are popped when the matching `popTheme` is called.
+
+Available presets:
+
+| Preset | Colors Pushed | Effect |
+|--------|--------------|--------|
+| `"danger"` | Button, ButtonHovered, ButtonActive, Text (4 colors) | Red buttons and text |
+| `"success"` | Button, ButtonHovered, ButtonActive, Text (4 colors) | Green buttons and text |
+| `"warning"` | Button, ButtonHovered, ButtonActive, Text (4 colors) | Orange buttons and text |
+| `"info"` | Button, ButtonHovered, ButtonActive, Text (4 colors) | Blue buttons and text |
+| `"dark"` | WindowBg, FrameBg, Text (3 colors) | Dark background with light text |
+| `"light"` | WindowBg, FrameBg, Text (3 colors) | Light background with dark text |
+
+Push and pop calls must be paired with matching preset names.
+
+**Retained-mode example:**
+
+```cpp
+int id = guiRenderer.show(finegui::WidgetNode::window("Themed Buttons", {
+    finegui::WidgetNode::pushTheme("danger"),
+    finegui::WidgetNode::button("Delete", [](finegui::WidgetNode&) {
+        deleteItem();
+    }),
+    finegui::WidgetNode::popTheme("danger"),
+
+    finegui::WidgetNode::pushTheme("success"),
+    finegui::WidgetNode::button("Confirm", [](finegui::WidgetNode&) {
+        confirm();
+    }),
+    finegui::WidgetNode::popTheme("success"),
+
+    finegui::WidgetNode::pushTheme("warning"),
+    finegui::WidgetNode::text("Caution: this action is irreversible"),
+    finegui::WidgetNode::popTheme("warning"),
+}));
+```
+
+**Script-mode example:**
+
+```
+ui.show {ui.window "Themed Buttons" [
+    {ui.push_theme "danger"}
+    {ui.button "Delete" fn [] do
+        print "Deleted!"
+    end}
+    {ui.pop_theme "danger"}
+
+    {ui.push_theme "success"}
+    {ui.button "Confirm" fn [] do
+        print "Confirmed!"
+    end}
+    {ui.pop_theme "success"}
+
+    {ui.push_theme "warning"}
+    {ui.text "Caution: this action is irreversible"}
+    {ui.pop_theme "warning"}
+]}
+```
+
+#### Global Theme Switching (set_theme)
+
+`ui.set_theme` is an immediate action function (not a widget) that switches the entire ImGui color scheme. It calls ImGui's built-in theme functions and affects the entire context.
+
+Available themes:
+
+| Theme | ImGui Function Called |
+|-------|---------------------|
+| `"dark"` | `ImGui::StyleColorsDark()` |
+| `"light"` | `ImGui::StyleColorsLight()` |
+| `"classic"` | `ImGui::StyleColorsClassic()` |
+
+This is a script-only action function. To call it from C++, use ImGui's style functions directly.
+
+**Script-mode example:**
+
+```
+# Switch to dark theme at startup
+ui.set_theme "dark"
+
+ui.show {ui.window "Settings" [
+    {ui.text "Choose a theme:"}
+    {ui.button "Dark" fn [] do
+        ui.set_theme "dark"
+    end}
+    {ui.button "Light" fn [] do
+        ui.set_theme "light"
+    end}
+    {ui.button "Classic" fn [] do
+        ui.set_theme "classic"
+    end}
+]}
+```
+
+---
+
+## Textured Skin System (Planned)
+
+> **Status:** Not yet implemented. See [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md) for the full design.
+
+The textured skin system will replace ImGui's flat-colored rectangles with artist-authored textures from a sprite atlas, using 9-slice rendering. This enables game UIs to match the visual style of the rest of the game — ornate window borders, beveled buttons, themed scrollbars, etc.
+
+**Key points for projects planning ahead:**
+
+- The system is **opt-in and non-breaking**. All existing code continues to work unchanged.
+- A `SkinManager` will be passed to `GuiRenderer` and/or `MapRenderer` via `setSkinManager()`.
+- Skins are defined in finescript files (`.fgs`) mapping widget elements to atlas regions.
+- Each element supports per-state textures (normal, hovered, active, disabled) with automatic fallback.
+- Per-widget skin overrides will be available via a `skinOverride` field (C++) or `:skin` map field (script).
+- `pushSkin` / `popSkin` widgets will allow scoped skin changes within a tree.
+- Widgets without skin definitions fall back to standard ImGui rendering, so skins can be partial.
+
+**Planned C++ usage:**
+```cpp
+SkinAtlas atlas;
+atlas.loadTexture(gui, "assets/ui/medieval_atlas.png");
+auto skin = Skin::loadFromFile("assets/ui/medieval.fgs", atlas, engine);
+
+SkinManager skinMgr;
+skinMgr.registerSkin("medieval", std::move(skin));
+skinMgr.setActiveSkin("medieval");
+
+guiRenderer.setSkinManager(&skinMgr);
+```
+
+**Planned script usage:**
+```
+ui.load_skin "medieval" "assets/ui/medieval.fgs"
+ui.set_skin "medieval"
+```
+
+If you are building a project on finegui now, you can use the default ImGui style and adopt the skin system later without changing any widget code — only add skin loading and activation at startup.
+
+---
+
+## 3D in GUI
+
+### SceneTexture (Offscreen Render to Texture)
+
+SceneTexture wraps a finevk OffscreenSurface and manages texture registration with GuiSystem. It lets you render a 3D scene (or any Vulkan drawing) offscreen and display the result in Image or Canvas widgets.
+
+**Basic Usage (C++):**
+```cpp
+#include <finegui/scene_texture.hpp>
+
+// Create a 512x512 offscreen render target with depth buffer
+finegui::SceneTexture scene(gui, 512, 512);
+
+// Each frame:
+scene.beginScene(0, 0, 0, 1);   // clear to black
+auto& cmd = scene.commandBuffer();
+// ... record Vulkan draw commands ...
+scene.endScene();
+
+// Display via Image widget:
+auto node = WidgetNode::image(scene.textureHandle(), 512, 512);
+
+// Or display via Canvas widget (with click handling, border, etc.):
+auto canvas = WidgetNode::canvas("##viewport", 512, 512, scene.textureHandle());
+```
+
+**Resize:**
+```cpp
+renderer->waitIdle();           // ensure GPU is done with old texture
+scene.resize(1024, 1024);
+scene.beginScene(0, 0, 0, 1);  // render at new size
+scene.endScene();
+// textureHandle() now returns a new handle at 1024x1024
+```
+
+**Pipeline Creation:** Use `scene.renderTarget()` to get the RenderTarget for creating compatible pipelines:
+```cpp
+auto pipeline = Pipeline::create(device)
+    .renderPass(scene.renderTarget()->renderPass())
+    // ... vertex input, shaders, etc.
+    .build();
+```
+
+### Canvas with Texture
+
+Canvas widgets can now display a texture (e.g. from SceneTexture). The texture fills the canvas area and is drawn before any draw commands or the onDraw callback:
+
+```cpp
+// Retained mode:
+auto canvas = WidgetNode::canvas("##vp", 256, 256, sceneTexture.textureHandle());
+
+// Script mode - reference a registered texture by name:
+// ui.canvas "##vp" 256 256 {:texture "my_scene"}
+```
+
+In script mode, register the SceneTexture's handle in the TextureRegistry:
+```cpp
+textureRegistry.registerTexture("my_scene", scene.textureHandle());
+```
+
+**Note:** When using SceneTexture, ensure the GPU has finished using the old texture handle before calling `resize()` or destroying the SceneTexture. Call `renderer->waitIdle()` or equivalent before these operations.
+
 ---
 
 ## Script-Driven GUI
@@ -1034,6 +1236,30 @@ ui.show {ui.window "Settings" [
 ]}
 ```
 
+### String Interpolation
+
+finescript natively supports string interpolation using `{expression}` syntax inside double-quoted strings. This works in all widget text: titles, labels, text content, and anywhere else a string is accepted.
+
+```
+set player_name "Alice"
+ui.text "Hello {player_name}!"
+
+set score 100
+ui.button "Score: {score}"
+
+set level 5
+set area "Dungeon"
+ui.window "Level {level} - {area}" [...]
+```
+
+Any finescript expression works inside `{}`, including function calls:
+
+```
+ui.text "HP: {format \"%d/%d\" hp max_hp}"
+```
+
+Use `\{` and `\}` for literal braces in strings.
+
 ### Script Widget Functions
 
 Builder functions (return widget maps):
@@ -1105,6 +1331,8 @@ Builder functions (return widget maps):
 | `ui.pop_style_color` | `[count]` | Pop color overrides |
 | `ui.push_style_var` | `var_idx value` | Push style var (float or `[x y]`) |
 | `ui.pop_style_var` | `[count]` | Pop style var overrides |
+| `ui.push_theme` | `name` | Push a named theme preset ("danger", "success", "warning", "info", "dark", "light") |
+| `ui.pop_theme` | `name` | Pop a named theme preset (must match the push) |
 | `ui.context_menu` | `[children]` | Right-click context menu for the previous widget. Place immediately after the target widget in the children list. Children are typically `menu_item` and `separator` widgets. |
 | `ui.main_menu_bar` | `[children]` | Top-level application menu bar (renders at the top of the screen, outside any window). Must be shown as a top-level tree via `ui.show`, not inside a window. Children are typically `menu` widgets. |
 | `ui.item_tooltip` | `text_or_children` | Hover tooltip on previous widget (text string or array of children) |
@@ -1126,6 +1354,13 @@ Action functions (require active ScriptGui context):
 | `ui.find` | `"widget_id"` or `:widget_id` | Find widget map by `:id` string or symbol (nil if not found) |
 | `ui.open_popup` | `popup_map` | Open a popup or modal programmatically (sets `:value` to true on the popup/modal map) |
 | `ui.close_popup` | *(none)* | Close the innermost open popup (must be called during popup rendering) |
+| `ui.save_state` | *(none)* | Save all widget states (by `:id`) as a map. Returns finescript map. |
+| `ui.load_state` | `state_map` | Restore widget states from a previously saved map. |
+| `ui.set_theme` | `name` | Switch global ImGui theme ("dark", "light", "classic"). Immediate action, not a widget. |
+| `gui.bind_key` | `"chord" callback` | Bind a keyboard shortcut. Returns integer binding ID. Requires `setHotkeyManager()`. |
+| `gui.unbind_key` | `id` | Unbind a keyboard shortcut by binding ID. |
+| `gui.open_popup` | `"id"` | Open a popup by string ID (calls `ImGui::OpenPopup`). |
+| `gui.close_popup` | *(none)* | Close the current popup (calls `ImGui::CloseCurrentPopup`). |
 
 ### Dynamic Updates from Scripts
 
@@ -1428,6 +1663,299 @@ tweens.animate(guiId, {0}, TweenProperty::FloatValue, 1.0f, 0.5f);
 // Target children[2].children[0] (deeply nested)
 tweens.animate(guiId, {2, 0}, TweenProperty::ColorR, 1.0f, 0.3f);
 ```
+
+---
+
+## State Serialization
+
+finegui supports saving and loading widget state, enabling features like persistent user preferences, session restore, and undo/redo. Only widgets with explicit IDs (the `id` field on `WidgetNode`, or `:id` on script maps) are included in serialization.
+
+### State Types
+
+Widget state is stored as a `WidgetStateMap`, which is an `std::unordered_map<std::string, WidgetStateValue>`. Each key is the widget's `id` string, and the value is a variant:
+
+```cpp
+using WidgetStateValue = std::variant<bool, int, double, std::string, std::vector<float>>;
+```
+
+The state field saved depends on the widget type:
+
+| Widget Type | State Field | Variant Type |
+|-------------|-------------|--------------|
+| `checkbox` | `boolValue` | `bool` |
+| `slider` | `floatValue` | `double` |
+| `sliderInt` | `intValue` | `int` |
+| `combo` | `selectedIndex` | `int` |
+| `inputText` | `stringValue` | `std::string` |
+| `inputInt` | `intValue` | `int` |
+| `inputFloat` | `floatValue` | `double` |
+| `colorEdit` | RGBA color | `std::vector<float>` (4 elements) |
+| `colorPicker` | RGBA color | `std::vector<float>` (4 elements) |
+| `dragFloat` | `floatValue` | `double` |
+| `dragInt` | `intValue` | `int` |
+| `radioButton` | `intValue` | `int` |
+| `selectable` | `boolValue` | `bool` |
+
+### Retained Mode (C++ API)
+
+`GuiRenderer` provides save/load methods that operate on individual widget trees or across all trees:
+
+```cpp
+// Save state for a single tree (by gui ID from show())
+WidgetStateMap state = guiRenderer.saveState(guiId);
+
+// Save state across all trees
+WidgetStateMap state = guiRenderer.saveState();
+
+// Load state into a single tree
+guiRenderer.loadState(guiId, state);
+
+// Load state across all trees
+guiRenderer.loadState(state);
+```
+
+Only widgets that have a non-empty `id` field are included. Widgets without an explicit ID are skipped during both save and load.
+
+**Example: Persisting settings across sessions**
+
+```cpp
+// Build a settings window with explicit IDs
+int settingsId = guiRenderer.show(WidgetNode::window("Settings", {
+    WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f),
+    WidgetNode::checkbox("Fullscreen", false),
+    WidgetNode::combo("Quality", {"Low", "Medium", "High"}, 1),
+}));
+
+// Give each widget an ID for serialization
+auto* tree = guiRenderer.get(settingsId);
+tree->children[0].id = "volume";
+tree->children[1].id = "fullscreen";
+tree->children[2].id = "quality";
+
+// Save state (e.g., when closing the application)
+WidgetStateMap state = guiRenderer.saveState(settingsId);
+// state contains: {"volume": 0.5, "fullscreen": false, "quality": 1}
+
+// Load state (e.g., when reopening)
+guiRenderer.loadState(settingsId, state);
+```
+
+### Script Mode (finescript API)
+
+Scripts use `ui.save_state` and `ui.load_state` to save and restore widget state. The returned value is a finescript map keyed by widget `:id`.
+
+```
+# Save current widget state
+set state (ui.save_state)
+
+# ... later (e.g., after rebuilding the UI) ...
+
+# Restore state
+ui.load_state state
+```
+
+Widgets in scripts must have an `:id` field to be included:
+
+```
+ui.show {ui.window "Settings" [
+    {ui.slider "Volume" 0.0 1.0 0.5 :id "volume"}
+    {ui.checkbox "Fullscreen" false :id "fullscreen"}
+    {ui.combo "Quality" ["Low" "Medium" "High"] 1 :id "quality"}
+]}
+
+# Save
+set saved (ui.save_state)
+
+# Restore
+ui.load_state saved
+```
+
+### Serializing State to Disk
+
+To persist state across application restarts, use `MapRenderer::serializeState()` to convert a `WidgetStateMap` into parseable finescript source text. The serialized format uses `{=key value}` map literal syntax that can be parsed back by the script engine.
+
+**C++ round-trip example:**
+
+```cpp
+// 1. Save state
+auto state = renderer.saveState(guiId);
+
+// 2. Serialize to finescript source text
+std::string text = MapRenderer::serializeState(state, engine.interner());
+
+// 3. Write to file
+std::ofstream out("settings.dat");
+out << text;
+out.close();
+
+// 4. Later: read file, parse, and restore
+std::ifstream in("settings.dat");
+std::string source((std::istreambuf_iterator<char>(in)),
+                     std::istreambuf_iterator<char>());
+
+// Parse the serialized map back through the script engine
+auto result = engine.executeCommand(source);
+
+// Convert the parsed map back to WidgetStateMap and load
+// (application-specific conversion from finescript::Value map)
+```
+
+**Script round-trip example:**
+
+```
+# Save and serialize
+set state (ui.save_state)
+set text {ui.serialize_state state}
+# Write `text` to a file via your file I/O mechanism
+
+# Later: read file contents back into `text`
+# Parse and restore
+set restored_state {eval text}
+ui.load_state restored_state
+```
+
+---
+
+## Keyboard Shortcuts (HotkeyManager)
+
+`HotkeyManager` is a standalone class for binding keyboard shortcuts to callbacks. It wraps ImGui's `Shortcut()` API with focus routing, so hotkeys will not fire when a text input field is active. Call `update()` once per frame between `beginFrame()` and `endFrame()`.
+
+### C++ API (Retained Mode)
+
+```cpp
+#include <finegui/hotkey_manager.hpp>
+
+finegui::HotkeyManager hotkeys;
+
+// Bind shortcuts — each returns a binding ID
+int saveId = hotkeys.bind(ImGuiMod_Ctrl | ImGuiKey_S, []() { save(); });
+hotkeys.bind(ImGuiKey_F5, []() { refresh(); });
+hotkeys.bind(ImGuiMod_Ctrl | ImGuiMod_Shift | ImGuiKey_Z, []() { redo(); });
+
+// Each frame:
+gui.beginFrame();
+hotkeys.update();           // check all bindings and fire callbacks
+guiRenderer.renderAll();
+gui.endFrame();
+
+// Manage bindings
+hotkeys.unbind(saveId);                         // remove by ID
+hotkeys.unbindChord(ImGuiMod_Ctrl | ImGuiKey_S); // remove all bindings for a chord
+hotkeys.unbindAll();                            // remove everything
+
+// Enable/disable individual bindings
+hotkeys.setEnabled(saveId, false);
+hotkeys.setEnabled(saveId, true);
+
+// Enable/disable all bindings globally
+hotkeys.setGlobalEnabled(false);   // suppress all hotkeys (e.g., during a modal)
+hotkeys.setGlobalEnabled(true);
+
+// Query
+hotkeys.isEnabled(saveId);         // check a specific binding
+hotkeys.isGlobalEnabled();
+hotkeys.bindingCount();            // number of active bindings
+```
+
+### Script API
+
+Scripts use `gui.bind_key` and `gui.unbind_key` to manage hotkeys:
+
+```
+# Bind a hotkey — returns a binding ID
+set save_id (gui.bind_key "ctrl+s" fn [] do
+    set state (ui.save_state)
+end)
+
+gui.bind_key "f5" fn [] do
+    print "Refreshing..."
+end
+
+gui.bind_key "ctrl+shift+z" fn [] do
+    print "Redo"
+end
+
+# Unbind by ID
+gui.unbind_key save_id
+```
+
+### String Chord Format
+
+`parseChord()` accepts a case-insensitive string of modifier and key names separated by `+`. This format is used by the script API and is also available from C++ via `HotkeyManager::parseChord()`.
+
+**Modifiers:** `ctrl`, `shift`, `alt`, `super` / `cmd`
+
+**Letters:** `a` -- `z`
+
+**Digits:** `0` -- `9`
+
+**Function keys:** `f1` -- `f24`
+
+**Named keys:**
+
+| String | Key |
+|--------|-----|
+| `escape` / `esc` | Escape |
+| `enter` / `return` | Enter |
+| `space` | Space |
+| `tab` | Tab |
+| `backspace` | Backspace |
+| `delete` / `del` | Delete |
+| `insert` / `ins` | Insert |
+| `up`, `down`, `left`, `right` | Arrow keys |
+| `home`, `end` | Home / End |
+| `pageup`, `pagedown` | Page Up / Page Down |
+| `minus` | Minus / Hyphen |
+| `equals` / `equal` | Equals |
+
+Combine modifiers and a key with `+`:
+
+```
+"ctrl+s"           → Ctrl+S
+"ctrl+shift+a"     → Ctrl+Shift+A
+"f5"               → F5
+"alt+enter"        → Alt+Enter
+```
+
+### Static Utilities
+
+Two static helper methods are available for working with chord values directly:
+
+```cpp
+// Parse a string into an ImGuiKeyChord (returns 0 on failure)
+ImGuiKeyChord chord = HotkeyManager::parseChord("ctrl+s");
+
+// Format a chord as a human-readable string
+std::string label = HotkeyManager::formatChord(ImGuiMod_Ctrl | ImGuiKey_S);
+// label == "Ctrl+S"
+```
+
+These are useful for displaying shortcut labels in menu items or tooltips.
+
+### ScriptGui Integration
+
+To enable `gui.bind_key` / `gui.unbind_key` in scripts, connect the `HotkeyManager` to the `ScriptGui` instance before running scripts that use hotkey bindings:
+
+```cpp
+finegui::HotkeyManager hotkeys;
+finegui::ScriptGui scriptGui(engine, guiRenderer);
+scriptGui.setHotkeyManager(&hotkeys);
+
+scriptGui.loadAndRun(R"SCRIPT(
+    gui.bind_key "ctrl+s" fn [] do
+        print "Save!"
+    end
+)SCRIPT");
+
+// Each frame:
+gui.beginFrame();
+hotkeys.update();
+scriptGui.processPendingMessages();
+guiRenderer.renderAll();
+gui.endFrame();
+```
+
+The `HotkeyManager` must outlive the `ScriptGui` that references it.
 
 ---
 

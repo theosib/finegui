@@ -1245,6 +1245,46 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // =========================================================================
+    // Style & Theming - Named presets
+    // =========================================================================
+
+    // ui.push_theme "name"  ->  pushes a named style preset
+    uiMap.set(engine.intern("push_theme"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "push_theme");
+            if (args.size() > 0 && args[0].isString()) {
+                w.asMap().set(engine.intern("label"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.pop_theme "name"  ->  pops a named style preset
+    uiMap.set(engine.intern("pop_theme"), makeFn(
+        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(engine, "pop_theme");
+            if (args.size() > 0 && args[0].isString()) {
+                w.asMap().set(engine.intern("label"), args[0]);
+            }
+            return w;
+        }));
+
+    // ui.set_theme "dark"/"light"/"classic"  ->  immediate action, switches global theme
+    uiMap.set(engine.intern("set_theme"), makeFn(
+        [](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            if (args.size() > 0 && args[0].isString()) {
+                auto name = std::string(args[0].asString());
+                if (name == "dark") {
+                    ImGui::StyleColorsDark();
+                } else if (name == "light") {
+                    ImGui::StyleColorsLight();
+                } else if (name == "classic") {
+                    ImGui::StyleColorsClassic();
+                }
+            }
+            return Value::nil();
+        }));
+
+    // =========================================================================
     // Phase 5 - Tables
     // =========================================================================
 
@@ -1326,6 +1366,25 @@ void registerGuiBindings(ScriptEngine& engine) {
             return gui->navigateMap(guiId, args[1]);
         }));
 
+    // ui.save_state  ->  returns a map of {widget_id => value} for all widgets with :id
+    uiMap.set(engine.intern("save_state"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>&) -> Value {
+            auto* gui = static_cast<ScriptGui*>(ctx.userData());
+            if (!gui) return Value::map();
+            return gui->scriptSaveState();
+        }));
+
+    // ui.load_state map  ->  restores widget state from a previously saved map
+    uiMap.set(engine.intern("load_state"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* gui = static_cast<ScriptGui*>(ctx.userData());
+            if (!gui || args.empty() || !args[0].isMap()) {
+                return Value::nil();
+            }
+            gui->scriptLoadState(args[0]);
+            return Value::nil();
+        }));
+
     // ui.find "widget_id" or ui.find :widget_id  ->  find a widget map by :id
     uiMap.set(engine.intern("find"), makeFn(
         [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
@@ -1367,6 +1426,28 @@ void registerGuiBindings(ScriptEngine& engine) {
             if (sg && !args.empty() && args[0].isString()) {
                 sg->scriptSetFocus(std::string(args[0].asString()));
             }
+            return Value::nil();
+        }));
+
+    // gui.bind_key "chord" callback  ->  bind a hotkey, returns binding ID
+    guiMap.set(engine.intern("bind_key"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* sg = static_cast<ScriptGui*>(ctx.userData());
+            if (!sg || args.size() < 2 || !args[0].isString() || !args[1].isCallable()) {
+                return Value::integer(-1);
+            }
+            int id = sg->scriptBindKey(std::string(args[0].asString()), args[1]);
+            return Value::integer(id);
+        }));
+
+    // gui.unbind_key id  ->  unbind a hotkey by ID
+    guiMap.set(engine.intern("unbind_key"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* sg = static_cast<ScriptGui*>(ctx.userData());
+            if (!sg || args.empty() || !args[0].isInt()) {
+                return Value::nil();
+            }
+            sg->scriptUnbindKey(static_cast<int>(args[0].asInt()));
             return Value::nil();
         }));
 

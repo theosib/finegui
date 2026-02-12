@@ -1,5 +1,6 @@
 #include <finegui/script_gui.hpp>
 #include <finegui/map_renderer.hpp>
+#include <finegui/hotkey_manager.hpp>
 #include <finescript/map_data.h>
 #include <mutex>
 #include <unordered_map>
@@ -26,6 +27,8 @@ struct ScriptGui::Impl {
     };
     std::mutex messageMutex;
     std::vector<PendingMessage> pendingMessages;
+
+    HotkeyManager* hotkeyManager = nullptr;
 
     Impl(finescript::ScriptEngine& e, MapRenderer& r)
         : engine(e), renderer(r) {
@@ -222,6 +225,48 @@ finescript::Value ScriptGui::scriptFindById(const std::string& widgetId) {
 
 finescript::Value ScriptGui::scriptFindById(uint32_t symbolId) {
     return impl_->renderer.findById(symbolId);
+}
+
+finescript::Value ScriptGui::scriptSaveState() {
+    if (impl_->guiId < 0) return finescript::Value::map();
+    return impl_->renderer.saveState(impl_->guiId);
+}
+
+void ScriptGui::scriptLoadState(const finescript::Value& stateMap) {
+    if (impl_->guiId >= 0) {
+        impl_->renderer.loadState(impl_->guiId, stateMap);
+    }
+}
+
+// -- Hotkey support -----------------------------------------------------------
+
+void ScriptGui::setHotkeyManager(HotkeyManager* mgr) {
+    impl_->hotkeyManager = mgr;
+}
+
+int ScriptGui::scriptBindKey(const std::string& chord, finescript::Value callback) {
+    if (!impl_->hotkeyManager) return -1;
+
+    auto chordVal = HotkeyManager::parseChord(chord);
+    if (chordVal == 0) return -1;
+
+    // Capture engine, ctx, and the closure by value so the callback
+    // can be invoked safely from HotkeyManager::update()
+    auto& engine = impl_->engine;
+    auto* ctx = impl_->ctx.get();
+    auto closure = std::move(callback);
+
+    return impl_->hotkeyManager->bind(chordVal, [&engine, ctx, closure]() {
+        if (ctx) {
+            engine.callFunction(closure, {}, *ctx);
+        }
+    });
+}
+
+void ScriptGui::scriptUnbindKey(int id) {
+    if (impl_->hotkeyManager) {
+        impl_->hotkeyManager->unbind(id);
+    }
 }
 
 } // namespace finegui

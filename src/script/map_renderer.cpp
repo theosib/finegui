@@ -1,5 +1,6 @@
 #include <finegui/map_renderer.hpp>
 #include <finescript/map_data.h>
+#include <finescript/interner.h>
 #include <imgui.h>
 #include <cstring>
 #include <cfloat>
@@ -265,6 +266,9 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         // Phase 15
         else if (sym == syms_.sym_plot_lines)        renderPlotLines(m);
         else if (sym == syms_.sym_plot_histogram)    renderPlotHistogram(m);
+        // Style & Theming
+        else if (sym == syms_.sym_push_theme)        renderPushTheme(m);
+        else if (sym == syms_.sym_pop_theme)         renderPopTheme(m);
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
@@ -1235,6 +1239,17 @@ void MapRenderer::renderCanvas(MapData& m, ExecutionContext& ctx) {
         drawList->AddRect(canvasPos, {canvasPos.x + w, canvasPos.y + h}, borderCol);
     }
 
+    // Draw texture if set (e.g. from SceneTexture offscreen render)
+    auto texName = getStringField(m, syms_.texture, "");
+    if (!texName.empty() && textureRegistry_) {
+        auto texHandle = textureRegistry_->get(texName);
+        if (texHandle.valid()) {
+            drawList->AddImage(static_cast<ImTextureID>(texHandle),
+                               canvasPos,
+                               {canvasPos.x + w, canvasPos.y + h});
+        }
+    }
+
     // Render draw commands from :commands array
     auto cmdsVal = m.get(syms_.commands);
     if (cmdsVal.isArray()) {
@@ -1663,6 +1678,74 @@ void MapRenderer::renderPopStyleVar(MapData& m) {
     ImGui::PopStyleVar(count);
 }
 
+// -- Style & Theming: Named presets -------------------------------------------
+
+// Returns the number of style colors pushed for a given theme preset name.
+static int pushThemePresetMap(const std::string& name) {
+    if (name == "danger") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.70f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.85f, 0.20f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.55f, 0.10f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(1.00f, 0.90f, 0.90f, 1.0f));
+        return 4;
+    }
+    if (name == "success") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.60f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.20f, 0.75f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.10f, 0.45f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 1.00f, 0.90f, 1.0f));
+        return 4;
+    }
+    if (name == "warning") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.80f, 0.55f, 0.10f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.90f, 0.65f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.65f, 0.45f, 0.05f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(1.00f, 0.95f, 0.85f, 1.0f));
+        return 4;
+    }
+    if (name == "info") {
+        ImGui::PushStyleColor(ImGuiCol_Button,        ImVec4(0.15f, 0.40f, 0.75f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered,  ImVec4(0.25f, 0.50f, 0.85f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive,   ImVec4(0.10f, 0.30f, 0.60f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 0.95f, 1.00f, 1.0f));
+        return 4;
+    }
+    if (name == "dark") {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,      ImVec4(0.10f, 0.10f, 0.12f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(0.16f, 0.16f, 0.20f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.90f, 0.90f, 0.90f, 1.0f));
+        return 3;
+    }
+    if (name == "light") {
+        ImGui::PushStyleColor(ImGuiCol_WindowBg,      ImVec4(0.95f, 0.95f, 0.96f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_FrameBg,        ImVec4(1.00f, 1.00f, 1.00f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_Text,           ImVec4(0.10f, 0.10f, 0.10f, 1.0f));
+        return 3;
+    }
+    return 0;
+}
+
+static int themePresetColorCountMap(const std::string& name) {
+    if (name == "danger" || name == "success" || name == "warning" || name == "info")
+        return 4;
+    if (name == "dark" || name == "light")
+        return 3;
+    return 0;
+}
+
+void MapRenderer::renderPushTheme(MapData& m) {
+    auto name = getStringField(m, syms_.label, "");
+    pushThemePresetMap(name);
+}
+
+void MapRenderer::renderPopTheme(MapData& m) {
+    auto name = getStringField(m, syms_.label, "");
+    int count = themePresetColorCountMap(name);
+    if (count > 0) {
+        ImGui::PopStyleColor(count);
+    }
+}
+
 int MapRenderer::parseWindowFlags(MapData& m) {
     int result = 0;
     auto flagsVal = m.get(syms_.window_flags);
@@ -1816,6 +1899,236 @@ void MapRenderer::handleDragDrop(MapData& m, ExecutionContext& ctx) {
             }
         }
     }
+}
+
+// -- State serialization ------------------------------------------------------
+
+void MapRenderer::collectMapState(Value& node, Value& out) {
+    if (!node.isMap()) return;
+    auto& m = node.asMap();
+
+    // Check for :id field
+    auto idVal = m.get(syms_.id);
+    std::string widgetId;
+    if (idVal.isString() && !idVal.asString().empty()) {
+        widgetId = std::string(idVal.asString());
+    } else if (idVal.isSymbol()) {
+        widgetId = std::string(engine_.lookupSymbol(idVal.asSymbol()));
+    }
+
+    if (!widgetId.empty()) {
+        auto typeVal = m.get(syms_.type);
+        if (typeVal.isSymbol()) {
+            uint32_t sym = typeVal.asSymbol();
+
+            // Types that store state in :value (bool)
+            if (sym == syms_.sym_checkbox || sym == syms_.sym_selectable) {
+                auto v = m.get(syms_.value);
+                if (v.isBool()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+            // Types that store state in :value (numeric)
+            else if (sym == syms_.sym_slider || sym == syms_.sym_slider_int ||
+                     sym == syms_.sym_input_int || sym == syms_.sym_input_float ||
+                     sym == syms_.sym_drag_float || sym == syms_.sym_drag_int ||
+                     sym == syms_.sym_slider_angle || sym == syms_.sym_radio_button ||
+                     sym == syms_.sym_progress_bar) {
+                auto v = m.get(syms_.value);
+                if (v.isNumeric()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+            // Types that store state in :value (string)
+            else if (sym == syms_.sym_input_text || sym == syms_.sym_input_multiline ||
+                     sym == syms_.sym_input_with_hint) {
+                auto v = m.get(syms_.value);
+                if (v.isString()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+            // Types that store state in :value (array, e.g. drag_float3)
+            else if (sym == syms_.sym_drag_float3) {
+                auto v = m.get(syms_.value);
+                if (v.isArray()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+            // Types that store state in :selected (combo, listbox)
+            else if (sym == syms_.sym_combo || sym == syms_.sym_listbox) {
+                auto v = m.get(syms_.selected);
+                if (v.isNumeric()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+            // Types that store state in :color (color_edit, color_picker)
+            else if (sym == syms_.sym_color_edit || sym == syms_.sym_color_picker) {
+                auto v = m.get(syms_.color);
+                if (v.isArray()) {
+                    out.asMap().set(engine_.intern(widgetId), v);
+                }
+            }
+        }
+    }
+
+    // Recurse into children
+    auto childrenVal = m.get(syms_.children);
+    if (childrenVal.isArray()) {
+        for (auto& child : childrenVal.asArrayMut()) {
+            collectMapState(child, out);
+        }
+    }
+}
+
+void MapRenderer::applyMapState(Value& node, const MapData& stateMap) {
+    if (!node.isMap()) return;
+    auto& m = node.asMap();
+
+    // Check for :id field
+    auto idVal = m.get(syms_.id);
+    uint32_t keyId = 0;
+    if (idVal.isString() && !idVal.asString().empty()) {
+        keyId = engine_.intern(std::string(idVal.asString()));
+    } else if (idVal.isSymbol()) {
+        keyId = idVal.asSymbol();
+    }
+
+    if (keyId != 0 && stateMap.has(keyId)) {
+        auto stateVal = stateMap.get(keyId);
+        auto typeVal = m.get(syms_.type);
+        if (typeVal.isSymbol()) {
+            uint32_t sym = typeVal.asSymbol();
+
+            // :value widgets
+            if (sym == syms_.sym_checkbox || sym == syms_.sym_selectable ||
+                sym == syms_.sym_slider || sym == syms_.sym_slider_int ||
+                sym == syms_.sym_input_int || sym == syms_.sym_input_float ||
+                sym == syms_.sym_input_text || sym == syms_.sym_input_multiline ||
+                sym == syms_.sym_input_with_hint || sym == syms_.sym_drag_float ||
+                sym == syms_.sym_drag_int || sym == syms_.sym_drag_float3 ||
+                sym == syms_.sym_slider_angle || sym == syms_.sym_radio_button ||
+                sym == syms_.sym_progress_bar) {
+                m.set(syms_.value, stateVal);
+            }
+            // :selected widgets
+            else if (sym == syms_.sym_combo || sym == syms_.sym_listbox) {
+                m.set(syms_.selected, stateVal);
+            }
+            // :color widgets
+            else if (sym == syms_.sym_color_edit || sym == syms_.sym_color_picker) {
+                m.set(syms_.color, stateVal);
+            }
+        }
+    }
+
+    // Recurse into children
+    auto childrenVal = m.get(syms_.children);
+    if (childrenVal.isArray()) {
+        for (auto& child : childrenVal.asArrayMut()) {
+            applyMapState(child, stateMap);
+        }
+    }
+}
+
+Value MapRenderer::saveState(int id) {
+    auto result = Value::map();
+    auto* root = get(id);
+    if (root) {
+        collectMapState(*root, result);
+    }
+    return result;
+}
+
+Value MapRenderer::saveState() {
+    auto result = Value::map();
+    for (auto& [id, entry] : trees_) {
+        collectMapState(entry.rootMap, result);
+    }
+    return result;
+}
+
+void MapRenderer::loadState(int id, const Value& stateMap) {
+    if (!stateMap.isMap()) return;
+    auto* root = get(id);
+    if (root) {
+        applyMapState(*root, stateMap.asMap());
+    }
+}
+
+void MapRenderer::loadState(const Value& stateMap) {
+    if (!stateMap.isMap()) return;
+    for (auto& [id, entry] : trees_) {
+        applyMapState(entry.rootMap, stateMap.asMap());
+    }
+}
+
+// -- State serialization to string --------------------------------------------
+
+static void escapeString(const std::string& s, std::string& out) {
+    out += '"';
+    for (char c : s) {
+        switch (c) {
+            case '"':  out += "\\\""; break;
+            case '\\': out += "\\\\"; break;
+            case '\n': out += "\\n";  break;
+            case '\r': out += "\\r";  break;
+            case '\t': out += "\\t";  break;
+            default:   out += c;      break;
+        }
+    }
+    out += '"';
+}
+
+static void serializeValue(const Value& val, finescript::Interner& interner,
+                           std::string& out, int indent) {
+    if (val.isBool()) {
+        out += val.asBool() ? "true" : "false";
+    } else if (val.isInt()) {
+        out += std::to_string(val.asInt());
+    } else if (val.isFloat()) {
+        // Use enough precision to round-trip
+        char buf[32];
+        std::snprintf(buf, sizeof(buf), "%.6g", val.asFloat());
+        out += buf;
+    } else if (val.isString()) {
+        escapeString(std::string(val.asString()), out);
+    } else if (val.isSymbol()) {
+        out += ':';
+        out += interner.lookup(val.asSymbol());
+    } else if (val.isArray()) {
+        out += '[';
+        const auto& arr = val.asArray();
+        for (size_t i = 0; i < arr.size(); i++) {
+            if (i > 0) out += ' ';
+            serializeValue(arr[i], interner, out, indent);
+        }
+        out += ']';
+    } else if (val.isMap()) {
+        const auto& m = val.asMap();
+        auto keys = m.keys();
+        out += "{\n";
+        for (size_t i = 0; i < keys.size(); i++) {
+            for (int j = 0; j < indent + 1; j++) out += "  ";
+            out += '=';
+            out += interner.lookup(keys[i]);
+            out += ' ';
+            serializeValue(m.get(keys[i]), interner, out, indent + 1);
+            out += '\n';
+        }
+        for (int j = 0; j < indent; j++) out += "  ";
+        out += '}';
+    } else {
+        out += "nil";
+    }
+}
+
+std::string MapRenderer::serializeState(const Value& stateMap,
+                                        finescript::Interner& interner) {
+    if (!stateMap.isMap()) return "{}";
+    std::string result;
+    serializeValue(stateMap, interner, result, 0);
+    result += '\n';
+    return result;
 }
 
 } // namespace finegui

@@ -366,6 +366,18 @@ WidgetNode WidgetNode::canvas(std::string id, float width, float height,
     return n;
 }
 
+WidgetNode WidgetNode::canvas(std::string id, float width, float height,
+                               TextureHandle texture, WidgetCallback onClick) {
+    WidgetNode n;
+    n.type = Type::Canvas;
+    n.id = std::move(id);
+    n.width = width;
+    n.height = height;
+    n.texture = texture;
+    n.onClick = std::move(onClick);
+    return n;
+}
+
 WidgetNode WidgetNode::tooltip(std::string text) {
     WidgetNode n;
     n.type = Type::Tooltip;
@@ -634,6 +646,22 @@ WidgetNode WidgetNode::imageButton(std::string id, TextureHandle texture,
     return n;
 }
 
+// Style & Theming - Named presets
+
+WidgetNode WidgetNode::pushTheme(std::string name) {
+    WidgetNode n;
+    n.type = Type::PushTheme;
+    n.label = std::move(name);
+    return n;
+}
+
+WidgetNode WidgetNode::popTheme(std::string name) {
+    WidgetNode n;
+    n.type = Type::PopTheme;
+    n.label = std::move(name);
+    return n;
+}
+
 // Phase 15 builders
 
 WidgetNode WidgetNode::plotLines(std::string label, std::vector<float> values,
@@ -733,6 +761,8 @@ const char* widgetTypeName(WidgetNode::Type type) {
         case WidgetNode::Type::ImageButton:      return "ImageButton";
         case WidgetNode::Type::PlotLines:        return "PlotLines";
         case WidgetNode::Type::PlotHistogram:    return "PlotHistogram";
+        case WidgetNode::Type::PushTheme:        return "PushTheme";
+        case WidgetNode::Type::PopTheme:         return "PopTheme";
         default:                                  return "Unknown";
     }
 }

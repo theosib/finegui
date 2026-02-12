@@ -1,6 +1,7 @@
 #pragma once
 
 #include "widget_node.hpp"
+#include "widget_state.hpp"
 #include "drag_drop_manager.hpp"
 #include <map>
 #include <string>
@@ -58,8 +59,24 @@ public:
     /// Returns nullptr if not found. Returns first match.
     WidgetNode* findById(const std::string& widgetId);
 
+    /// Save the state of all widgets with explicit IDs in a specific tree.
+    /// Returns a map of {widget_id -> state_value}.
+    WidgetStateMap saveState(int guiId);
+
+    /// Save the state of all widgets with explicit IDs across all trees.
+    WidgetStateMap saveState();
+
+    /// Restore widget state from a previously saved map.
+    /// Widgets are matched by ID; missing IDs are silently skipped.
+    void loadState(int guiId, const WidgetStateMap& state);
+
+    /// Restore widget state across all trees.
+    void loadState(const WidgetStateMap& state);
+
 private:
     static WidgetNode* findByIdRecursive(WidgetNode& node, const std::string& widgetId);
+    static void collectState(WidgetNode& node, WidgetStateMap& out);
+    static void applyState(WidgetNode& node, const WidgetStateMap& state);
 
     DragDropManager* dndManager_ = nullptr;
     GuiSystem& gui_;
@@ -161,6 +178,10 @@ private:
     // Phase 15 - Display (plots)
     void renderPlotLines(WidgetNode& node);
     void renderPlotHistogram(WidgetNode& node);
+
+    // Style & Theming - Named presets
+    void renderPushTheme(WidgetNode& node);
+    void renderPopTheme(WidgetNode& node);
 
     // Drag-and-drop
     void handleDragDrop(WidgetNode& node);

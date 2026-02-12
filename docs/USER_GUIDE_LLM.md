@@ -32,6 +32,7 @@ Backend handles ImGui 1.92+ texture lifecycle (`ImGuiBackendFlags_RendererHasTex
 #include <finegui/texture_handle.hpp>// TextureHandle
 #include <finegui/gui_draw_data.hpp> // GuiDrawData, DrawCommand
 #include <finegui/gui_state.hpp>     // TypedStateUpdate<T>
+#include <finegui/scene_texture.hpp> // SceneTexture (offscreen 3D-in-GUI)
 
 // Retained mode
 #include <finegui/widget_node.hpp>   // WidgetNode struct + builders
@@ -384,6 +385,114 @@ previewHandle = gui.registerTexture(iconSurface->colorTexture());
 ImGui::Image(previewHandle, ImVec2(128, 128));
 ```
 
+### SceneTexture (Offscreen 3D-in-GUI Helper)
+
+`#include <finegui/scene_texture.hpp>`
+
+Wraps a finevk `OffscreenSurface` with automatic GuiSystem texture registration. Renders a 3D scene (or any Vulkan drawing) offscreen and produces a `TextureHandle` for display in Image or Canvas widgets.
+
+```cpp
+class SceneTexture {
+    SceneTexture(GuiSystem& gui, uint32_t width, uint32_t height, bool enableDepth = true);
+    ~SceneTexture();
+
+    // Render cycle
+    void beginScene(float r=0, float g=0, float b=0, float a=1); // Clear + begin render pass
+    finevk::CommandBuffer& commandBuffer();                       // Record draw commands (valid between begin/end)
+    void endScene();                                              // Submit + wait; textureHandle() valid after this
+
+    // Display
+    TextureHandle textureHandle() const;      // For Image/Canvas widgets (invalid before first endScene)
+    uint32_t width() const;
+    uint32_t height() const;
+
+    // Access (for pipeline creation / advanced usage)
+    finevk::RenderTarget* renderTarget();     // Compatible render pass for pipeline creation
+    finevk::OffscreenSurface* surface();      // Underlying surface
+
+    // Resize
+    void resize(uint32_t width, uint32_t height); // Unregisters old, re-registers new; call endScene() after to get valid handle
+};
+```
+
+Usage:
+```cpp
+// Create
+SceneTexture scene(gui, 512, 512);
+
+// Build pipeline against scene's render target
+auto pipeline = PipelineBuilder(device)
+    .renderTarget(scene.renderTarget())
+    /* ... shaders, vertex layout, etc. ... */
+    .build();
+
+// Each frame: render 3D content
+scene.beginScene(0, 0, 0, 1);          // Clear to black
+auto& cmd = scene.commandBuffer();
+pipeline->bind(cmd);
+mesh.draw(cmd);
+scene.endScene();
+
+// Display in Image widget
+ImGui::Image(scene.textureHandle(), ImVec2(512, 512));
+
+// Or in retained mode
+auto node = WidgetNode::image(scene.textureHandle(), 512, 512);
+
+// Or in a Canvas (texture drawn before draw commands)
+auto viewport = WidgetNode::canvas("viewport", 512, 512, scene.textureHandle());
+```
+
+Resize:
+```cpp
+device->waitIdle();             // GPU must be idle before resize
+scene.resize(newW, newH);
+// Must call beginScene/endScene at least once before using textureHandle()
+scene.beginScene(0, 0, 0, 1);
+/* re-render */
+scene.endScene();
+// scene.textureHandle() now valid at new size
+```
+
+### Canvas with Texture
+
+Canvas widgets now support an optional texture that is drawn via `ImDrawList::AddImage()` before any draw commands and the `onDraw` callback. This is the primary way to display a SceneTexture inside a Canvas.
+
+**Retained mode** -- overloaded builder:
+```cpp
+// Canvas with texture (no onDraw callback; onClick optional)
+static WidgetNode canvas(std::string id, float width, float height,
+                         TextureHandle texture, WidgetCallback onClick = {});
+
+// Original canvas (no texture; onDraw + onClick)
+static WidgetNode canvas(std::string id, float width, float height,
+                         WidgetCallback onDraw = {}, WidgetCallback onClick = {});
+```
+
+The texture overload sets `node.texture` on the Canvas. The renderer draws the texture first, then executes `onDraw` (if set), so custom draw commands layer on top of the texture.
+
+**Script mode** -- Canvas map with `:texture` field:
+```
+ui.canvas "viewport" 512 512 [
+    {ui.draw_rect [10 10] [100 100] [1 0 0 1] true}
+]
+```
+Add `:texture "name"` to the canvas map to draw a registered texture as the background:
+```
+set canvas_map {ui.canvas "viewport" 512 512 []}
+set canvas_map.texture "scene_tex"
+```
+The texture name is resolved via `TextureRegistry`. The texture is drawn before any draw commands in the commands array.
+
+### GPU Safety: Descriptor Set Lifetime
+
+SceneTexture registers its texture with GuiSystem once (after the first `endScene()`) and only re-registers after `resize()`. The registered descriptor set is used by in-flight frames, so:
+
+- Call `device->waitIdle()` before `resize()` to ensure no in-flight frames reference the old descriptor set.
+- Call `device->waitIdle()` before destroying a SceneTexture if frames may still be in flight.
+- Do NOT call `gui.unregisterTexture()` on a SceneTexture handle -- the SceneTexture destructor handles cleanup.
+- After `resize()`, call `endScene()` at least once before displaying the texture (the handle is invalid between resize and the next endScene).
+
 ## Threaded Rendering
 
 ```cpp
@@ -445,6 +554,7 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `ItemTooltip` must be placed immediately after the target widget in the children list (same rule as `Tooltip`)
 - `ImageButton` requires a valid TextureHandle; skips rendering silently if texture is invalid
 - `PlotLines`/`PlotHistogram`: `plotValues` stores float array data; `minFloat`/`maxFloat` = FLT_MAX for auto-scaling; `overlayText` for optional text overlay; `width`/`height` for graph size (0 = auto)
+- `PushTheme`/`PopTheme` must be paired with matching preset names; pop count is determined by the preset name
 
 ## WidgetNode (Retained Mode)
 
@@ -650,6 +760,7 @@ struct WidgetNode {
 
     // --- Phase 8 builders ---
     static WidgetNode canvas(string id, float w, float h, WidgetCallback onDraw={}, WidgetCallback onClick={});
+    static WidgetNode canvas(string id, float w, float h, TextureHandle texture, WidgetCallback onClick={});
     static WidgetNode tooltip(string text);
     static WidgetNode tooltip(vector<WidgetNode> children);
 
@@ -688,6 +799,10 @@ struct WidgetNode {
     static WidgetNode plotHistogram(std::string label, std::vector<float> values,
                                    std::string overlay = "", float scaleMin = FLT_MAX, float scaleMax = FLT_MAX,
                                    float width = 0.0f, float height = 0.0f);
+
+    // --- Style & Theming builders ---
+    static WidgetNode pushTheme(std::string name);
+    static WidgetNode popTheme(std::string name);
 };
 ```
 
@@ -997,6 +1112,20 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.image_button` | `ui.image_button "id" "texture_name" [w] [h] [on_click]` | Clickable image button |
 | `ui.plot_lines` | `ui.plot_lines "label" [values] "overlay" min max width height` | Line graph from array of floats |
 | `ui.plot_histogram` | `ui.plot_histogram "label" [values] "overlay" min max width height` | Histogram from array of floats |
+| `ui.push_theme` | `ui.push_theme "name"` | Push named theme preset (see Style & Theming) |
+| `ui.pop_theme` | `ui.pop_theme "name"` | Pop named theme preset (must match push) |
+
+### String Interpolation in Widget Text
+
+finescript supports string interpolation with `{expr}` in all widget string fields (labels, titles, text content):
+
+```
+set hp 42
+ui.text "HP: {hp}"                  # produces "HP: 42"
+ui.text "Result: {add 3 4}"         # produces "Result: 7"
+ui.text "Name: {player.name}"       # any expression works
+ui.text "Literal brace: \{ \}"      # escape with backslash
+```
 
 ### Canvas Draw Commands (returned by ui.draw_*)
 
@@ -1013,9 +1142,18 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | Function | Script Syntax | Description |
 |----------|---------------|-------------|
 | `ui.show` | `ui.show widget_map` | Store map in MapRenderer, returns ID |
+| `ui.update` | `ui.update id widget_map` | Replace an existing tree |
 | `ui.hide` | `ui.hide` | Remove tree from renderer |
 | `ui.node` | `ui.node gui_id [child_path]` | Navigate map tree, return child map |
 | `ui.find` | `ui.find "id"` or `ui.find :id` | Find widget map by `:id` string or symbol (nil if not found) |
+| `ui.set_text` | `ui.set_text id child_index text` | Mutate text content of a child node |
+| `ui.set_value` | `ui.set_value id child_index value` | Mutate value field of a child node |
+| `ui.set_label` | `ui.set_label id child_index label` | Mutate label of a child node |
+| `ui.save_state` | `ui.save_state` | Save all widget states (by `:id`) as a map |
+| `ui.load_state` | `ui.load_state state_map` | Restore widget states from a previously saved map |
+| `ui.open_popup` | `ui.open_popup popup_map` | Open a popup/modal (sets `:value` to true on the map) |
+| `ui.close_popup` | `ui.close_popup` | Close the innermost open popup |
+| `ui.set_theme` | `ui.set_theme "dark"` / `"light"` / `"classic"` | Switch global ImGui theme (immediate, not a widget) |
 
 `ui.node` path: integer (direct child index) or array of integers (nested path, e.g., `[2 0]`). No path returns root map.
 
@@ -1025,6 +1163,10 @@ Registers `ui` and `gui` as constant map objects on the engine.
 |----------|---------------|-------------|
 | `gui.on_message` | `gui.on_message :symbol handler` | Register message handler |
 | `gui.set_focus` | `gui.set_focus "widget_id"` | Programmatically focus a widget |
+| `gui.bind_key` | `gui.bind_key "chord" callback` | Bind keyboard shortcut, returns binding ID |
+| `gui.unbind_key` | `gui.unbind_key id` | Unbind keyboard shortcut by ID |
+| `gui.open_popup` | `gui.open_popup "id"` | Open a popup by string ID |
+| `gui.close_popup` | `gui.close_popup` | Close current popup |
 
 ## Map-Based Mutation
 
@@ -1196,6 +1338,202 @@ tweens.shake(guiId, 0.4f, 8.0f, 15.0f);
 // Target child widget by index path: children[2].children[0]
 tweens.animate(guiId, {2, 0}, TweenProperty::FloatValue, 1.0f, 0.5f);
 ```
+
+## Style & Theming
+
+### Named Theme Presets (push_theme / pop_theme)
+
+Push/pop scoped style color overrides by preset name. Must be paired with matching names. Affects all widgets between push and pop.
+
+Widget types: `PushTheme`, `PopTheme`
+
+Builder:
+```cpp
+static WidgetNode pushTheme(std::string name);
+static WidgetNode popTheme(std::string name);
+```
+
+Script:
+```
+ui.push_theme "danger"
+ui.pop_theme "danger"
+```
+
+Map: `{:type :push_theme :label "danger"}`, `{:type :pop_theme :label "danger"}`
+
+Available presets:
+
+| Preset | Colors pushed | Description |
+|--------|--------------|-------------|
+| `"danger"` | 4 (Button, ButtonHovered, ButtonActive, Text) | Red buttons with light text |
+| `"success"` | 4 (Button, ButtonHovered, ButtonActive, Text) | Green buttons with light text |
+| `"warning"` | 4 (Button, ButtonHovered, ButtonActive, Text) | Orange buttons with light text |
+| `"info"` | 4 (Button, ButtonHovered, ButtonActive, Text) | Blue buttons with light text |
+| `"dark"` | 3 (WindowBg, FrameBg, Text) | Dark background with light text |
+| `"light"` | 3 (WindowBg, FrameBg, Text) | Light background with dark text |
+
+Unknown preset names push nothing (no-op). Pop with an unknown name also does nothing.
+
+Usage (retained):
+```cpp
+auto win = WidgetNode::window("Themed", {
+    WidgetNode::pushTheme("danger"),
+    WidgetNode::button("Delete", [](auto&) { /* ... */ }),
+    WidgetNode::popTheme("danger"),
+    WidgetNode::pushTheme("success"),
+    WidgetNode::button("Confirm", [](auto&) { /* ... */ }),
+    WidgetNode::popTheme("success"),
+});
+```
+
+Usage (script):
+```
+ui.show {ui.window "Actions" [
+    {ui.push_theme "danger"}
+    {ui.button "Delete" fn [] do ... end}
+    {ui.pop_theme "danger"}
+    {ui.push_theme "success"}
+    {ui.button "Save" fn [] do ... end}
+    {ui.pop_theme "success"}
+]}
+```
+
+### Textured Skin System (Planned)
+
+**Not yet implemented.** Full design: [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md)
+
+Replaces ImGui flat-color rendering with 9-slice textured draws from a sprite atlas. Opt-in, non-breaking. Key future API surface:
+
+```cpp
+// C++
+SkinAtlas atlas;
+atlas.loadTexture(gui, "atlas.png");
+auto skin = Skin::loadFromFile("skin.fgs", atlas, engine);
+SkinManager skinMgr;
+skinMgr.registerSkin("name", std::move(skin));
+skinMgr.setActiveSkin("name");
+guiRenderer.setSkinManager(&skinMgr);  // or mapRenderer.setSkinManager(&skinMgr)
+```
+
+Script: `ui.load_skin "name" "path"`, `ui.set_skin "name"`, `ui.push_skin "name"`, `ui.pop_skin`.
+Per-widget: `:skin "custom_element"` map field or `skinOverride` string on WidgetNode.
+
+Unskinned elements fall back to standard ImGui rendering. Skins can be partial.
+
+New widget types (future): `PushSkin`, `PopSkin`. New WidgetNode field: `skinOverride`.
+
+### Global Theme Switching (set_theme)
+
+Immediate action (not a widget) -- calls `ImGui::StyleColorsDark()`, `ImGui::StyleColorsLight()`, or `ImGui::StyleColorsClassic()`. Changes apply to the entire ImGui context. Script-only (no WidgetNode equivalent).
+
+```
+ui.set_theme "dark"
+ui.set_theme "light"
+ui.set_theme "classic"
+```
+
+Returns nil. Unknown theme names are ignored.
+
+## State Serialization
+
+Save/load widget values by ID. Only widgets with explicit `:id` fields are included.
+
+### Retained Mode
+
+```cpp
+using WidgetStateMap = std::map<std::string, std::variant<bool, int, double, std::string, std::vector<float>>>;
+
+WidgetStateMap state = renderer.saveState(guiId);   // Snapshot current values
+renderer.loadState(guiId, state);                    // Restore values
+```
+
+### Script Mode
+
+```
+set state {ui.save_state}       # Returns finescript map of id->value
+ui.load_state state              # Restore from map
+```
+
+`MapRenderer::serializeState(state, interner)` converts a saved state map to a parseable finescript string using `{=key value}` syntax.
+
+### State Fields by Widget Type
+
+| Widget | State type | Notes |
+|--------|-----------|-------|
+| `checkbox`, `selectable` | `bool` | |
+| `slider`, `drag_float`, `slider_angle` | `float` | |
+| `input_int`, `drag_int` | `int` | |
+| `combo`, `listbox` | `int` | Selected index |
+| `radio_button` | `int` | Active index |
+| `input_text`, `input_multiline`, `input_with_hint` | `string` | |
+| `color_edit`, `color_picker` | `[r,g,b,a]` float array | |
+| `drag_float3` | `[x,y,z]` float array | |
+
+## Keyboard Shortcuts (HotkeyManager)
+
+`#include <finegui/hotkey_manager.hpp>`
+
+Global keyboard shortcut manager. Binds key chords (modifier+key combos) to callbacks. Call `update()` each frame between `beginFrame()`/`endFrame()`.
+
+```cpp
+class HotkeyManager {
+    HotkeyManager() = default;
+    void update();  // Call each frame (checks ImGui input state)
+
+    // Bind chord to callback. Returns unique ID. flags: ImGuiInputFlags_RouteGlobal (default), etc.
+    int bind(ImGuiKeyChord chord, HotkeyCallback callback,
+             ImGuiInputFlags flags = ImGuiInputFlags_RouteGlobal);
+    void unbind(int id);
+    void unbindChord(ImGuiKeyChord chord);  // Remove all bindings for chord
+    void unbindAll();
+
+    void setEnabled(int id, bool enabled);    // Per-binding enable/disable
+    void setGlobalEnabled(bool enabled);      // Master enable/disable
+
+    static ImGuiKeyChord parseChord(const std::string& str);  // "ctrl+s" -> ImGuiKeyChord
+    static std::string formatChord(ImGuiKeyChord chord);       // ImGuiKeyChord -> "Ctrl+S"
+};
+```
+
+`HotkeyCallback` = `std::function<void()>`.
+
+Chord string format: modifiers (`ctrl`, `shift`, `alt`, `super`/`cmd`) + key name joined with `+`. Case-insensitive. Key names: `a`-`z`, `0`-`9`, `f1`-`f24`, `escape`, `enter`, `space`, `tab`, `backspace`, `delete`, `insert`, `home`, `end`, `pageup`, `pagedown`, `up`, `down`, `left`, `right`, etc.
+
+Usage:
+```cpp
+HotkeyManager hotkeys;
+int id = hotkeys.bind(HotkeyManager::parseChord("ctrl+s"), [&]() { save(); });
+hotkeys.bind(HotkeyManager::parseChord("ctrl+shift+z"), [&]() { redo(); });
+
+// Frame loop
+gui.beginFrame();
+hotkeys.update();
+/* widgets */
+gui.endFrame();
+
+// Later
+hotkeys.setEnabled(id, false);  // Temporarily disable
+hotkeys.unbind(id);             // Remove
+```
+
+### Script Integration
+
+Call `setHotkeyManager(&hotkeys)` on ScriptGui to enable `gui.bind_key` / `gui.unbind_key`:
+
+```cpp
+ScriptGui scriptGui(engine, mapRenderer);
+scriptGui.setHotkeyManager(&hotkeys);
+```
+
+Script:
+```
+set save_id {gui.bind_key "ctrl+s" fn [] do
+    # save logic
+end}
+gui.unbind_key save_id
+```
+
+`gui.bind_key` returns an integer binding ID. `gui.unbind_key` takes that ID.
 
 ## Widget Converter (Advanced)
 

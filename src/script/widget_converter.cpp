@@ -180,6 +180,10 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_plot_lines     = engine.intern("plot_lines");
     sym_plot_histogram = engine.intern("plot_histogram");
 
+    // Type name symbols - Style & Theming
+    sym_push_theme = engine.intern("push_theme");
+    sym_pop_theme  = engine.intern("pop_theme");
+
     // Phase 12 field keys
     hint = engine.intern("hint");
 
@@ -255,6 +259,9 @@ static WidgetNode::Type symbolToType(uint32_t sym, const ConverterSymbols& s) {
     // Phase 15
     if (sym == s.sym_plot_lines)     return WidgetNode::Type::PlotLines;
     if (sym == s.sym_plot_histogram) return WidgetNode::Type::PlotHistogram;
+    // Style & Theming
+    if (sym == s.sym_push_theme)     return WidgetNode::Type::PushTheme;
+    if (sym == s.sym_pop_theme)      return WidgetNode::Type::PopTheme;
     return WidgetNode::Type::Text; // fallback
 }
 
