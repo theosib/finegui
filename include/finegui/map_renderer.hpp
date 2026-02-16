@@ -31,7 +31,24 @@ public:
 
     /// Register a map tree to be rendered each frame.
     /// ctx is used for invoking callbacks (closures stored in the map).
-    int show(finescript::Value rootMap, finescript::ExecutionContext& ctx);
+    /// Auto-sized windows get 1 warmup frame (invisible) to let ImGui compute layout.
+    /// Pass immediate=true to skip warmup.
+    int show(finescript::Value rootMap, finescript::ExecutionContext& ctx,
+             bool immediate = false);
+
+    /// Store a map tree without rendering (staged).
+    /// Use goLive() to begin rendering later.
+    int stage(finescript::Value rootMap, finescript::ExecutionContext& ctx);
+
+    /// Transition a staged tree to live rendering.
+    /// Begins warmup if the window is auto-sized.
+    void goLive(int id);
+
+    /// Check if a tree is currently warming up (rendering invisibly).
+    bool isWarmingUp(int id) const;
+
+    /// Check if a tree is staged (stored but not rendering).
+    bool isStaged(int id) const;
 
     /// Remove a map tree.
     void hide(int id);
@@ -94,6 +111,7 @@ private:
     struct Entry {
         finescript::Value rootMap;
         finescript::ExecutionContext* ctx;
+        int warmupFrames = 0;  // >0 = warming up, 0 = normal, -1 = staged
     };
 
     finescript::ScriptEngine& engine_;

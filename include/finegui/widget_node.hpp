@@ -95,6 +95,7 @@ struct WidgetNode {
     WidgetCallback onChange;        // Checkbox, Slider, Input, Combo, ColorEdit
     WidgetCallback onSubmit;        // InputText (Enter pressed)
     WidgetCallback onClose;         // Window close button
+    WidgetCallback onHistory;       // InputText (Up/Down arrow history)
 
     /// Texture handle (for Image widgets).
     TextureHandle texture{};
@@ -143,9 +144,15 @@ struct WidgetNode {
     /// Programmatic window size (0 = ImGui auto-size).
     float windowSizeW = 0.0f;
     float windowSizeH = 0.0f;
+    /// Window position pivot (0,0 = top-left, 0.5,0.5 = center).
+    float windowPivotX = 0.0f;
+    float windowPivotY = 0.0f;
 
     /// Drag widget properties.
     float dragSpeed = 1.0f;
+
+    /// Format string for sliders/drags (e.g. "%.2f", "%d"). Empty = ImGui default.
+    std::string formatString;
 
     /// DragFloat3 values (3-component vector).
     float floatX = 0.0f, floatY = 0.0f, floatZ = 0.0f;

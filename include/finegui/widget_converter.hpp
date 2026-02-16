@@ -52,7 +52,7 @@ struct ConverterSymbols {
 
     // Callback keys
     uint32_t on_click = 0, on_change = 0, on_submit = 0, on_close = 0;
-    uint32_t on_select = 0;
+    uint32_t on_select = 0, on_history = 0;
 
     // Type name symbols - Phase 1
     uint32_t sym_window = 0, sym_text = 0, sym_button = 0;
@@ -145,8 +145,9 @@ struct ConverterSymbols {
     uint32_t sym_flag_no_background = 0, sym_flag_menu_bar = 0;
     uint32_t sym_flag_no_nav = 0, sym_flag_no_inputs = 0;
 
-    // Window size field keys
+    // Window size/pivot field keys
     uint32_t window_size_w = 0, window_size_h = 0;
+    uint32_t window_pivot_x = 0, window_pivot_y = 0;
 
     void intern(finescript::ScriptEngine& engine);
 };

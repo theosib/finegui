@@ -196,15 +196,29 @@ const std::string& ScriptGui::lastError() const {
 
 // -- Script binding helpers ---------------------------------------------------
 
-finescript::Value ScriptGui::scriptShow(const finescript::Value& map) {
+finescript::Value ScriptGui::scriptShow(const finescript::Value& map, bool immediate) {
     if (impl_->guiId < 0) {
-        impl_->guiId = impl_->renderer.show(map, *impl_->ctx);
+        impl_->guiId = impl_->renderer.show(map, *impl_->ctx, immediate);
     } else {
         // Replace the existing tree
         impl_->renderer.hide(impl_->guiId);
-        impl_->guiId = impl_->renderer.show(map, *impl_->ctx);
+        impl_->guiId = impl_->renderer.show(map, *impl_->ctx, immediate);
     }
     return finescript::Value::integer(impl_->guiId);
+}
+
+finescript::Value ScriptGui::scriptStage(const finescript::Value& map) {
+    if (impl_->guiId < 0) {
+        impl_->guiId = impl_->renderer.stage(map, *impl_->ctx);
+    } else {
+        impl_->renderer.hide(impl_->guiId);
+        impl_->guiId = impl_->renderer.stage(map, *impl_->ctx);
+    }
+    return finescript::Value::integer(impl_->guiId);
+}
+
+void ScriptGui::scriptGoLive(int id) {
+    impl_->renderer.goLive(id);
 }
 
 void ScriptGui::scriptHide() {

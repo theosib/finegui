@@ -58,11 +58,12 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_flag_scroll_y      = engine.intern("scroll_y");
 
     // Callback keys
-    on_click  = engine.intern("on_click");
-    on_change = engine.intern("on_change");
-    on_submit = engine.intern("on_submit");
-    on_close  = engine.intern("on_close");
-    on_select = engine.intern("on_select");
+    on_click   = engine.intern("on_click");
+    on_change  = engine.intern("on_change");
+    on_submit  = engine.intern("on_submit");
+    on_close   = engine.intern("on_close");
+    on_select  = engine.intern("on_select");
+    on_history = engine.intern("on_history");
 
     // Type name symbols - Phase 1
     sym_window     = engine.intern("window");
@@ -214,9 +215,11 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_flag_no_nav           = engine.intern("no_nav");
     sym_flag_no_inputs        = engine.intern("no_inputs");
 
-    // Window size field keys
+    // Window size/pivot field keys
     window_size_w = engine.intern("window_size_w");
     window_size_h = engine.intern("window_size_h");
+    window_pivot_x = engine.intern("window_pivot_x");
+    window_pivot_y = engine.intern("window_pivot_y");
 
     // Focus management field keys
     focusable  = engine.intern("focusable");
@@ -460,6 +463,35 @@ WidgetNode convertToWidget(const finescript::Value& map,
     if (onBlurVal.isCallable()) {
         node.onBlur = [&engine, &ctx, closure = onBlurVal](WidgetNode&) {
             engine.callFunction(closure, {}, ctx);
+        };
+    }
+
+    // Window pivot (for centering positioned windows)
+    auto pivotXVal = m.get(syms.window_pivot_x);
+    if (pivotXVal.isNumeric()) {
+        node.windowPivotX = static_cast<float>(pivotXVal.asNumber());
+    }
+    auto pivotYVal = m.get(syms.window_pivot_y);
+    if (pivotYVal.isNumeric()) {
+        node.windowPivotY = static_cast<float>(pivotYVal.asNumber());
+    }
+
+    // Format string (for sliders, drags)
+    auto formatVal = m.get(syms.format);
+    if (formatVal.isString()) {
+        node.formatString = std::string(formatVal.asString());
+    }
+
+    // History callback (for InputText)
+    auto onHistoryVal = m.get(syms.on_history);
+    if (onHistoryVal.isCallable()) {
+        node.onHistory = [&engine, &ctx, closure = onHistoryVal](WidgetNode& w) {
+            // w.intValue carries direction: -1 = up, +1 = down
+            auto result = engine.callFunction(
+                closure, {finescript::Value::integer(w.intValue)}, ctx);
+            if (result.isString()) {
+                w.stringValue = std::string(result.asString());
+            }
         };
     }
 

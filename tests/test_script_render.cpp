@@ -418,7 +418,7 @@ void test_script_rendering() {
     {
         ScriptGui scriptGui(engine, mapRenderer);
         bool ok = scriptGui.loadAndRun(R"(
-            set slider_widget {ui.slider "Test" 0.0 1.0 0.5}
+            set slider_widget {ui.slider "Test" 0.5 0.0 1.0}
             set gui_id {ui.show {ui.window "Writeback" [
                 slider_widget
             ]}}

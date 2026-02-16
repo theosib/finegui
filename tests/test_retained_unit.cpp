@@ -2366,6 +2366,221 @@ void test_parse_chord_function_keys() {
 }
 
 // ============================================================================
+// Window Warm-up Tests (GuiRenderer stage/show/goLive lifecycle)
+// ============================================================================
+
+// GuiRenderer needs a GuiSystem& but never uses it (reserved for future).
+// We create a minimal dummy to test the warmup bookkeeping.
+#include <finegui/gui_system.hpp>
+
+static GuiSystem& dummyGuiSystem() {
+    alignas(GuiSystem) static char buf[sizeof(GuiSystem)]{};
+    return *reinterpret_cast<GuiSystem*>(buf);
+}
+
+void test_show_auto_warmup() {
+    std::cout << "Testing: show() auto-sized window gets warmup... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test");  // no explicit size → auto-sized
+    int id = renderer.show(tree);
+    assert(renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+    assert(renderer.get(id) != nullptr);
+    std::cout << "PASSED\n";
+}
+
+void test_show_explicit_size_no_warmup() {
+    std::cout << "Testing: show() explicit-sized window skips warmup... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test", 400.0f, 300.0f);
+    int id = renderer.show(tree);
+    assert(!renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+    std::cout << "PASSED\n";
+}
+
+void test_show_immediate_no_warmup() {
+    std::cout << "Testing: show(tree, immediate=true) skips warmup... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test");  // auto-sized
+    int id = renderer.show(std::move(tree), /*immediate=*/true);
+    assert(!renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+    std::cout << "PASSED\n";
+}
+
+void test_stage_and_go_live() {
+    std::cout << "Testing: stage() then goLive() lifecycle... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test");  // auto-sized
+    int id = renderer.stage(std::move(tree));
+    assert(renderer.isStaged(id));
+    assert(!renderer.isWarmingUp(id));
+    assert(renderer.get(id) != nullptr);  // accessible even when staged
+
+    renderer.goLive(id);
+    assert(!renderer.isStaged(id));
+    assert(renderer.isWarmingUp(id));  // auto-sized → warmup
+    std::cout << "PASSED\n";
+}
+
+void test_stage_explicit_size_go_live() {
+    std::cout << "Testing: stage() explicit-sized then goLive() skips warmup... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test", 400.0f, 300.0f);
+    int id = renderer.stage(std::move(tree));
+    assert(renderer.isStaged(id));
+
+    renderer.goLive(id);
+    assert(!renderer.isStaged(id));
+    assert(!renderer.isWarmingUp(id));  // explicit size → no warmup
+    std::cout << "PASSED\n";
+}
+
+void test_get_through_entry() {
+    std::cout << "Testing: get() returns correct WidgetNode through Entry... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("MyWindow", {
+        WidgetNode::text("Hello"),
+    });
+    int id = renderer.show(std::move(tree), /*immediate=*/true);
+    auto* node = renderer.get(id);
+    assert(node != nullptr);
+    assert(node->label == "MyWindow");
+    assert(node->children.size() == 1);
+    assert(node->children[0].textContent == "Hello");
+    std::cout << "PASSED\n";
+}
+
+void test_update_through_entry() {
+    std::cout << "Testing: update() replaces tree through Entry... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree1 = WidgetNode::window("First");
+    int id = renderer.show(std::move(tree1), /*immediate=*/true);
+    assert(renderer.get(id)->label == "First");
+
+    auto tree2 = WidgetNode::window("Second");
+    renderer.update(id, std::move(tree2));
+    assert(renderer.get(id)->label == "Second");
+    std::cout << "PASSED\n";
+}
+
+void test_find_by_id_through_entry() {
+    std::cout << "Testing: findById() works through Entry... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test", {
+        WidgetNode::button("Click"),
+    });
+    tree.children[0].id = "my_button";
+    int id = renderer.show(std::move(tree), /*immediate=*/true);
+    (void)id;
+
+    auto* found = renderer.findById("my_button");
+    assert(found != nullptr);
+    assert(found->label == "Click");
+
+    assert(renderer.findById("nonexistent") == nullptr);
+    std::cout << "PASSED\n";
+}
+
+void test_hide_removes_entry() {
+    std::cout << "Testing: hide() removes Entry... ";
+    GuiRenderer renderer(dummyGuiSystem());
+    auto tree = WidgetNode::window("Test");
+    int id = renderer.show(std::move(tree));
+    assert(renderer.get(id) != nullptr);
+
+    renderer.hide(id);
+    assert(renderer.get(id) == nullptr);
+    assert(!renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Format String & History Callback Tests
+// ============================================================================
+
+void test_format_string_default_empty() {
+    std::cout << "Testing: WidgetNode formatString default empty... ";
+
+    auto slider = WidgetNode::slider("Vol", 0.5f, 0.0f, 1.0f);
+    assert(slider.formatString.empty());
+
+    auto drag = WidgetNode::dragFloat("Speed", 1.0f);
+    assert(drag.formatString.empty());
+
+    std::cout << "PASSED\n";
+}
+
+void test_format_string_field() {
+    std::cout << "Testing: WidgetNode formatString field assignment... ";
+
+    auto slider = WidgetNode::slider("FOV", 90.0f, 0.0f, 180.0f);
+    slider.formatString = "%.0f";
+    assert(slider.formatString == "%.0f");
+
+    auto sliderInt = WidgetNode::sliderInt("Count", 50, 0, 100);
+    sliderInt.formatString = "%d items";
+    assert(sliderInt.formatString == "%d items");
+
+    auto drag = WidgetNode::dragFloat("Speed", 1.0f, 0.1f, 0.0f, 10.0f);
+    drag.formatString = "%.2f";
+    assert(drag.formatString == "%.2f");
+
+    std::cout << "PASSED\n";
+}
+
+void test_on_history_callback() {
+    std::cout << "Testing: WidgetNode onHistory callback... ";
+
+    auto input = WidgetNode::inputText("Cmd", "");
+    bool historyCalled = false;
+    int historyDir = 0;
+
+    input.onHistory = [&](WidgetNode& node) {
+        historyCalled = true;
+        historyDir = node.intValue;
+        node.stringValue = "previous_command";
+    };
+
+    assert(input.onHistory != nullptr);
+
+    // Simulate up arrow
+    input.intValue = -1;
+    input.onHistory(input);
+    assert(historyCalled);
+    assert(historyDir == -1);
+    assert(input.stringValue == "previous_command");
+
+    // Simulate down arrow
+    historyCalled = false;
+    input.intValue = 1;
+    input.onHistory(input);
+    assert(historyCalled);
+    assert(historyDir == 1);
+
+    std::cout << "PASSED\n";
+}
+
+void test_window_pivot_fields() {
+    std::cout << "Testing: WidgetNode windowPivotX/Y default and assignment... ";
+
+    // Default pivot is (0, 0)
+    auto win = WidgetNode::window("Test");
+    assert(win.windowPivotX == 0.0f);
+    assert(win.windowPivotY == 0.0f);
+
+    // Set pivot to center (0.5, 0.5)
+    win.windowPivotX = 0.5f;
+    win.windowPivotY = 0.5f;
+    assert(win.windowPivotX == 0.5f);
+    assert(win.windowPivotY == 0.5f);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -2558,6 +2773,25 @@ int main() {
         test_parse_chord_named_keys();
         test_parse_chord_digits();
         test_parse_chord_function_keys();
+
+        // Window Warm-up
+        test_show_auto_warmup();
+        test_show_explicit_size_no_warmup();
+        test_show_immediate_no_warmup();
+        test_stage_and_go_live();
+        test_stage_explicit_size_go_live();
+        test_get_through_entry();
+        test_update_through_entry();
+        test_find_by_id_through_entry();
+        test_hide_removes_entry();
+
+        // Format string & history callback
+        test_format_string_default_empty();
+        test_format_string_field();
+        test_on_history_callback();
+
+        // Window pivot
+        test_window_pivot_fields();
 
         std::cout << "\n=== All retained-mode unit tests PASSED ===\n";
     } catch (const std::exception& e) {

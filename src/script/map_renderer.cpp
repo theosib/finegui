@@ -12,17 +12,33 @@ using finescript::Value;
 using finescript::MapData;
 using finescript::ExecutionContext;
 
-// -- InputText resize callback ------------------------------------------------
+// -- InputText callback -------------------------------------------------------
 
 struct InputTextCallbackData {
     std::string* str;
+    // History support (MapRenderer only)
+    finescript::ScriptEngine* engine = nullptr;
+    finescript::ExecutionContext* ctx = nullptr;
+    finescript::Value historyCallback;
 };
 
-static int inputTextResizeCallback(ImGuiInputTextCallbackData* data) {
+static int inputTextCallback(ImGuiInputTextCallbackData* data) {
+    auto* userData = static_cast<InputTextCallbackData*>(data->UserData);
     if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
-        auto* userData = static_cast<InputTextCallbackData*>(data->UserData);
         userData->str->resize(static_cast<size_t>(data->BufTextLen));
         data->Buf = userData->str->data();
+    } else if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory) {
+        int dir = (data->EventKey == ImGuiKey_UpArrow) ? -1 : 1;
+        auto result = userData->engine->callFunction(
+            userData->historyCallback,
+            {finescript::Value::integer(dir)},
+            *userData->ctx);
+        if (result.isString()) {
+            data->DeleteChars(0, data->BufTextLen);
+            auto sv = result.asString();
+            data->InsertChars(0, sv.data(), sv.data() + sv.size());
+            *userData->str = std::string(sv);
+        }
     }
     return 0;
 }
@@ -42,10 +58,47 @@ void MapRenderer::setTextureRegistry(TextureRegistry* registry) {
     textureRegistry_ = registry;
 }
 
-int MapRenderer::show(Value rootMap, ExecutionContext& ctx) {
+int MapRenderer::show(Value rootMap, ExecutionContext& ctx, bool immediate) {
     int id = nextId_++;
-    trees_[id] = Entry{std::move(rootMap), &ctx};
+    int warmup = 0;
+    if (!immediate && rootMap.isMap()) {
+        auto& m = rootMap.asMap();
+        float w = static_cast<float>(getNumericField(m, syms_.window_size_w, 0.0));
+        float h = static_cast<float>(getNumericField(m, syms_.window_size_h, 0.0));
+        if (!(w > 0.0f && h > 0.0f)) warmup = 1;
+    }
+    trees_[id] = Entry{std::move(rootMap), &ctx, warmup};
     return id;
+}
+
+int MapRenderer::stage(Value rootMap, ExecutionContext& ctx) {
+    int id = nextId_++;
+    trees_[id] = Entry{std::move(rootMap), &ctx, -1};
+    return id;
+}
+
+void MapRenderer::goLive(int id) {
+    auto it = trees_.find(id);
+    if (it == trees_.end() || it->second.warmupFrames != -1) return;
+    auto& entry = it->second;
+    if (entry.rootMap.isMap()) {
+        auto& m = entry.rootMap.asMap();
+        float w = static_cast<float>(getNumericField(m, syms_.window_size_w, 0.0));
+        float h = static_cast<float>(getNumericField(m, syms_.window_size_h, 0.0));
+        entry.warmupFrames = (w > 0.0f && h > 0.0f) ? 0 : 1;
+    } else {
+        entry.warmupFrames = 0;
+    }
+}
+
+bool MapRenderer::isWarmingUp(int id) const {
+    auto it = trees_.find(id);
+    return it != trees_.end() && it->second.warmupFrames > 0;
+}
+
+bool MapRenderer::isStaged(int id) const {
+    auto it = trees_.find(id);
+    return it != trees_.end() && it->second.warmupFrames == -1;
 }
 
 void MapRenderer::hide(int id) {
@@ -111,8 +164,18 @@ finescript::Value MapRenderer::findById(uint32_t symbolId) {
 void MapRenderer::renderAll() {
     currentFocusedId_.clear();
     for (auto& [id, entry] : trees_) {
+        if (entry.warmupFrames == -1) continue;  // staged — skip
         if (entry.rootMap.isMap()) {
-            renderNode(entry.rootMap.asMap(), *entry.ctx);
+            if (entry.warmupFrames > 0) {
+                // Render invisibly so ImGui computes layout.
+                // Use ImGui's style stack rather than mutating the map.
+                ImGui::PushStyleVar(ImGuiStyleVar_Alpha, 0.0f);
+                renderNode(entry.rootMap.asMap(), *entry.ctx);
+                ImGui::PopStyleVar();
+                entry.warmupFrames--;
+            } else {
+                renderNode(entry.rootMap.asMap(), *entry.ctx);
+            }
         }
     }
     lastFocusedId_ = currentFocusedId_;
@@ -310,11 +373,15 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
     auto title = getStringField(m, syms_.title, "Untitled");
     int wflags = parseWindowFlags(m);
 
-    // Animation: explicit window position
+    // Animation: explicit window position (with optional pivot for centering)
     float posX = getNumericField(m, syms_.window_pos_x, FLT_MAX);
     float posY = getNumericField(m, syms_.window_pos_y, FLT_MAX);
     if (posX != FLT_MAX && posY != FLT_MAX) {
-        ImGui::SetNextWindowPos(ImVec2(posX, posY));
+        float pivotX = static_cast<float>(getNumericField(m, syms_.window_pivot_x, 0.0));
+        float pivotY = static_cast<float>(getNumericField(m, syms_.window_pivot_y, 0.0));
+        ImGui::SetNextWindowPos(ImVec2(posX, posY),
+                                ImGuiCond_Always,
+                                ImVec2(pivotX, pivotY));
     }
 
     // Programmatic window size
@@ -440,8 +507,10 @@ void MapRenderer::renderSlider(MapData& m, ExecutionContext& ctx) {
     float value = static_cast<float>(getNumericField(m, syms_.value, 0.0));
     float min = static_cast<float>(getNumericField(m, syms_.min, 0.0));
     float max = static_cast<float>(getNumericField(m, syms_.max, 1.0));
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
 
-    if (ImGui::SliderFloat(label.c_str(), &value, min, max)) {
+    if (ImGui::SliderFloat(label.c_str(), &value, min, max, fmtStr)) {
         m.set(syms_.value, Value::number(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::number(value)});
     }
@@ -452,8 +521,10 @@ void MapRenderer::renderSliderInt(MapData& m, ExecutionContext& ctx) {
     int value = static_cast<int>(getNumericField(m, syms_.value, 0));
     int min = static_cast<int>(getNumericField(m, syms_.min, 0));
     int max = static_cast<int>(getNumericField(m, syms_.max, 100));
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
 
-    if (ImGui::SliderInt(label.c_str(), &value, min, max)) {
+    if (ImGui::SliderInt(label.c_str(), &value, min, max, fmtStr)) {
         m.set(syms_.value, Value::integer(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::integer(value)});
     }
@@ -475,7 +546,7 @@ void MapRenderer::renderInputText(MapData& m, ExecutionContext& ctx) {
     size_t cap = str.capacity();
     str.resize(cap);
 
-    InputTextCallbackData cbData{&str};
+    InputTextCallbackData cbData{&str, nullptr, nullptr, {}};
     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
 
     auto onSubmit = m.get(syms_.on_submit);
@@ -483,9 +554,17 @@ void MapRenderer::renderInputText(MapData& m, ExecutionContext& ctx) {
         flags |= ImGuiInputTextFlags_EnterReturnsTrue;
     }
 
+    auto onHistory = m.get(syms_.on_history);
+    if (onHistory.isCallable()) {
+        flags |= ImGuiInputTextFlags_CallbackHistory;
+        cbData.engine = &engine_;
+        cbData.ctx = &ctx;
+        cbData.historyCallback = onHistory;
+    }
+
     bool enterPressed = ImGui::InputText(
         label.c_str(), str.data(), str.size() + 1,
-        flags, inputTextResizeCallback, &cbData);
+        flags, inputTextCallback, &cbData);
 
     // Trim to actual string length
     str.resize(std::strlen(str.c_str()));
@@ -998,8 +1077,10 @@ void MapRenderer::renderDragFloat(MapData& m, ExecutionContext& ctx) {
     float speed = static_cast<float>(getNumericField(m, syms_.speed, 1.0));
     float min = static_cast<float>(getNumericField(m, syms_.min, 0.0));
     float max = static_cast<float>(getNumericField(m, syms_.max, 0.0));
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
 
-    if (ImGui::DragFloat(label.c_str(), &value, speed, min, max)) {
+    if (ImGui::DragFloat(label.c_str(), &value, speed, min, max, fmtStr)) {
         m.set(syms_.value, Value::number(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::number(value)});
     }
@@ -1011,8 +1092,10 @@ void MapRenderer::renderDragInt(MapData& m, ExecutionContext& ctx) {
     float speed = static_cast<float>(getNumericField(m, syms_.speed, 1.0));
     int min = static_cast<int>(getNumericField(m, syms_.min, 0));
     int max = static_cast<int>(getNumericField(m, syms_.max, 0));
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
 
-    if (ImGui::DragInt(label.c_str(), &value, speed, min, max)) {
+    if (ImGui::DragInt(label.c_str(), &value, speed, min, max, fmtStr)) {
         m.set(syms_.value, Value::integer(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::integer(value)});
     }
@@ -1328,11 +1411,11 @@ void MapRenderer::renderInputTextMultiline(MapData& m, ExecutionContext& ctx) {
     float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
     float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
 
-    InputTextCallbackData cbData{&str};
+    InputTextCallbackData cbData{&str, nullptr, nullptr, {}};
     ImGui::InputTextMultiline(
         label.c_str(), str.data(), str.size() + 1,
         {w, h},
-        ImGuiInputTextFlags_CallbackResize, inputTextResizeCallback, &cbData);
+        ImGuiInputTextFlags_CallbackResize, inputTextCallback, &cbData);
 
     str.resize(std::strlen(str.c_str()));
 
@@ -1391,7 +1474,10 @@ void MapRenderer::renderDragFloat3(MapData& m, ExecutionContext& ctx) {
         if (arr.size() >= 3 && arr[2].isNumeric()) v[2] = static_cast<float>(arr[2].asNumber());
     }
 
-    if (ImGui::DragFloat3(label.c_str(), v, speed, min, max)) {
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
+
+    if (ImGui::DragFloat3(label.c_str(), v, speed, min, max, fmtStr)) {
         auto newVal = Value::array({
             Value::number(v[0]), Value::number(v[1]), Value::number(v[2])
         });
@@ -1415,7 +1501,7 @@ void MapRenderer::renderInputTextWithHint(MapData& m, ExecutionContext& ctx) {
     size_t cap = str.capacity();
     str.resize(cap);
 
-    InputTextCallbackData cbData{&str};
+    InputTextCallbackData cbData{&str, nullptr, nullptr, {}};
     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
 
     auto onSubmit = m.get(syms_.on_submit);
@@ -1423,10 +1509,18 @@ void MapRenderer::renderInputTextWithHint(MapData& m, ExecutionContext& ctx) {
         flags |= ImGuiInputTextFlags_EnterReturnsTrue;
     }
 
+    auto onHistory = m.get(syms_.on_history);
+    if (onHistory.isCallable()) {
+        flags |= ImGuiInputTextFlags_CallbackHistory;
+        cbData.engine = &engine_;
+        cbData.ctx = &ctx;
+        cbData.historyCallback = onHistory;
+    }
+
     bool enterPressed = ImGui::InputTextWithHint(
         label.c_str(), hint.c_str(),
         str.data(), str.size() + 1,
-        flags, inputTextResizeCallback, &cbData);
+        flags, inputTextCallback, &cbData);
 
     str.resize(std::strlen(str.c_str()));
 
@@ -1444,8 +1538,10 @@ void MapRenderer::renderSliderAngle(MapData& m, ExecutionContext& ctx) {
     float value = static_cast<float>(getNumericField(m, syms_.value, 0.0));
     float minDeg = static_cast<float>(getNumericField(m, syms_.min, -360.0));
     float maxDeg = static_cast<float>(getNumericField(m, syms_.max, 360.0));
+    auto fmt = getStringField(m, syms_.format, "");
+    const char* fmtStr = fmt.empty() ? nullptr : fmt.c_str();
 
-    if (ImGui::SliderAngle(label.c_str(), &value, minDeg, maxDeg)) {
+    if (ImGui::SliderAngle(label.c_str(), &value, minDeg, maxDeg, fmtStr)) {
         m.set(syms_.value, Value::number(value));
         invokeCallback(m, syms_.on_change, ctx, {Value::number(value)});
     }

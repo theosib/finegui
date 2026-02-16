@@ -7,17 +7,31 @@
 
 namespace finegui {
 
-// -- InputText resize callback ------------------------------------------------
+// -- InputText callback -------------------------------------------------------
 
 struct InputTextCallbackData {
     std::string* str;
+    WidgetNode* node = nullptr;  // For history callback
 };
 
-static int inputTextResizeCallback(ImGuiInputTextCallbackData* data) {
+static int inputTextCallback(ImGuiInputTextCallbackData* data) {
+    auto* userData = static_cast<InputTextCallbackData*>(data->UserData);
     if (data->EventFlag == ImGuiInputTextFlags_CallbackResize) {
-        auto* userData = static_cast<InputTextCallbackData*>(data->UserData);
         userData->str->resize(static_cast<size_t>(data->BufTextLen));
         data->Buf = userData->str->data();
+    } else if (data->EventFlag == ImGuiInputTextFlags_CallbackHistory) {
+        auto* node = userData->node;
+        if (node && node->onHistory) {
+            // Encode direction in intValue: -1 = up, +1 = down
+            int savedInt = node->intValue;
+            node->intValue = (data->EventKey == ImGuiKey_UpArrow) ? -1 : 1;
+            node->onHistory(*node);
+            // After callback, stringValue may have been updated
+            data->DeleteChars(0, data->BufTextLen);
+            data->InsertChars(0, node->stringValue.c_str());
+            *userData->str = node->stringValue;
+            node->intValue = savedInt;
+        }
     }
     return 0;
 }
@@ -29,16 +43,56 @@ GuiRenderer::GuiRenderer(GuiSystem& gui)
     (void)gui_;  // Reserved for future use (e.g., querying display size)
 }
 
-int GuiRenderer::show(WidgetNode tree) {
+int GuiRenderer::show(WidgetNode tree, bool immediate) {
     int id = nextId_++;
-    trees_.emplace(id, std::move(tree));
+    int warmup = 0;
+    if (!immediate && tree.type == WidgetNode::Type::Window &&
+        !(tree.windowSizeW > 0.0f && tree.windowSizeH > 0.0f)) {
+        warmup = 1;
+    }
+    trees_.emplace(id, Entry{std::move(tree), warmup});
     return id;
+}
+
+int GuiRenderer::stage(WidgetNode tree) {
+    int id = nextId_++;
+    trees_.emplace(id, Entry{std::move(tree), -1});
+    return id;
+}
+
+void GuiRenderer::goLive(int guiId) {
+    auto it = trees_.find(guiId);
+    if (it == trees_.end() || it->second.warmupFrames != -1) return;
+    auto& entry = it->second;
+    if (entry.tree.type == WidgetNode::Type::Window &&
+        !(entry.tree.windowSizeW > 0.0f && entry.tree.windowSizeH > 0.0f)) {
+        entry.warmupFrames = 1;
+    } else {
+        entry.warmupFrames = 0;
+    }
+}
+
+bool GuiRenderer::isWarmingUp(int guiId) const {
+    auto it = trees_.find(guiId);
+    return it != trees_.end() && it->second.warmupFrames > 0;
+}
+
+bool GuiRenderer::isStaged(int guiId) const {
+    auto it = trees_.find(guiId);
+    return it != trees_.end() && it->second.warmupFrames == -1;
 }
 
 void GuiRenderer::update(int guiId, WidgetNode tree) {
     auto it = trees_.find(guiId);
     if (it != trees_.end()) {
-        it->second = std::move(tree);
+        // Recalculate warmup for the new tree
+        int warmup = 0;
+        if (tree.type == WidgetNode::Type::Window &&
+            !(tree.windowSizeW > 0.0f && tree.windowSizeH > 0.0f)) {
+            warmup = 1;
+        }
+        it->second.tree = std::move(tree);
+        it->second.warmupFrames = warmup;
     }
 }
 
@@ -52,7 +106,7 @@ void GuiRenderer::hideAll() {
 
 WidgetNode* GuiRenderer::get(int guiId) {
     auto it = trees_.find(guiId);
-    return it != trees_.end() ? &it->second : nullptr;
+    return it != trees_.end() ? &it->second.tree : nullptr;
 }
 
 void GuiRenderer::setDragDropManager(DragDropManager* manager) {
@@ -73,19 +127,27 @@ WidgetNode* GuiRenderer::findByIdRecursive(WidgetNode& node, const std::string& 
 
 WidgetNode* GuiRenderer::findById(const std::string& widgetId) {
     if (widgetId.empty()) return nullptr;
-    for (auto& [id, tree] : trees_) {
-        if (auto* found = findByIdRecursive(tree, widgetId)) return found;
+    for (auto& [id, entry] : trees_) {
+        if (auto* found = findByIdRecursive(entry.tree, widgetId)) return found;
     }
     return nullptr;
 }
 
 void GuiRenderer::renderAll() {
     currentFocusedId_.clear();
-    for (auto& [id, tree] : trees_) {
-        renderNode(tree);
+    for (auto& [id, entry] : trees_) {
+        if (entry.warmupFrames == -1) continue;  // staged — skip
+        if (entry.warmupFrames > 0) {
+            // Render invisibly so ImGui computes layout
+            float savedAlpha = entry.tree.alpha;
+            entry.tree.alpha = 0.0f;
+            renderNode(entry.tree);
+            entry.tree.alpha = savedAlpha;
+            entry.warmupFrames--;
+        } else {
+            renderNode(entry.tree);
+        }
     }
-    // Fire blur callback if the previously-focused widget lost focus
-    // (onBlur is fired in renderNode when a widget loses focus)
     lastFocusedId_ = currentFocusedId_;
 }
 
@@ -239,9 +301,11 @@ void GuiRenderer::renderNode(WidgetNode& node) {
 // -- Per-widget render methods ------------------------------------------------
 
 void GuiRenderer::renderWindow(WidgetNode& node) {
-    // Animation: explicit window position
+    // Animation: explicit window position (with optional pivot for centering)
     if (node.windowPosX != FLT_MAX && node.windowPosY != FLT_MAX) {
-        ImGui::SetNextWindowPos(ImVec2(node.windowPosX, node.windowPosY));
+        ImGui::SetNextWindowPos(ImVec2(node.windowPosX, node.windowPosY),
+                                ImGuiCond_Always,
+                                ImVec2(node.windowPivotX, node.windowPivotY));
     }
 
     // Programmatic window size
@@ -344,15 +408,17 @@ void GuiRenderer::renderCheckbox(WidgetNode& node) {
 }
 
 void GuiRenderer::renderSlider(WidgetNode& node) {
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::SliderFloat(node.label.c_str(), &node.floatValue,
-                           node.minFloat, node.maxFloat)) {
+                           node.minFloat, node.maxFloat, fmt)) {
         if (node.onChange) node.onChange(node);
     }
 }
 
 void GuiRenderer::renderSliderInt(WidgetNode& node) {
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::SliderInt(node.label.c_str(), &node.intValue,
-                         node.minInt, node.maxInt)) {
+                         node.minInt, node.maxInt, fmt)) {
         if (node.onChange) node.onChange(node);
     }
 }
@@ -366,11 +432,14 @@ void GuiRenderer::renderInputText(WidgetNode& node) {
     size_t cap = node.stringValue.capacity();
     node.stringValue.resize(cap);
 
-    InputTextCallbackData cbData{&node.stringValue};
+    InputTextCallbackData cbData{&node.stringValue, &node};
 
     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
     if (node.onSubmit) {
         flags |= ImGuiInputTextFlags_EnterReturnsTrue;
+    }
+    if (node.onHistory) {
+        flags |= ImGuiInputTextFlags_CallbackHistory;
     }
 
     bool enterPressed = ImGui::InputText(
@@ -378,7 +447,7 @@ void GuiRenderer::renderInputText(WidgetNode& node) {
         node.stringValue.data(),
         node.stringValue.size() + 1,  // +1 for null terminator
         flags,
-        inputTextResizeCallback,
+        inputTextCallback,
         &cbData
     );
 
@@ -653,15 +722,17 @@ void GuiRenderer::renderColorPicker(WidgetNode& node) {
 }
 
 void GuiRenderer::renderDragFloat(WidgetNode& node) {
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::DragFloat(node.label.c_str(), &node.floatValue,
-                         node.dragSpeed, node.minFloat, node.maxFloat)) {
+                         node.dragSpeed, node.minFloat, node.maxFloat, fmt)) {
         if (node.onChange) node.onChange(node);
     }
 }
 
 void GuiRenderer::renderDragInt(WidgetNode& node) {
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::DragInt(node.label.c_str(), &node.intValue,
-                       node.dragSpeed, node.minInt, node.maxInt)) {
+                       node.dragSpeed, node.minInt, node.maxInt, fmt)) {
         if (node.onChange) node.onChange(node);
     }
 }
@@ -834,7 +905,7 @@ void GuiRenderer::renderInputTextMultiline(WidgetNode& node) {
     size_t cap = node.stringValue.capacity();
     node.stringValue.resize(cap);
 
-    InputTextCallbackData cbData{&node.stringValue};
+    InputTextCallbackData cbData{&node.stringValue, nullptr};
 
     ImGui::InputTextMultiline(
         node.label.c_str(),
@@ -842,7 +913,7 @@ void GuiRenderer::renderInputTextMultiline(WidgetNode& node) {
         node.stringValue.size() + 1,
         {node.width, node.height},
         ImGuiInputTextFlags_CallbackResize,
-        inputTextResizeCallback,
+        inputTextCallback,
         &cbData
     );
 
@@ -926,8 +997,9 @@ void GuiRenderer::renderNewLine(WidgetNode& /*node*/) {
 
 void GuiRenderer::renderDragFloat3(WidgetNode& node) {
     float v[3] = {node.floatX, node.floatY, node.floatZ};
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::DragFloat3(node.label.c_str(), v, node.dragSpeed,
-                          node.minFloat, node.maxFloat)) {
+                          node.minFloat, node.maxFloat, fmt)) {
         node.floatX = v[0];
         node.floatY = v[1];
         node.floatZ = v[2];
@@ -942,11 +1014,14 @@ void GuiRenderer::renderInputTextWithHint(WidgetNode& node) {
     size_t cap = node.stringValue.capacity();
     node.stringValue.resize(cap);
 
-    InputTextCallbackData cbData{&node.stringValue};
+    InputTextCallbackData cbData{&node.stringValue, &node};
 
     ImGuiInputTextFlags flags = ImGuiInputTextFlags_CallbackResize;
     if (node.onSubmit) {
         flags |= ImGuiInputTextFlags_EnterReturnsTrue;
+    }
+    if (node.onHistory) {
+        flags |= ImGuiInputTextFlags_CallbackHistory;
     }
 
     bool enterPressed = ImGui::InputTextWithHint(
@@ -955,7 +1030,7 @@ void GuiRenderer::renderInputTextWithHint(WidgetNode& node) {
         node.stringValue.data(),
         node.stringValue.size() + 1,
         flags,
-        inputTextResizeCallback,
+        inputTextCallback,
         &cbData
     );
 
@@ -971,8 +1046,9 @@ void GuiRenderer::renderInputTextWithHint(WidgetNode& node) {
 }
 
 void GuiRenderer::renderSliderAngle(WidgetNode& node) {
+    const char* fmt = node.formatString.empty() ? nullptr : node.formatString.c_str();
     if (ImGui::SliderAngle(node.label.c_str(), &node.floatValue,
-                           node.minFloat, node.maxFloat)) {
+                           node.minFloat, node.maxFloat, fmt)) {
         if (node.onChange) node.onChange(node);
     }
 }
@@ -1374,8 +1450,8 @@ WidgetStateMap GuiRenderer::saveState(int guiId) {
 
 WidgetStateMap GuiRenderer::saveState() {
     WidgetStateMap result;
-    for (auto& [id, tree] : trees_) {
-        collectState(tree, result);
+    for (auto& [id, entry] : trees_) {
+        collectState(entry.tree, result);
     }
     return result;
 }
@@ -1388,8 +1464,8 @@ void GuiRenderer::loadState(int guiId, const WidgetStateMap& state) {
 }
 
 void GuiRenderer::loadState(const WidgetStateMap& state) {
-    for (auto& [id, tree] : trees_) {
-        applyState(tree, state);
+    for (auto& [id, entry] : trees_) {
+        applyState(entry.tree, state);
     }
 }
 

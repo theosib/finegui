@@ -603,6 +603,49 @@ guiRenderer.renderAll();
 gui.endFrame();
 ```
 
+### Window Warm-Up
+
+`show()` auto-detects auto-sized windows (those without explicit `windowSizeW`/`windowSizeH`) and renders them invisibly for 1 frame so ImGui can compute the layout. This prevents a visual glitch where the window flashes at a wrong size on its first visible frame.
+
+- **Auto-sized windows**: 1 warmup frame (invisible), then visible.
+- **Explicitly sized windows**: No warmup, visible immediately.
+- **Skip warmup**: Pass `immediate=true` to `show()`.
+
+```cpp
+// Normal: auto-sized window gets 1 invisible warmup frame
+int id = guiRenderer.show(WidgetNode::window("Settings", { ... }));
+
+// Skip warmup: visible on the very first frame
+int id = guiRenderer.show(WidgetNode::window("Settings", { ... }), true);
+
+// Explicitly sized windows never warm up
+int id = guiRenderer.show(WidgetNode::window("Settings", 400.0f, 300.0f, { ... }));
+```
+
+Use `isWarmingUp()` to check whether a tree is still in its warmup frame:
+
+```cpp
+if (guiRenderer.isWarmingUp(id)) {
+    // Tree is rendering invisibly; layout not yet finalized
+}
+```
+
+### Staging Trees
+
+`stage()` stores a widget tree without rendering it at all. Use `goLive()` later to transition it to live rendering (with warmup if auto-sized). This is useful for pre-building UI that will be shown in response to a future event.
+
+```cpp
+// Pre-build the inventory window
+int invId = guiRenderer.stage(WidgetNode::window("Inventory", { ... }));
+
+// Later, when the player opens inventory:
+guiRenderer.goLive(invId);
+
+// Check state
+guiRenderer.isStaged(invId);    // true before goLive(), false after
+guiRenderer.isWarmingUp(invId); // true during warmup frame after goLive()
+```
+
 ### Updating Trees
 
 You can replace a tree wholesale or mutate nodes directly:
@@ -630,9 +673,9 @@ guiRenderer.hide(mainId);
 | `WidgetNode::text(content)` | Static text |
 | `WidgetNode::button(label, onClick)` | Click button |
 | `WidgetNode::checkbox(label, value, onChange)` | Boolean toggle |
-| `WidgetNode::slider(label, value, min, max, onChange)` | Float slider |
-| `WidgetNode::sliderInt(label, value, min, max, onChange)` | Integer slider |
-| `WidgetNode::inputText(label, value, onChange, onSubmit)` | Text input |
+| `WidgetNode::slider(label, value, min, max, onChange)` | Float slider. Set `formatString` for custom display format. |
+| `WidgetNode::sliderInt(label, value, min, max, onChange)` | Integer slider. Set `formatString` for custom display format. |
+| `WidgetNode::inputText(label, value, onChange, onSubmit)` | Text input. Supports `onHistory` callback. |
 | `WidgetNode::inputInt(label, value, onChange)` | Integer input |
 | `WidgetNode::inputFloat(label, value, onChange)` | Float input |
 | `WidgetNode::combo(label, items, selected, onChange)` | Dropdown combo |
@@ -683,11 +726,11 @@ guiRenderer.hide(mainId);
 |---------|-------------|
 | `WidgetNode::colorEdit(label, r, g, b, a)` | RGBA color editor |
 | `WidgetNode::colorPicker(label, r, g, b, a)` | Color picker wheel |
-| `WidgetNode::dragFloat(label, value, speed, min, max)` | Drag-to-adjust float |
-| `WidgetNode::dragInt(label, value, speed, min, max)` | Drag-to-adjust int |
-| `WidgetNode::dragFloat3(label, x, y, z, speed, min, max, onChange)` | Drag-to-adjust 3-component float vector (x, y, z) |
-| `WidgetNode::inputTextWithHint(label, hint, value, onChange, onSubmit)` | Text input with placeholder hint |
-| `WidgetNode::sliderAngle(label, valueRadians, minDegrees, maxDegrees, onChange)` | Angle slider (radians internally, degrees displayed) |
+| `WidgetNode::dragFloat(label, value, speed, min, max)` | Drag-to-adjust float. Set `formatString` for custom display format. |
+| `WidgetNode::dragInt(label, value, speed, min, max)` | Drag-to-adjust int. Set `formatString` for custom display format. |
+| `WidgetNode::dragFloat3(label, x, y, z, speed, min, max, onChange)` | Drag-to-adjust 3-component float vector (x, y, z). Set `formatString` for custom display format. |
+| `WidgetNode::inputTextWithHint(label, hint, value, onChange, onSubmit)` | Text input with placeholder hint. Supports `onHistory` callback. |
+| `WidgetNode::sliderAngle(label, valueRadians, minDegrees, maxDegrees, onChange)` | Angle slider (radians internally, degrees displayed). Set `formatString` for custom display format. |
 | `WidgetNode::smallButton(label, onClick)` | Compact button (no frame padding) |
 | `WidgetNode::colorButton(label, r, g, b, a, onClick)` | Color swatch display button |
 
@@ -807,6 +850,93 @@ finegui::WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f,
 | `onClose` | Window close button | - |
 | `onFocus` | Widget gains keyboard focus | - |
 | `onBlur` | Widget loses keyboard focus | - |
+| `onHistory` | Up/Down arrow in InputText | `intValue` (-1 = up, +1 = down) |
+
+### Format String Support (Sliders & Drags)
+
+All slider and drag widgets support an optional format string that controls how the value is displayed. This is passed directly to ImGui's underlying slider/drag functions.
+
+**Retained mode (C++):** Set the `formatString` field on the `WidgetNode`. An empty string uses the ImGui default.
+
+```cpp
+auto slider = WidgetNode::slider("Volume", 0.5f, 0.0f, 1.0f);
+slider.formatString = "%.2f";  // Display with 2 decimal places
+
+auto angle = WidgetNode::sliderAngle("Heading", 0.0f, -360.0f, 360.0f);
+angle.formatString = "%.1f deg";  // Custom angle format
+
+auto drag = WidgetNode::dragFloat("Scale", 1.0f, 0.01f, 0.0f, 10.0f);
+drag.formatString = "%.3f";
+```
+
+**Script mode:** Use the `:format` map field or `=format` named argument:
+
+```
+# Integer display for a float slider
+{ui.slider "FOV" 90 0 180 =format "%.0f"}
+
+# Two decimal places
+{ui.slider "Speed" 1.0 0.0 10.0 =format "%.2f"}
+
+# Custom suffix on integer slider
+{ui.slider_int "Items" 5 0 100 =format "%d items"}
+
+# Drag with format
+{ui.drag_float "Scale" 1.0 0.01 0.0 10.0 =format "%.3f"}
+
+# Custom angle format
+{ui.slider_angle "Angle" 0.0 -360 360 =format "%.1f deg"}
+```
+
+**Defaults** (when no format is specified):
+
+| Widget Type | Default Format |
+|-------------|---------------|
+| `slider` / `dragFloat` / `dragFloat3` | `"%.3f"` |
+| `sliderInt` / `dragInt` | `"%d"` |
+| `sliderAngle` | `"%.0f deg"` |
+
+**Applies to:** `slider`, `sliderInt`, `sliderAngle`, `dragFloat`, `dragInt`, `dragFloat3`
+
+### Input Text History Callback (on_history)
+
+Input text widgets support an `onHistory` callback for Up/Down arrow key history navigation, similar to a console or terminal. When the user presses Up or Down while the input is focused, the callback is invoked to retrieve a replacement text string.
+
+**Retained mode (C++):** Set the `onHistory` callback on the `WidgetNode`. The callback receives the node with `intValue` set to -1 (Up arrow) or +1 (Down arrow). Update `stringValue` with the desired replacement text.
+
+```cpp
+std::vector<std::string> history = {"cmd1", "cmd2", "cmd3"};
+int histIdx = static_cast<int>(history.size());
+
+auto input = WidgetNode::inputText("Console", "");
+input.onHistory = [&](WidgetNode& w) {
+    histIdx += w.intValue;  // -1 for up, +1 for down
+    histIdx = std::clamp(histIdx, 0, static_cast<int>(history.size()));
+    if (histIdx < static_cast<int>(history.size())) {
+        w.stringValue = history[histIdx];
+    } else {
+        w.stringValue = "";  // Past end = clear
+    }
+};
+```
+
+**Script mode:** Use the `:on_history` map field or `=on_history` named argument. The callback receives -1 (Up) or +1 (Down) and should return the replacement text string (or nil to do nothing).
+
+```
+set history ["cmd1" "cmd2" "cmd3"]
+set hist_idx {len history}
+
+def on_hist [dir] do
+  set hist_idx {+ hist_idx dir}
+  if {< hist_idx 0} do set hist_idx 0 end
+  if {>= hist_idx {len history}} do set hist_idx {len history}; "" end
+  {get history hist_idx}
+end
+
+{ui.input ">" "" =on_submit submit_fn =on_history on_hist}
+```
+
+**Works with:** `inputText`, `inputTextWithHint` (retained mode) / `ui.input`, `ui.input_with_hint` (script mode)
 
 ### Focus Management
 
@@ -846,6 +976,8 @@ WidgetNode supports animation-related fields for smooth transitions (used by Twe
 | `alpha` | `1.0f` | Window opacity (0.0 = invisible, 1.0 = fully opaque) |
 | `windowPosX` | `FLT_MAX` | Explicit window position X (`FLT_MAX` = ImGui auto-positioning) |
 | `windowPosY` | `FLT_MAX` | Explicit window position Y (`FLT_MAX` = ImGui auto-positioning) |
+| `windowPivotX` | `0.0f` | Window position pivot X (0.0 = left edge, 0.5 = center, 1.0 = right edge) |
+| `windowPivotY` | `0.0f` | Window position pivot Y (0.0 = top edge, 0.5 = center, 1.0 = bottom edge) |
 | `scaleX` | `1.0f` | Horizontal scale factor (0.0 = collapsed, 1.0 = normal size) |
 | `scaleY` | `1.0f` | Vertical scale factor (0.0 = collapsed, 1.0 = normal size) |
 | `rotationY` | `0.0f` | Rotation around the Y-axis in radians (0 = front face, PI = back face) |
@@ -855,6 +987,13 @@ auto win = WidgetNode::window("Fading", { WidgetNode::text("Semi-transparent") }
 win.alpha = 0.5f;          // 50% opacity
 win.windowPosX = 100.0f;   // Position at (100, 200)
 win.windowPosY = 200.0f;
+
+// Center a window at a specific position using pivot
+auto centered = WidgetNode::window("Centered", { WidgetNode::text("I'm centered!") });
+centered.windowPosX = 400.0f;    // Center point X
+centered.windowPosY = 300.0f;    // Center point Y
+centered.windowPivotX = 0.5f;    // Pivot at center
+centered.windowPivotY = 0.5f;
 
 auto popup = WidgetNode::window("ZoomPopup", { WidgetNode::text("Zoomed!") });
 popup.scaleX = 0.0f;       // Start collapsed (animate to 1.0 with TweenManager)
@@ -1236,6 +1375,30 @@ ui.show {ui.window "Settings" [
 ]}
 ```
 
+### Window Warm-Up and Staging (Scripts)
+
+By default, `ui.show` renders auto-sized windows invisibly for 1 frame to let ImGui compute layout. Pass `=immediate true` to skip this:
+
+```
+# Normal (warmup for auto-sized window)
+set id {ui.show {ui.window "Settings" [...]}}
+
+# Skip warmup — visible immediately
+set id {ui.show {ui.window "Settings" [...]} =immediate true}
+```
+
+Use `ui.stage` to pre-build a tree without rendering, then `ui.go_live` to make it visible later:
+
+```
+# Pre-build inventory (not rendered yet)
+set inv_id {ui.stage {ui.window "Inventory" [
+    {ui.text "Your items:"}
+]}}
+
+# Later, when player presses 'I':
+ui.go_live inv_id
+```
+
 ### String Interpolation
 
 finescript natively supports string interpolation using `{expression}` syntax inside double-quoted strings. This works in all widget text: titles, labels, text content, and anywhere else a string is accepted.
@@ -1289,7 +1452,9 @@ Common fields useful with named arguments:
 | `:on_click` | Click callback |
 | `:on_change` | Value change callback |
 | `:on_submit` | Submit callback (text inputs) |
+| `:on_history` | History callback (text inputs, receives -1/+1) |
 | `:on_close` | Close callback (windows, modals) |
+| `:format` | Display format string (sliders, drags) |
 | `:drag_type`, `:drag_data`, `:drop_accept` | Drag-and-drop |
 | `:focusable` | Tab-navigation control |
 | `:window_flags` | Window flag symbols array |
@@ -1317,13 +1482,13 @@ Builder functions (return widget maps):
 
 | Function | Arguments | Description |
 |----------|-----------|-------------|
-| `ui.window` | `title children` | Window with title and child array. Set `:window_size_w` and `:window_size_h` map fields for initial size. Set `:window_flags` to a flag symbol array (see [Window Control](#window-control)). |
+| `ui.window` | `title children` | Window with title and child array. Set `:window_size_w` and `:window_size_h` map fields for initial size. Set `:window_flags` to a flag symbol array (see [Window Control](#window-control)). Set `:window_pos_x`/`:window_pos_y` for explicit positioning and `:window_pivot_x`/`:window_pivot_y` (default 0.0) to control the anchor point (use 0.5/0.5 to center at the given position). |
 | `ui.text` | `content` | Static text |
 | `ui.button` | `label [on_click]` | Button with optional callback |
 | `ui.checkbox` | `label value [on_change]` | Boolean toggle |
-| `ui.slider` | `label value min max [on_change]` | Float slider |
-| `ui.slider_int` | `label value min max [on_change]` | Integer slider |
-| `ui.input` | `label value [on_change] [on_submit]` | Text input |
+| `ui.slider` | `label value min max [on_change]` | Float slider. Supports `=format` for display format. |
+| `ui.slider_int` | `label value min max [on_change]` | Integer slider. Supports `=format` for display format. |
+| `ui.input` | `label value [on_change] [on_submit]` | Text input. Supports `=on_history` callback. |
 | `ui.input_int` | `label value [on_change]` | Integer input |
 | `ui.input_float` | `label value [on_change]` | Float input |
 | `ui.combo` | `label items selected [on_change]` | Dropdown combo |
@@ -1353,11 +1518,11 @@ Builder functions (return widget maps):
 | `ui.table_next_column` | *(none)* | Next column |
 | `ui.color_edit` | `label color_array` | Color editor |
 | `ui.color_picker` | `label color_array` | Color picker |
-| `ui.drag_float` | `label value speed min max` | Drag float |
-| `ui.drag_int` | `label value speed min max` | Drag int |
-| `ui.drag_float3` | `label [x y z] speed min max [on_change]` | Drag 3-component float vector |
-| `ui.input_with_hint` | `label hint value [on_change] [on_submit]` | Text input with placeholder hint |
-| `ui.slider_angle` | `label value_rad min_deg max_deg [on_change]` | Angle slider (radians/degrees) |
+| `ui.drag_float` | `label value speed min max` | Drag float. Supports `=format` for display format. |
+| `ui.drag_int` | `label value speed min max` | Drag int. Supports `=format` for display format. |
+| `ui.drag_float3` | `label [x y z] speed min max [on_change]` | Drag 3-component float vector. Supports `=format` for display format. |
+| `ui.input_with_hint` | `label hint value [on_change] [on_submit]` | Text input with placeholder hint. Supports `=on_history` callback. |
+| `ui.slider_angle` | `label value_rad min_deg max_deg [on_change]` | Angle slider (radians/degrees). Supports `=format` for display format. |
 | `ui.small_button` | `label [on_click]` | Compact button (no frame padding) |
 | `ui.color_button` | `label [r g b a] [on_click]` | Color swatch display button |
 | `ui.listbox` | `label items selected [height]` | List box |
@@ -1393,7 +1558,9 @@ Action functions (require active ScriptGui context):
 
 | Function | Arguments | Description |
 |----------|-----------|-------------|
-| `ui.show` | `widget_map` | Convert map to widget tree, show it, return ID |
+| `ui.show` | `widget_map [=immediate true]` | Convert map to widget tree, show it, return ID. Auto-sized windows get 1 invisible warmup frame; pass `=immediate true` to skip. |
+| `ui.stage` | `widget_map` | Store map tree without rendering (staged). Returns ID. Use `ui.go_live` to begin rendering later. |
+| `ui.go_live` | `id` | Transition a staged tree to live rendering (with warmup if auto-sized). |
 | `ui.update` | `id widget_map` | Replace an existing tree |
 | `ui.set_text` | `id child_index text` | Mutate text content of a child node |
 | `ui.set_value` | `id child_index value` | Mutate value field of a child node |
@@ -1577,8 +1744,17 @@ The key advantage is that script maps use shared_ptr semantics, so direct mutati
 
 MapRenderer mapRenderer(engine);
 
-// Show a map tree
+// Show a map tree (auto-sized windows get 1 invisible warmup frame)
 int id = mapRenderer.show(mapValue, ctx);
+
+// Skip warmup
+int id2 = mapRenderer.show(mapValue, ctx, true);
+
+// Stage a tree (stored but not rendered)
+int staged = mapRenderer.stage(mapValue, ctx);
+mapRenderer.isStaged(staged);    // true
+mapRenderer.goLive(staged);      // begins rendering (with warmup if auto-sized)
+mapRenderer.isWarmingUp(staged); // true during warmup frame
 
 // Each frame:
 gui.beginFrame();
@@ -1698,6 +1874,7 @@ tweens.animate(guiId, {0}, TweenProperty::FloatValue, 0.0f, 1.0f, 0.5f);
 |----------|-----------------|-------------|
 | `Alpha` | `alpha` | Fade in/out |
 | `PosX`, `PosY` | `windowPosX`, `windowPosY` | Slide windows |
+| `PivotX`, `PivotY` | `windowPivotX`, `windowPivotY` | Position anchor point |
 | `FloatValue` | `floatValue` | Progress bars, sliders |
 | `IntValue` | `intValue` | Counters |
 | `ColorR/G/B/A` | `colorR/G/B/A` | Color transitions |

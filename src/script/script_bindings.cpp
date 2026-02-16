@@ -1407,14 +1407,41 @@ void registerGuiBindings(ScriptEngine& engine) {
     // Action functions (require ScriptGui context via ctx.userData())
     // =========================================================================
 
-    // ui.show map  ->  stores map in MapRenderer, returns ID
+    // ui.show map [=immediate true]  ->  stores map in MapRenderer, returns ID
     uiMap.set(engine.intern("show"), makeFn(
+        [&engine](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* gui = static_cast<ScriptGui*>(ctx.userData());
+            if (!gui || args.empty() || !args[0].isMap()) {
+                return Value::nil();
+            }
+            // Check for =immediate kwarg in trailing map
+            bool immediate = false;
+            if (args.size() > 1 && args.back().isMap()) {
+                auto imm = args.back().asMap().get(engine.intern("immediate"));
+                if (imm.isBool()) immediate = imm.asBool();
+            }
+            return gui->scriptShow(args[0], immediate);
+        }));
+
+    // ui.stage map  ->  stores map without rendering, returns ID
+    uiMap.set(engine.intern("stage"), makeFn(
         [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
             auto* gui = static_cast<ScriptGui*>(ctx.userData());
             if (!gui || args.empty() || !args[0].isMap()) {
                 return Value::nil();
             }
-            return gui->scriptShow(args[0]);
+            return gui->scriptStage(args[0]);
+        }));
+
+    // ui.go_live id  ->  begin rendering a staged tree
+    uiMap.set(engine.intern("go_live"), makeFn(
+        [](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+            auto* gui = static_cast<ScriptGui*>(ctx.userData());
+            if (!gui || args.empty() || !args[0].isInt()) {
+                return Value::nil();
+            }
+            gui->scriptGoLive(static_cast<int>(args[0].asInt()));
+            return Value::nil();
         }));
 
     // ui.hide  ->  removes tree from renderer

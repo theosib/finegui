@@ -87,7 +87,14 @@ public:
     // These are public so script_bindings.cpp can call them via ctx.userData().
 
     /// Called by ui.show binding: store map in MapRenderer, returns GUI ID.
-    finescript::Value scriptShow(const finescript::Value& map);
+    /// Pass immediate=true to skip warmup frames.
+    finescript::Value scriptShow(const finescript::Value& map, bool immediate = false);
+
+    /// Called by ui.stage binding: store map without rendering.
+    finescript::Value scriptStage(const finescript::Value& map);
+
+    /// Called by ui.go_live binding: begin rendering staged tree.
+    void scriptGoLive(int id);
 
     /// Called by ui.hide binding: remove tree.
     void scriptHide();

@@ -544,7 +544,7 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `connectToInputManager()` replaces manual event polling for simpler integration
 - Focus management: `focusable`, `autoFocus`, `onFocus`, `onBlur` on WidgetNode; `setFocus()` on renderers
 - `findById()` on both renderers for widget search by `:id` string; `ui.find` in scripts
-- Animation fields: `alpha`, `windowPosX`, `windowPosY`, `scaleX`, `scaleY`, `rotationY` on WidgetNode (FLT_MAX = auto-position for pos; 1.0 = normal scale; 0.0 = no rotation)
+- Animation fields: `alpha`, `windowPosX`, `windowPosY`, `windowPivotX`, `windowPivotY`, `scaleX`, `scaleY`, `rotationY` on WidgetNode (FLT_MAX = auto-position for pos; 0.0 = top-left pivot; 1.0 = normal scale; 0.0 = no rotation)
 - TweenManager: call `update(dt)` before `renderAll()` each frame
 - Vertex post-processing transform (scale/rotation) only affects the window's own draw list, not nested `BeginChild` regions
 - Vulkan pipeline uses `cullNone` so Y-axis flips work without back-face culling issues
@@ -555,6 +555,7 @@ Backend destroyed before ImGui context (`backend.reset()` in `~Impl()` before `D
 - `ImageButton` requires a valid TextureHandle; skips rendering silently if texture is invalid
 - `PlotLines`/`PlotHistogram`: `plotValues` stores float array data; `minFloat`/`maxFloat` = FLT_MAX for auto-scaling; `overlayText` for optional text overlay; `width`/`height` for graph size (0 = auto)
 - `PushTheme`/`PopTheme` must be paired with matching preset names; pop count is determined by the preset name
+- `show()` renders auto-sized windows invisibly for 1 frame (warmup); pass `immediate=true` or use explicit size to skip
 
 ## WidgetNode (Retained Mode)
 
@@ -609,6 +610,9 @@ struct WidgetNode {
     float minFloat = 0.0f, maxFloat = 1.0f;
     int minInt = 0, maxInt = 100;
 
+    // Display format (sliders, drags)
+    std::string formatString;           // ImGui format string (empty = ImGui default)
+
     // Layout
     float width = 0.0f, height = 0.0f;  // 0 = auto
     int columnCount = 1;
@@ -626,6 +630,7 @@ struct WidgetNode {
     WidgetCallback onClick;         // Button, MenuItem, Image
     WidgetCallback onChange;        // Checkbox, Slider, Input, Combo, ColorEdit
     WidgetCallback onSubmit;        // InputText (Enter pressed)
+    WidgetCallback onHistory;       // InputText Up/Down arrow history; intValue=-1(Up)/+1(Down), set stringValue to replace
     WidgetCallback onClose;         // Window close button
 
     // Image
@@ -678,6 +683,8 @@ struct WidgetNode {
     float alpha = 1.0f;            // Window opacity (0.0=invisible, 1.0=opaque)
     float windowPosX = FLT_MAX;    // Explicit window position (FLT_MAX=auto)
     float windowPosY = FLT_MAX;
+    float windowPivotX = 0.0f;    // Position pivot/anchor (0,0=top-left, 0.5,0.5=center)
+    float windowPivotY = 0.0f;
     float scaleX = 1.0f;           // Window scale X (1.0=normal, 0.0=collapsed to center)
     float scaleY = 1.0f;           // Window scale Y (1.0=normal, 0.0=collapsed to center)
     float rotationY = 0.0f;        // Y-axis rotation in radians (0=facing forward, PI=flipped)
@@ -822,7 +829,11 @@ Common `ImGuiWindowFlags_*` values for `windowFlags` / `flags` parameter:
 class GuiRenderer {
     explicit GuiRenderer(GuiSystem& gui);
 
-    int show(WidgetNode tree);              // Register tree, returns ID
+    int show(WidgetNode tree, bool immediate = false); // Register tree, returns ID; warmup unless immediate
+    int stage(WidgetNode tree);              // Store without rendering (staged), returns ID
+    void goLive(int guiId);                  // Transition staged tree to live (warmup if auto-sized)
+    bool isWarmingUp(int guiId) const;       // True during invisible warmup frame
+    bool isStaged(int guiId) const;          // True if staged (not yet live)
     void update(int guiId, WidgetNode tree); // Replace tree
     void hide(int guiId);                    // Remove tree
     void hideAll();                          // Remove all
@@ -854,6 +865,43 @@ if (widget) widget->floatValue = 0.5f;
 
 // Remove:
 renderer.hide(id);
+```
+
+### Window Warm-Up & Staging
+
+`show()` auto-detects auto-sized windows (no explicit `windowSizeW`/`windowSizeH` on WidgetNode, or no `:window_size_w`/`:window_size_h` on map) and renders them invisibly for 1 frame so ImGui can compute layout. This prevents the visual glitch of a window appearing at a default size then snapping to its content size.
+
+- **`show(tree)`** -- registers and begins rendering. Auto-sized windows get 1 invisible warmup frame first.
+- **`show(tree, true)`** / `ui.show map =immediate true` -- skips warmup entirely. Use when the window has explicit size or you don't care about the initial frame.
+- **`stage(tree)`** / `ui.stage map` -- stores the tree without rendering. Returns an ID. The tree is inert until `goLive()`.
+- **`goLive(id)`** / `ui.go_live id` -- transitions a staged tree to live rendering. Applies warmup if auto-sized.
+- **`isWarmingUp(id)`** -- returns true during the invisible warmup frame.
+- **`isStaged(id)`** -- returns true if the tree is stored but not yet live.
+
+Staging is useful for pre-building UI trees (e.g., during a loading screen) and revealing them later without any layout glitch.
+
+```cpp
+// C++ (GuiRenderer)
+int id = renderer.stage(WidgetNode::window("Inventory", { /* ... */ }));
+// ... later ...
+renderer.goLive(id);  // warmup + appear
+
+// C++ (MapRenderer)
+int id = mapRenderer.stage(tree, ctx);
+mapRenderer.goLive(id);
+
+// C++ skip warmup
+int id = renderer.show(WidgetNode::window("HUD", 400, 300, { /* ... */ }), true);
+```
+
+```
+# Script
+set id {ui.stage {ui.window "Inventory" [...]}}
+# ... later ...
+ui.go_live id
+
+# Script skip warmup
+ui.show {ui.window "HUD" [...]} =immediate true
 ```
 
 ## DragDropManager
@@ -927,7 +975,9 @@ mapRenderer.setTextureRegistry(&reg);
 
 Alternative to GuiRenderer -- renders directly from finescript map data (no WidgetNode conversion). Used internally by ScriptGui. Maps ARE the widget data (shared_ptr semantics via finescript MapData), so mutations from script or C++ are visible immediately to the renderer.
 
-Window animation fields on maps: `:alpha`, `:window_pos_x`, `:window_pos_y`, `:scale_x`, `:scale_y`, `:rotation_y`. Same semantics as WidgetNode fields (defaults: alpha=1.0, pos=FLT_MAX for auto, scale=1.0, rotation=0.0).
+Window animation fields on maps: `:alpha`, `:window_pos_x`, `:window_pos_y`, `:window_pivot_x`, `:window_pivot_y`, `:scale_x`, `:scale_y`, `:rotation_y`. Same semantics as WidgetNode fields (defaults: alpha=1.0, pos=FLT_MAX for auto, pivot=0.0, scale=1.0, rotation=0.0).
+
+Window position pivot: `:window_pivot_x` (default 0.0), `:window_pivot_y` (default 0.0). Controls the anchor point for `:window_pos_x`/`:window_pos_y`. Use `0.5`/`0.5` to center a window at the given position.
 
 Window control symbols on maps: `:window_size_w` (programmatic width, 0=auto), `:window_size_h` (programmatic height, 0=auto).
 
@@ -937,15 +987,20 @@ Window flag symbols: `:no_nav` (NoNav), `:no_inputs` (NoInputs). Used in the `:f
 class MapRenderer {
     explicit MapRenderer(finescript::ScriptEngine& engine);
 
-    int show(finescript::Value rootMap, finescript::ExecutionContext& ctx);
+    int show(finescript::Value rootMap, finescript::ExecutionContext& ctx,
+             bool immediate = false);              // Register tree; warmup unless immediate
+    int stage(finescript::Value rootMap, finescript::ExecutionContext& ctx); // Store without rendering (staged)
+    void goLive(int id);                           // Transition staged tree to live (warmup if auto-sized)
+    bool isWarmingUp(int id) const;                // True during invisible warmup frame
+    bool isStaged(int id) const;                   // True if staged (not yet live)
     void hide(int id);
     void hideAll();
-    finescript::Value* get(int id);            // nullptr if not found
-    void renderAll();                          // Call between beginFrame/endFrame
+    finescript::Value* get(int id);                // nullptr if not found
+    void renderAll();                              // Call between beginFrame/endFrame
     void setDragDropManager(DragDropManager* mgr);
     void setTextureRegistry(TextureRegistry* registry);
-    const ConverterSymbols& syms() const;      // Pre-interned symbols
-    void setFocus(const std::string& widgetId); // Programmatic focus by widget ID
+    const ConverterSymbols& syms() const;          // Pre-interned symbols
+    void setFocus(const std::string& widgetId);    // Programmatic focus by widget ID
     finescript::Value findById(const std::string& widgetId); // Find by :id string (matches symbol/string fields)
     finescript::Value findById(uint32_t symbolId);           // Find by :id symbol (matches symbol/string fields)
 };
@@ -1046,13 +1101,13 @@ Registers `ui` and `gui` as constant map objects on the engine.
 
 | Function | Script Syntax | Notes |
 |----------|---------------|-------|
-| `ui.window` | `ui.window "Title" [children]` | Supports `:window_size_w`/`:window_size_h` map keys for programmatic sizing |
+| `ui.window` | `ui.window "Title" [children]` | Supports `:window_size_w`/`:window_size_h` for sizing, `:window_pivot_x`/`:window_pivot_y` for position anchor (default 0.0; use 0.5/0.5 to center at position) |
 | `ui.text` | `ui.text "content"` | |
 | `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end` |
 | `ui.checkbox` | `ui.checkbox "label" value [on_change]` | on_change receives bool |
-| `ui.slider` | `ui.slider "label" value min max [on_change]` | on_change receives float |
-| `ui.slider_int` | `ui.slider_int "label" value min max [on_change]` | on_change receives int |
-| `ui.input` | `ui.input "label" value [on_change] [on_submit]` | |
+| `ui.slider` | `ui.slider "label" value min max [on_change]` | on_change receives float; supports `=format` |
+| `ui.slider_int` | `ui.slider_int "label" value min max [on_change]` | on_change receives int; supports `=format` |
+| `ui.input` | `ui.input "label" value [on_change] [on_submit]` | Supports `=on_history` callback |
 | `ui.input_int` | `ui.input_int "label" value [on_change]` | |
 | `ui.input_float` | `ui.input_float "label" value [on_change]` | |
 | `ui.combo` | `ui.combo "label" [items] selected [on_change]` | on_change receives int index |
@@ -1079,11 +1134,11 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.table_next_column` | `ui.table_next_column` | |
 | `ui.color_edit` | `ui.color_edit "label" [r g b a] [on_change]` | Color as array |
 | `ui.color_picker` | `ui.color_picker "label" [r g b a] [on_change]` | Color as array |
-| `ui.drag_float` | `ui.drag_float "label" val speed min max [on_change]` | |
-| `ui.drag_int` | `ui.drag_int "label" val speed min max [on_change]` | |
-| `ui.drag_float3` | `ui.drag_float3 "label" [x y z] speed min max [on_change]` | 3-component float vector |
-| `ui.input_with_hint` | `ui.input_with_hint "label" "hint" "value" [on_change] [on_submit]` | Text input with placeholder |
-| `ui.slider_angle` | `ui.slider_angle "label" value_rad min_deg max_deg [on_change]` | Radians stored, degrees displayed |
+| `ui.drag_float` | `ui.drag_float "label" val speed min max [on_change]` | Supports `=format` |
+| `ui.drag_int` | `ui.drag_int "label" val speed min max [on_change]` | Supports `=format` |
+| `ui.drag_float3` | `ui.drag_float3 "label" [x y z] speed min max [on_change]` | 3-component float vector; supports `=format` |
+| `ui.input_with_hint` | `ui.input_with_hint "label" "hint" "value" [on_change] [on_submit]` | Text input with placeholder; supports `=on_history` |
+| `ui.slider_angle` | `ui.slider_angle "label" value_rad min_deg max_deg [on_change]` | Radians stored, degrees displayed; supports `=format` |
 | `ui.small_button` | `ui.small_button "label" [on_click]` | Compact button variant |
 | `ui.color_button` | `ui.color_button "label" [r g b a] [on_click]` | Color swatch display |
 | `ui.listbox` | `ui.listbox "label" [items] [selected] [height] [on_change]` | |
@@ -1132,11 +1187,74 @@ All `ui.*` builders support **named arguments** (`=name value` syntax). Named ar
 
 An explicit options map as last positional arg also works: `{ui.slider "Volume" {=value 0.5}}`. Both forms are equivalent; prefer no-braces.
 
-Useful fields: `:id`, `:enabled`, `:visible`, `:on_click`, `:on_change`, `:on_submit`, `:on_close`, `:drag_type`, `:drag_data`, `:drop_accept`, `:focusable`, `:window_flags`.
+Useful fields: `:id`, `:enabled`, `:visible`, `:on_click`, `:on_change`, `:on_submit`, `:on_close`, `:on_history`, `:format`, `:drag_type`, `:drag_data`, `:drop_accept`, `:focusable`, `:window_flags`.
 
 Named callbacks (recommended style):
 ```
 {ui.slider "Volume" =value 0.5 =min 0.0 =max 1.0 =on_change fn [v] do set volume v end}
+```
+
+### Format String for Sliders and Drags
+
+All slider and drag widgets support an optional display format string, passed directly to ImGui. Set via the `=format` named argument (script) or the `:format` map field. In retained mode, set `node.formatString`. An empty string uses the ImGui default.
+
+Applies to: `slider`, `slider_int`, `slider_angle`, `drag_float`, `drag_int`, `drag_float3`.
+
+Default formats (when not specified): `"%.3f"` for float sliders/drags, `"%d"` for int sliders/drags, `"%.0f deg"` for slider_angle.
+
+Script examples:
+```
+{ui.slider "FOV" 90 0 180 =format "%.0f"}
+{ui.slider_int "Items" 5 0 100 =format "%d items"}
+{ui.drag_float "Scale" 1.0 0.01 0.0 10.0 =format "%.3f"}
+{ui.slider_angle "Heading" 0.0 -360 360 =format "%.1f deg"}
+```
+
+Retained mode:
+```cpp
+auto node = WidgetNode::slider("FOV", 90.0f, 0.0f, 180.0f);
+node.formatString = "%.0f";  // Display as integer
+
+auto node2 = WidgetNode::dragFloat("Scale", 1.0f, 0.01f, 0.0f, 10.0f);
+node2.formatString = "%.3f";
+```
+
+### Input Text History Callback (on_history)
+
+Input text widgets support an `on_history` callback for Up/Down arrow key history navigation (like a console/terminal). The callback receives -1 (Up) or +1 (Down) as the direction and should return the replacement text string (or nil for no change).
+
+Applies to: `input_text` (`ui.input`), `input_text_with_hint` (`ui.input_with_hint`).
+
+Script example:
+```
+set history ["first command" "second command" "third command"]
+set hist_idx {len history}
+
+set hist_fn fn [dir] do
+    set hist_idx (hist_idx + dir)
+    if (hist_idx < 0) do set hist_idx 0 end
+    if (hist_idx >= {len history}) do
+        set hist_idx {len history}
+        return ""
+    end
+    return {get history hist_idx}
+end
+
+ui.show {ui.window "Console" [
+    {ui.input ">" "" =on_submit submit_fn =on_history hist_fn}
+]}
+```
+
+Retained mode:
+```cpp
+auto node = WidgetNode::inputText(">", "");
+node.onHistory = [&](WidgetNode& w) {
+    int direction = w.intValue;  // -1 = Up, +1 = Down
+    std::string replacement = getHistoryEntry(direction);
+    if (!replacement.empty()) {
+        w.stringValue = replacement;
+    }
+};
 ```
 
 ### String Interpolation in Widget Text
@@ -1165,7 +1283,10 @@ ui.text "Literal brace: \{ \}"      # escape with backslash
 
 | Function | Script Syntax | Description |
 |----------|---------------|-------------|
-| `ui.show` | `ui.show widget_map` | Store map in MapRenderer, returns ID |
+| `ui.show` | `ui.show widget_map` | Store map in MapRenderer with warmup, returns ID |
+| `ui.show` (immediate) | `ui.show widget_map =immediate true` | Store map without warmup, returns ID |
+| `ui.stage` | `ui.stage widget_map` | Store map without rendering (staged), returns ID |
+| `ui.go_live` | `ui.go_live id` | Transition staged tree to live (with warmup if auto-sized) |
 | `ui.update` | `ui.update id widget_map` | Replace an existing tree |
 | `ui.hide` | `ui.hide` | Remove tree from renderer |
 | `ui.node` | `ui.node gui_id [child_path]` | Navigate map tree, return child map |

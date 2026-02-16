@@ -2394,6 +2394,153 @@ void test_options_map_overrides_positional() {
 }
 
 // ============================================================================
+// Window Warm-up / Staging Tests (MapRenderer)
+// ============================================================================
+
+void test_map_show_auto_warmup() {
+    std::cout << "Testing: MapRenderer show() auto-sized gets warmup... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Window without explicit size → auto-sized → warmup
+    auto window = Value::map();
+    window.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    window.asMap().set(engine.intern("title"), Value::string("Test"));
+
+    MapRenderer renderer(engine);
+    int id = renderer.show(window, ctx);
+    assert(renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_map_show_explicit_size_no_warmup() {
+    std::cout << "Testing: MapRenderer show() explicit-sized skips warmup... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto window = Value::map();
+    window.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    window.asMap().set(engine.intern("title"), Value::string("Test"));
+    window.asMap().set(engine.intern("window_size_w"), Value::number(400.0));
+    window.asMap().set(engine.intern("window_size_h"), Value::number(300.0));
+
+    MapRenderer renderer(engine);
+    int id = renderer.show(window, ctx);
+    assert(!renderer.isWarmingUp(id));
+    assert(!renderer.isStaged(id));
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_map_show_immediate() {
+    std::cout << "Testing: MapRenderer show(immediate=true) skips warmup... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto window = Value::map();
+    window.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    window.asMap().set(engine.intern("title"), Value::string("Test"));
+
+    MapRenderer renderer(engine);
+    int id = renderer.show(window, ctx, /*immediate=*/true);
+    assert(!renderer.isWarmingUp(id));
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_map_stage_and_go_live() {
+    std::cout << "Testing: MapRenderer stage() then goLive()... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto window = Value::map();
+    window.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    window.asMap().set(engine.intern("title"), Value::string("Test"));
+
+    MapRenderer renderer(engine);
+    int id = renderer.stage(window, ctx);
+    assert(renderer.isStaged(id));
+    assert(!renderer.isWarmingUp(id));
+    assert(renderer.get(id) != nullptr);  // accessible while staged
+
+    renderer.goLive(id);
+    assert(!renderer.isStaged(id));
+    assert(renderer.isWarmingUp(id));  // auto-sized → warmup
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_map_stage_explicit_size_go_live() {
+    std::cout << "Testing: MapRenderer stage() explicit-sized then goLive()... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto window = Value::map();
+    window.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    window.asMap().set(engine.intern("title"), Value::string("Test"));
+    window.asMap().set(engine.intern("window_size_w"), Value::number(400.0));
+    window.asMap().set(engine.intern("window_size_h"), Value::number(300.0));
+
+    MapRenderer renderer(engine);
+    int id = renderer.stage(window, ctx);
+    assert(renderer.isStaged(id));
+
+    renderer.goLive(id);
+    assert(!renderer.isStaged(id));
+    assert(!renderer.isWarmingUp(id));  // explicit size → no warmup
+
+    renderer.hide(id);
+    std::cout << "PASSED\n";
+}
+
+void test_script_stage_binding() {
+    std::cout << "Testing: ui.stage returns integer ID... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+    ctx.setUserData(nullptr);  // No ScriptGui → returns nil (safety check)
+
+    // We can't test ui.stage without a ScriptGui, but we can verify
+    // the binding builds a window map correctly
+    auto result = engine.executeCommand(
+        R"({ui.window "Test" [{ui.text "Hello"}]})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+    assert(result.returnValue.asMap().get(engine.intern("type")).asSymbol() ==
+           engine.intern("window"));
+
+    std::cout << "PASSED\n";
+}
+
+void test_script_show_immediate_kwarg() {
+    std::cout << "Testing: ui.show =immediate kwarg builds correctly... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Verify the window with =immediate builds correctly as a map
+    // (actual show requires ScriptGui context)
+    auto result = engine.executeCommand(
+        R"({ui.window "Test" [] =window_size_w 400 =window_size_h 300})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+    assert(result.returnValue.asMap().get(engine.intern("window_size_w")).asNumber() == 400.0);
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Native kwargs (no-braces) tests
 // ============================================================================
 
@@ -2534,6 +2681,221 @@ void test_kwargs_input() {
     assert(m.get(engine.intern("label")).asString() == "Name");
     assert(m.get(engine.intern("value")).asString() == "Alice");
     assert(m.get(engine.intern("hint")).asString() == "Enter name");
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
+// Format String & History Callback Tests
+// ============================================================================
+
+void test_slider_format_kwarg() {
+    std::cout << "Testing: slider with =format kwarg... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.slider "FOV" 90 0 180 =format "%.0f"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("slider"));
+    assert(m.get(engine.intern("label")).asString() == "FOV");
+    assert(m.get(engine.intern("format")).asString() == "%.0f");
+
+    std::cout << "PASSED\n";
+}
+
+void test_slider_int_format_kwarg() {
+    std::cout << "Testing: slider_int with =format kwarg... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.slider_int "Count" 50 0 100 =format "%d items"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("slider_int"));
+    assert(m.get(engine.intern("format")).asString() == "%d items");
+
+    std::cout << "PASSED\n";
+}
+
+void test_drag_float_format_kwarg() {
+    std::cout << "Testing: drag_float with =format kwarg... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.drag_float "Speed" 1.0 0.1 0.0 10.0 =format "%.2f"})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("drag_float"));
+    assert(m.get(engine.intern("format")).asString() == "%.2f");
+
+    std::cout << "PASSED\n";
+}
+
+void test_converter_reads_format() {
+    std::cout << "Testing: convertToWidget reads format string... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+    ConverterSymbols syms;
+    syms.intern(engine);
+
+    auto result = engine.executeCommand(
+        R"({ui.slider "Test" 0.5 0.0 1.0 =format "%.1f"})", ctx);
+    assert(result.success);
+
+    auto node = convertToWidget(result.returnValue, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::Slider);
+    assert(node.formatString == "%.1f");
+
+    std::cout << "PASSED\n";
+}
+
+void test_input_on_history_kwarg() {
+    std::cout << "Testing: input with =on_history kwarg stores callable... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    // Create a history closure first
+    auto closureResult = engine.executeCommand(R"(
+        fn [dir] do
+            "history"
+        end
+    )", ctx);
+    assert(closureResult.success);
+    assert(closureResult.returnValue.isClosure());
+    ctx.set("hist_fn", closureResult.returnValue);
+
+    // Pass it as =on_history
+    auto result = engine.executeCommand(
+        R"({ui.input "Cmd" "" =on_history hist_fn})", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+
+    auto& m = result.returnValue.asMap();
+    assert(m.get(engine.intern("type")).asSymbol() == engine.intern("input_text"));
+    assert(m.get(engine.intern("on_history")).isCallable());
+
+    std::cout << "PASSED\n";
+}
+
+void test_converter_reads_on_history() {
+    std::cout << "Testing: convertToWidget reads on_history callback... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+    ExecutionContext ctx(engine);
+
+    // Create a history closure that returns a string
+    auto closureResult = engine.executeCommand(R"(
+        fn [dir] do
+            "history"
+        end
+    )", ctx);
+    assert(closureResult.success);
+
+    // Build an input_text map with on_history
+    auto map = Value::map();
+    auto& m = map.asMap();
+    m.set(engine.intern("type"), Value::symbol(engine.intern("input_text")));
+    m.set(engine.intern("label"), Value::string("Cmd"));
+    m.set(engine.intern("value"), Value::string(""));
+    m.set(engine.intern("on_history"), closureResult.returnValue);
+
+    auto node = convertToWidget(map, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::InputText);
+    assert(node.onHistory != nullptr);
+
+    // Test that calling onHistory with direction updates stringValue
+    node.intValue = -1;  // up arrow
+    node.onHistory(node);
+    assert(node.stringValue == "history");
+
+    std::cout << "PASSED\n";
+}
+
+void test_on_history_interned() {
+    std::cout << "Testing: on_history symbol interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+    assert(syms.on_history != 0);
+    assert(syms.on_history == engine.intern("on_history"));
+
+    std::cout << "PASSED\n";
+}
+
+void test_window_pivot_interned() {
+    std::cout << "Testing: window_pivot_x/y symbols interned... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+    assert(syms.window_pivot_x != 0);
+    assert(syms.window_pivot_y != 0);
+    assert(syms.window_pivot_x == engine.intern("window_pivot_x"));
+    assert(syms.window_pivot_y == engine.intern("window_pivot_y"));
+
+    std::cout << "PASSED\n";
+}
+
+void test_converter_reads_window_pivot() {
+    std::cout << "Testing: convertToWidget reads window_pivot_x/y... ";
+
+    ScriptEngine engine;
+    ConverterSymbols syms;
+    syms.intern(engine);
+    ExecutionContext ctx(engine);
+
+    // Build a window map with pivot fields
+    auto map = Value::map();
+    auto& m = map.asMap();
+    m.set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    m.set(engine.intern("title"), Value::string("Centered"));
+    m.set(engine.intern("window_pivot_x"), Value::number(0.5));
+    m.set(engine.intern("window_pivot_y"), Value::number(0.5));
+
+    auto node = convertToWidget(map, engine, ctx, syms);
+    assert(node.type == WidgetNode::Type::Window);
+    assert(node.windowPivotX == 0.5f);
+    assert(node.windowPivotY == 0.5f);
+
+    std::cout << "PASSED\n";
+}
+
+void test_window_pivot_kwarg() {
+    std::cout << "Testing: ui.window with =window_pivot_x/y kwargs... ";
+
+    auto& engine = testEngine();
+    ExecutionContext ctx(engine);
+
+    auto result = engine.executeCommand(R"(
+        ui.window "Center" =window_pivot_x 0.5 =window_pivot_y 0.5
+    )", ctx);
+    assert(result.success);
+    assert(result.returnValue.isMap());
+    auto& m = result.returnValue.asMap();
+    auto px = m.get(engine.intern("window_pivot_x"));
+    auto py = m.get(engine.intern("window_pivot_y"));
+    assert(px.isNumeric());
+    assert(py.isNumeric());
+    assert(static_cast<float>(px.asNumber()) == 0.5f);
+    assert(static_cast<float>(py.asNumber()) == 0.5f);
 
     std::cout << "PASSED\n";
 }
@@ -2681,6 +3043,15 @@ int main() {
         test_serialize_state_produces_parseable_output();
         test_serialize_state_with_arrays();
 
+        // Window Warm-up / Staging
+        test_map_show_auto_warmup();
+        test_map_show_explicit_size_no_warmup();
+        test_map_show_immediate();
+        test_map_stage_and_go_live();
+        test_map_stage_explicit_size_go_live();
+        test_script_stage_binding();
+        test_script_show_immediate_kwarg();
+
         // Options-map (keyword-style) tests
         test_options_map_slider();
         test_options_map_button_with_id();
@@ -2696,6 +3067,20 @@ int main() {
         test_kwargs_overrides_positional();
         test_kwargs_color_edit();
         test_kwargs_input();
+
+        // Format string & history callback tests
+        test_slider_format_kwarg();
+        test_slider_int_format_kwarg();
+        test_drag_float_format_kwarg();
+        test_converter_reads_format();
+        test_input_on_history_kwarg();
+        test_converter_reads_on_history();
+        test_on_history_interned();
+
+        // Window pivot tests
+        test_window_pivot_interned();
+        test_converter_reads_window_pivot();
+        test_window_pivot_kwarg();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {

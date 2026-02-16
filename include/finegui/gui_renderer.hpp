@@ -28,7 +28,23 @@ public:
 
     /// Register a widget tree to be rendered each frame.
     /// Returns an ID that can be used to update or remove it.
-    int show(WidgetNode tree);
+    /// Auto-sized windows get 1 warmup frame (invisible) to let ImGui compute layout.
+    /// Pass immediate=true to skip warmup.
+    int show(WidgetNode tree, bool immediate = false);
+
+    /// Store a widget tree without rendering (staged).
+    /// Use goLive() to begin rendering later.
+    int stage(WidgetNode tree);
+
+    /// Transition a staged tree to live rendering.
+    /// Begins warmup if the window is auto-sized.
+    void goLive(int guiId);
+
+    /// Check if a tree is currently warming up (rendering invisibly).
+    bool isWarmingUp(int guiId) const;
+
+    /// Check if a tree is staged (stored but not rendering).
+    bool isStaged(int guiId) const;
 
     /// Replace an existing widget tree.
     void update(int guiId, WidgetNode tree);
@@ -81,7 +97,12 @@ private:
     DragDropManager* dndManager_ = nullptr;
     GuiSystem& gui_;
     int nextId_ = 1;
-    std::map<int, WidgetNode> trees_;
+
+    struct Entry {
+        WidgetNode tree;
+        int warmupFrames = 0;  // >0 = warming up, 0 = normal, -1 = staged
+    };
+    std::map<int, Entry> trees_;
 
     // Focus tracking
     std::string pendingFocusId_;
