@@ -25,6 +25,12 @@ ScriptGui* ScriptGuiManager::showFromSource(
     return ptr;
 }
 
+int ScriptGuiManager::loadUIFromValue(finescript::Value widgetTree, bool immediate) {
+    if (!widgetTree.isMap()) return -1;
+    finescript::ExecutionContext ctx(engine_);
+    return renderer_.show(std::move(widgetTree), ctx, immediate);
+}
+
 bool ScriptGuiManager::deliverMessage(int guiId, uint32_t messageType,
                                        finescript::Value data) {
     auto* gui = findByGuiId(guiId);

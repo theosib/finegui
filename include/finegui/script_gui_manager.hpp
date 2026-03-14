@@ -26,6 +26,11 @@ public:
     ScriptGui* showFromSource(std::string_view source, std::string_view name = "<gui>",
                               const std::vector<std::pair<std::string, finescript::Value>>& bindings = {});
 
+    /// Show a UI tree from a pre-built Value map (e.g., received from server via CBOR).
+    /// Returns the renderer tree ID (>= 0 on success, -1 on failure).
+    /// The Value should be a widget tree map (same format as script-built trees).
+    int loadUIFromValue(finescript::Value widgetTree, bool immediate = false);
+
     /// Deliver a message to a specific GUI by its renderer ID.
     bool deliverMessage(int guiId, uint32_t messageType, finescript::Value data);
 
