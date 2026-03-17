@@ -30,6 +30,7 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     overlay      = engine.intern("overlay");
     size         = engine.intern("size");
     offset       = engine.intern("offset");
+    spacing      = engine.intern("spacing");
     default_open = engine.intern("default_open");
     format       = engine.intern("format");
 
@@ -62,8 +63,9 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     on_change  = engine.intern("on_change");
     on_submit  = engine.intern("on_submit");
     on_close   = engine.intern("on_close");
-    on_select  = engine.intern("on_select");
-    on_history = engine.intern("on_history");
+    on_select      = engine.intern("on_select");
+    on_history     = engine.intern("on_history");
+    on_right_click = engine.intern("on_right_click");
 
     // Type name symbols - Phase 1
     sym_window     = engine.intern("window");
@@ -193,6 +195,8 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
 
     // Image field keys
     texture = engine.intern("texture");
+    uv0     = engine.intern("uv0");
+    uv1     = engine.intern("uv1");
 
     // DnD field keys
     drag_type   = engine.intern("drag_type");
@@ -231,6 +235,7 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     window_alpha = engine.intern("window_alpha");
     window_pos_x = engine.intern("window_pos_x");
     window_pos_y = engine.intern("window_pos_y");
+    closable = engine.intern("closable");
     scale_x = engine.intern("scale_x");
     scale_y = engine.intern("scale_y");
     rotation_y = engine.intern("rotation_y");

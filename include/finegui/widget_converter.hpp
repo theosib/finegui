@@ -21,7 +21,7 @@ struct ConverterSymbols {
 
     // Phase 3 field keys
     uint32_t color = 0, overlay = 0, size = 0;
-    uint32_t offset = 0, default_open = 0;
+    uint32_t offset = 0, default_open = 0, spacing = 0;
     uint32_t format = 0;
 
     // Phase 4 field keys
@@ -53,6 +53,7 @@ struct ConverterSymbols {
     // Callback keys
     uint32_t on_click = 0, on_change = 0, on_submit = 0, on_close = 0;
     uint32_t on_select = 0, on_history = 0;
+    uint32_t on_right_click = 0;
 
     // Type name symbols - Phase 1
     uint32_t sym_window = 0, sym_text = 0, sym_button = 0;
@@ -124,6 +125,7 @@ struct ConverterSymbols {
 
     // Image field keys
     uint32_t texture = 0;
+    uint32_t uv0 = 0, uv1 = 0;
 
     // Focus management field keys
     uint32_t focusable = 0, auto_focus = 0;
@@ -132,6 +134,7 @@ struct ConverterSymbols {
     // Animation field keys
     uint32_t window_alpha = 0, window_pos_x = 0, window_pos_y = 0;
     uint32_t scale_x = 0, scale_y = 0, rotation_y = 0;
+    uint32_t closable = 0;
 
     // DnD field keys
     uint32_t drag_type = 0, drag_data = 0, drop_accept = 0;

@@ -403,8 +403,10 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
     float scaleY = static_cast<float>(getNumericField(m, syms_.scale_y, 1.0));
     float rotY = static_cast<float>(getNumericField(m, syms_.rotation_y, 0.0));
 
+    bool isClosable = getBoolField(m, syms_.closable, false);
     bool open = true;
-    bool windowOpen = ImGui::Begin(title.c_str(), &open, static_cast<ImGuiWindowFlags>(wflags));
+    bool windowOpen = ImGui::Begin(title.c_str(), isClosable ? &open : nullptr,
+                                    static_cast<ImGuiWindowFlags>(wflags));
 
     // Capture draw list and window geometry for vertex post-processing
     ImDrawList* drawList = ImGui::GetWindowDrawList();
@@ -489,6 +491,9 @@ void MapRenderer::renderButton(MapData& m, ExecutionContext& ctx) {
 
     if (clicked) {
         invokeCallback(m, syms_.on_click, ctx);
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        invokeCallback(m, syms_.on_right_click, ctx);
     }
 }
 
@@ -634,6 +639,7 @@ void MapRenderer::renderSeparator() {
 }
 
 void MapRenderer::renderGroup(MapData& m, ExecutionContext& ctx) {
+    ImGui::BeginGroup();
     auto childrenVal = m.get(syms_.children);
     if (childrenVal.isArray()) {
         for (auto& child : childrenVal.asArrayMut()) {
@@ -642,6 +648,7 @@ void MapRenderer::renderGroup(MapData& m, ExecutionContext& ctx) {
             }
         }
     }
+    ImGui::EndGroup();
 }
 
 void MapRenderer::renderColumns(MapData& m, ExecutionContext& ctx) {
@@ -694,7 +701,20 @@ void MapRenderer::renderImage(MapData& m, ExecutionContext& ctx) {
     if (w <= 0) w = static_cast<float>(handle.width);
     if (h <= 0) h = static_cast<float>(handle.height);
 
-    ImGui::Image(static_cast<ImTextureID>(handle), {w, h});
+    // Read optional UV coordinates: =uv0 [u0 v0] =uv1 [u1 v1]
+    ImVec2 imgUv0{0, 0}, imgUv1{1, 1};
+    auto uv0Val = m.get(syms_.uv0);
+    if (uv0Val.isArray() && uv0Val.asArray().size() >= 2) {
+        imgUv0.x = static_cast<float>(uv0Val.asArray()[0].asNumber());
+        imgUv0.y = static_cast<float>(uv0Val.asArray()[1].asNumber());
+    }
+    auto uv1Val = m.get(syms_.uv1);
+    if (uv1Val.isArray() && uv1Val.asArray().size() >= 2) {
+        imgUv1.x = static_cast<float>(uv1Val.asArray()[0].asNumber());
+        imgUv1.y = static_cast<float>(uv1Val.asArray()[1].asNumber());
+    }
+
+    ImGui::Image(static_cast<ImTextureID>(handle), {w, h}, imgUv0, imgUv1);
 
     if (ImGui::IsItemClicked()) {
         invokeCallback(m, syms_.on_click, ctx);
@@ -705,8 +725,11 @@ void MapRenderer::renderImage(MapData& m, ExecutionContext& ctx) {
 
 void MapRenderer::renderSameLine(MapData& m) {
     float offset = static_cast<float>(getNumericField(m, syms_.offset, 0.0));
+    float spacing = static_cast<float>(getNumericField(m, syms_.spacing, -1.0));
     if (offset > 0) {
-        ImGui::SameLine(offset);
+        ImGui::SameLine(offset, spacing >= 0 ? spacing : -1.0f);
+    } else if (spacing >= 0) {
+        ImGui::SameLine(0.0f, spacing);
     } else {
         ImGui::SameLine();
     }
@@ -1655,8 +1678,25 @@ void MapRenderer::renderImageButton(MapData& m, ExecutionContext& ctx) {
     if (w <= 0) w = static_cast<float>(handle.width);
     if (h <= 0) h = static_cast<float>(handle.height);
 
-    if (ImGui::ImageButton(strId.c_str(), static_cast<ImTextureID>(handle), {w, h})) {
+    // Read optional UV coordinates: =uv0 [u0 v0] =uv1 [u1 v1]
+    ImVec2 imgUv0{0, 0}, imgUv1{1, 1};
+    auto uv0Val = m.get(syms_.uv0);
+    if (uv0Val.isArray() && uv0Val.asArray().size() >= 2) {
+        imgUv0.x = static_cast<float>(uv0Val.asArray()[0].asNumber());
+        imgUv0.y = static_cast<float>(uv0Val.asArray()[1].asNumber());
+    }
+    auto uv1Val = m.get(syms_.uv1);
+    if (uv1Val.isArray() && uv1Val.asArray().size() >= 2) {
+        imgUv1.x = static_cast<float>(uv1Val.asArray()[0].asNumber());
+        imgUv1.y = static_cast<float>(uv1Val.asArray()[1].asNumber());
+    }
+
+    if (ImGui::ImageButton(strId.c_str(), static_cast<ImTextureID>(handle), {w, h},
+                           imgUv0, imgUv1)) {
         invokeCallback(m, syms_.on_click, ctx);
+    }
+    if (ImGui::IsItemHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Right)) {
+        invokeCallback(m, syms_.on_right_click, ctx);
     }
 }
 
