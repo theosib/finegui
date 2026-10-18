@@ -224,6 +224,7 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     window_size_h = engine.intern("window_size_h");
     window_pivot_x = engine.intern("window_pivot_x");
     window_pivot_y = engine.intern("window_pivot_y");
+    immediate = engine.intern("immediate");
 
     // Focus management field keys
     focusable  = engine.intern("focusable");

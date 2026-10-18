@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.20)
 project(finegui VERSION 0.1.0 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -11,37 +11,59 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(FINEGUI_BUILD_TESTS "Build tests" ON)
 option(FINEGUI_BUILD_EXAMPLES "Build examples" ON)
 option(FINEGUI_BUILD_RETAINED "Build retained-mode widget system" ON)
-option(FINEGUI_BUILD_SCRIPT "Build script engine integration (requires finescript)" OFF)
+option(FINEGUI_BUILD_SCRIPT "Build script engine integration (requires finescript)" ON)
 
 # =============================================================================
 # Find finevk (sibling project with pre-built libraries)
 # =============================================================================
-set(FINEVK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../FineStructureVK")
+set(FINEVK_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../FineStructureVK" CACHE PATH "Path to FineStructureVK root directory")
 set(FINEVK_BUILD_DIR "${FINEVK_ROOT}/build")
 
 if(NOT EXISTS "${FINEVK_ROOT}/include/finevk/finevk.hpp")
     message(FATAL_ERROR "finevk not found at ${FINEVK_ROOT}. "
-            "Please ensure FineStructureVK is a sibling directory.")
+            "Please ensure FineStructureVK is a sibling directory or set FINEVK_ROOT.")
 endif()
 
-if(NOT EXISTS "${FINEVK_BUILD_DIR}/libfinevk-core.dylib")
+set(FINEVK_CORE_SHARED "${FINEVK_BUILD_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}finevk-core${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(FINEVK_CORE_STATIC "${FINEVK_BUILD_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}finevk-core${CMAKE_STATIC_LIBRARY_SUFFIX}")
+set(FINEVK_ENGINE_SHARED "${FINEVK_BUILD_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}finevk-engine${CMAKE_SHARED_LIBRARY_SUFFIX}")
+set(FINEVK_ENGINE_STATIC "${FINEVK_BUILD_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}finevk-engine${CMAKE_STATIC_LIBRARY_SUFFIX}")
+
+if(EXISTS "${FINEVK_CORE_SHARED}")
+    set(FINEVK_CORE_LIB "${FINEVK_CORE_SHARED}")
+    set(FINEVK_CORE_TYPE SHARED)
+elseif(EXISTS "${FINEVK_CORE_STATIC}")
+    set(FINEVK_CORE_LIB "${FINEVK_CORE_STATIC}")
+    set(FINEVK_CORE_TYPE STATIC)
+else()
+    message(FATAL_ERROR "finevk libraries not found at ${FINEVK_BUILD_DIR}. "
+            "Please build FineStructureVK first.")
+endif()
+
+if(EXISTS "${FINEVK_ENGINE_SHARED}")
+    set(FINEVK_ENGINE_LIB "${FINEVK_ENGINE_SHARED}")
+    set(FINEVK_ENGINE_TYPE SHARED)
+elseif(EXISTS "${FINEVK_ENGINE_STATIC}")
+    set(FINEVK_ENGINE_LIB "${FINEVK_ENGINE_STATIC}")
+    set(FINEVK_ENGINE_TYPE STATIC)
+else()
     message(FATAL_ERROR "finevk libraries not found at ${FINEVK_BUILD_DIR}. "
             "Please build FineStructureVK first.")
 endif()
 
 # Create imported targets for finevk libraries
 if(NOT TARGET finevk-core)
-    add_library(finevk-core SHARED IMPORTED)
+    add_library(finevk-core ${FINEVK_CORE_TYPE} IMPORTED)
     set_target_properties(finevk-core PROPERTIES
-        IMPORTED_LOCATION "${FINEVK_BUILD_DIR}/libfinevk-core.dylib"
+        IMPORTED_LOCATION "${FINEVK_CORE_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${FINEVK_ROOT}/include"
     )
 endif()
 
 if(NOT TARGET finevk-engine)
-    add_library(finevk-engine SHARED IMPORTED)
+    add_library(finevk-engine ${FINEVK_ENGINE_TYPE} IMPORTED)
     set_target_properties(finevk-engine PROPERTIES
-        IMPORTED_LOCATION "${FINEVK_BUILD_DIR}/libfinevk-engine.dylib"
+        IMPORTED_LOCATION "${FINEVK_ENGINE_LIB}"
         INTERFACE_INCLUDE_DIRECTORIES "${FINEVK_ROOT}/include"
     )
 endif()
@@ -264,23 +286,32 @@ if(FINEGUI_BUILD_SCRIPT)
         message(FATAL_ERROR "FINEGUI_BUILD_SCRIPT requires FINEGUI_BUILD_RETAINED=ON")
     endif()
 
-    set(FINESCRIPT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../game-language")
+    set(FINESCRIPT_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../game-language" CACHE PATH "Path to game-language (finescript) root directory")
     set(FINESCRIPT_BUILD_DIR "${FINESCRIPT_ROOT}/build")
 
     if(NOT EXISTS "${FINESCRIPT_ROOT}/include/finescript/script_engine.h")
         message(FATAL_ERROR "finescript not found at ${FINESCRIPT_ROOT}. "
-                "Please ensure game-language is a sibling directory.")
+                "Please ensure game-language is a sibling directory or set FINESCRIPT_ROOT.")
     endif()
 
-    if(NOT EXISTS "${FINESCRIPT_BUILD_DIR}/libfinescript.dylib")
+    set(FINESCRIPT_SHARED "${FINESCRIPT_BUILD_DIR}/${CMAKE_SHARED_LIBRARY_PREFIX}finescript${CMAKE_SHARED_LIBRARY_SUFFIX}")
+    set(FINESCRIPT_STATIC "${FINESCRIPT_BUILD_DIR}/${CMAKE_STATIC_LIBRARY_PREFIX}finescript${CMAKE_STATIC_LIBRARY_SUFFIX}")
+
+    if(EXISTS "${FINESCRIPT_SHARED}")
+        set(FINESCRIPT_LIB "${FINESCRIPT_SHARED}")
+        set(FINESCRIPT_TYPE SHARED)
+    elseif(EXISTS "${FINESCRIPT_STATIC}")
+        set(FINESCRIPT_LIB "${FINESCRIPT_STATIC}")
+        set(FINESCRIPT_TYPE STATIC)
+    else()
         message(FATAL_ERROR "finescript library not found at ${FINESCRIPT_BUILD_DIR}. "
                 "Please build game-language first.")
     endif()
 
     if(NOT TARGET finescript)
-        add_library(finescript SHARED IMPORTED)
+        add_library(finescript ${FINESCRIPT_TYPE} IMPORTED)
         set_target_properties(finescript PROPERTIES
-            IMPORTED_LOCATION "${FINESCRIPT_BUILD_DIR}/libfinescript.dylib"
+            IMPORTED_LOCATION "${FINESCRIPT_LIB}"
             INTERFACE_INCLUDE_DIRECTORIES "${FINESCRIPT_ROOT}/include"
         )
     endif()
@@ -351,6 +382,7 @@ endif()
 # Tests
 # =============================================================================
 if(FINEGUI_BUILD_TESTS)
+    enable_testing()
     add_subdirectory(tests)
 endif()
 

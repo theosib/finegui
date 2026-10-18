@@ -8,6 +8,8 @@
 #include <finescript/execution_context.h>
 #include <map>
 #include <string>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 namespace finegui {
@@ -55,6 +57,7 @@ public:
 
     /// Remove all map trees.
     void hideAll();
+    void clear() { hideAll(); }
 
     /// Get a reference to a stored root map Value.
     /// Returns nullptr if the ID is not found.
@@ -102,7 +105,11 @@ public:
                                       finescript::Interner& interner);
 
 private:
-    finescript::Value findByIdRecursive(finescript::Value& node, uint32_t symId, const std::string& strId);
+    void indexNode(const finescript::Value& node);
+    void rebuildIdIndex();
+    bool nodeMatchesId(const finescript::Value& node, const std::string& strId) const;
+    int computeWarmupFrames(const finescript::Value& rootMap, bool immediate);
+    void flushPendingOps();
     void collectMapState(finescript::Value& node, finescript::Value& out);
     void applyMapState(finescript::Value& node, const finescript::MapData& stateMap);
 
@@ -114,10 +121,27 @@ private:
         int warmupFrames = 0;  // >0 = warming up, 0 = normal, -1 = staged
     };
 
+    enum class OpType {
+        Insert,
+        GoLive
+    };
+    struct PendingOp {
+        OpType type;
+        int id;
+        Entry entry;
+    };
+
     finescript::ScriptEngine& engine_;
     ConverterSymbols syms_;
     int nextId_ = 1;
     std::map<int, Entry> trees_;
+    std::unordered_map<std::string, finescript::Value> idIndex_;
+
+    // Re-entrant mutation guard during renderAll()
+    bool inRender_ = false;
+    bool pendingClear_ = false;
+    std::unordered_set<int> pendingHideIds_;
+    std::vector<PendingOp> pendingOps_;
 
     // Focus tracking
     std::string pendingFocusId_;

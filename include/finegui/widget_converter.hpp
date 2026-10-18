@@ -151,6 +151,7 @@ struct ConverterSymbols {
     // Window size/pivot field keys
     uint32_t window_size_w = 0, window_size_h = 0;
     uint32_t window_pivot_x = 0, window_pivot_y = 0;
+    uint32_t immediate = 0;
 
     void intern(finescript::ScriptEngine& engine);
 };

@@ -1,9 +1,11 @@
 #include <finegui/script_bindings.hpp>
 #include <finegui/script_gui.hpp>
+#include <finegui/widget_converter.hpp>
 #include <finescript/execution_context.h>
 #include <finescript/map_data.h>
 #include <finescript/native_function.h>
 #include <imgui.h>
+#include <memory>
 #include <unordered_map>
 
 namespace finegui {
@@ -18,22 +20,21 @@ static Value makeFn(std::function<Value(ExecutionContext&, const std::vector<Val
     return Value::nativeFunction(std::make_shared<SimpleLambdaFunction>(std::move(fn)));
 }
 
-// Helper: create a widget map with a type symbol
-static Value makeWidget(ScriptEngine& engine, const char* typeName) {
+// Helper: create a widget map with a pre-interned type symbol
+static Value makeWidget(const ConverterSymbols& syms, uint32_t typeSym) {
     auto w = Value::map();
-    w.asMap().set(engine.intern("type"), Value::symbol(engine.intern(typeName)));
+    w.asMap().set(syms.type, Value::symbol(typeSym));
     return w;
 }
 
 // Helper: if the last arg is a map, merge its keys into the widget map.
 // This enables keyword-style parameters: {ui.slider "Vol" {=value 0.5 =min 0 =max 1}}
-static void mergeOptions(const std::vector<Value>& args, Value& widget, ScriptEngine& engine) {
+static void mergeOptions(const std::vector<Value>& args, Value& widget, const ConverterSymbols& syms) {
     if (!args.empty() && args.back().isMap()) {
         auto& opts = args.back().asMap();
         auto& w = widget.asMap();
-        uint32_t typeSym = engine.intern("type");
         for (auto key : opts.keys()) {
-            if (key != typeSym) {
+            if (key != syms.type) {
                 w.set(key, opts.get(key));
             }
         }
@@ -41,6 +42,8 @@ static void mergeOptions(const std::vector<Value>& args, Value& widget, ScriptEn
 }
 
 void registerGuiBindings(ScriptEngine& engine) {
+    auto syms = std::make_shared<ConverterSymbols>();
+    syms->intern(engine);
 
     // =========================================================================
     // Build the "ui" namespace map
@@ -50,240 +53,240 @@ void registerGuiBindings(ScriptEngine& engine) {
     auto& uiMap = ui.asMap();
 
     // ui.window "title" [children]
-    uiMap.set(engine.intern("window"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "window");
+    uiMap.set(syms->sym_window, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_window);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("title"), args[0]);
+                m.set(syms->title, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.text "content"
-    uiMap.set(engine.intern("text"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "text");
+    uiMap.set(syms->sym_text, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_text);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("text"), args[0]);
+                w.asMap().set(syms->text, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.button "label" [on_click]
-    uiMap.set(engine.intern("button"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "button");
+    uiMap.set(syms->sym_button, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_button);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isCallable()) {
-                m.set(engine.intern("on_click"), args[1]);
+                m.set(syms->on_click, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.checkbox "label" [value] [on_change]
-    uiMap.set(engine.intern("checkbox"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "checkbox");
+    uiMap.set(syms->sym_checkbox, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_checkbox);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isBool()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.slider "label" [value] [min] [max] [on_change]
-    uiMap.set(engine.intern("slider"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "slider");
+    uiMap.set(syms->sym_slider, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_slider);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("min"), args[2]);
+                m.set(syms->min, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("max"), args[3]);
+                m.set(syms->max, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_change"), args[4]);
+                m.set(syms->on_change, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.slider_int "label" [value] [min] [max] [on_change]
-    uiMap.set(engine.intern("slider_int"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "slider_int");
+    uiMap.set(syms->sym_slider_int, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_slider_int);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("min"), args[2]);
+                m.set(syms->min, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("max"), args[3]);
+                m.set(syms->max, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_change"), args[4]);
+                m.set(syms->on_change, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.input "label" [value] [on_change] [on_submit]
     uiMap.set(engine.intern("input"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "input_text");
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_input_text);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
             if (args.size() > 3 && args[3].isCallable()) {
-                m.set(engine.intern("on_submit"), args[3]);
+                m.set(syms->on_submit, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.input_int "label" [value] [on_change]
-    uiMap.set(engine.intern("input_int"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "input_int");
+    uiMap.set(syms->sym_input_int, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_input_int);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.input_float "label" [value] [on_change]
-    uiMap.set(engine.intern("input_float"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "input_float");
+    uiMap.set(syms->sym_input_float, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_input_float);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.combo "label" [items] [selected] [on_change]
-    uiMap.set(engine.intern("combo"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "combo");
+    uiMap.set(syms->sym_combo, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_combo);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("items"), args[1]);
+                m.set(syms->items, args[1]);
             }
             if (args.size() > 2 && args[2].isInt()) {
-                m.set(engine.intern("selected"), args[2]);
+                m.set(syms->selected, args[2]);
             }
             if (args.size() > 3 && args[3].isCallable()) {
-                m.set(engine.intern("on_change"), args[3]);
+                m.set(syms->on_change, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.separator
-    uiMap.set(engine.intern("separator"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>&) -> Value {
-            return makeWidget(engine, "separator");
+    uiMap.set(syms->sym_separator, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>&) -> Value {
+            return makeWidget(*syms, syms->sym_separator);
         }));
 
     // ui.group [children]
-    uiMap.set(engine.intern("group"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "group");
+    uiMap.set(syms->sym_group, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_group);
             if (args.size() > 0 && args[0].isArray()) {
-                w.asMap().set(engine.intern("children"), args[0]);
+                w.asMap().set(syms->children, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.columns count [children]
-    uiMap.set(engine.intern("columns"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "columns");
+    uiMap.set(syms->sym_columns, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_columns);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isInt()) {
-                m.set(engine.intern("count"), args[0]);
+                m.set(syms->count, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.image "texture_name" [width] [height] [on_click]
-    uiMap.set(engine.intern("image"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "image");
+    uiMap.set(syms->sym_image, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_image);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("texture"), args[0]);
+                m.set(syms->texture, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("width"), args[1]);
+                m.set(syms->width, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("height"), args[2]);
+                m.set(syms->height, args[2]);
             }
             if (args.size() > 3 && args[3].isCallable()) {
-                m.set(engine.intern("on_click"), args[3]);
+                m.set(syms->on_click, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -292,83 +295,83 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.same_line [offset]
-    uiMap.set(engine.intern("same_line"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "same_line");
+    uiMap.set(syms->sym_same_line, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_same_line);
             if (args.size() > 0 && args[0].isNumeric()) {
-                w.asMap().set(engine.intern("offset"), args[0]);
+                w.asMap().set(syms->offset, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.spacing
-    uiMap.set(engine.intern("spacing"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>&) -> Value {
-            return makeWidget(engine, "spacing");
+    uiMap.set(syms->sym_spacing, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>&) -> Value {
+            return makeWidget(*syms, syms->sym_spacing);
         }));
 
     // ui.text_colored [r g b a] "text"
-    uiMap.set(engine.intern("text_colored"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "text_colored");
+    uiMap.set(syms->sym_text_colored, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_text_colored);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isArray()) {
-                m.set(engine.intern("color"), args[0]);
+                m.set(syms->color, args[0]);
             }
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("text"), args[1]);
+                m.set(syms->text, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.text_wrapped "text"
-    uiMap.set(engine.intern("text_wrapped"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "text_wrapped");
+    uiMap.set(syms->sym_text_wrapped, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_text_wrapped);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("text"), args[0]);
+                w.asMap().set(syms->text, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.text_disabled "text"
-    uiMap.set(engine.intern("text_disabled"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "text_disabled");
+    uiMap.set(syms->sym_text_disabled, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_text_disabled);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("text"), args[0]);
+                w.asMap().set(syms->text, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.progress_bar fraction
-    uiMap.set(engine.intern("progress_bar"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "progress_bar");
+    uiMap.set(syms->sym_progress_bar, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_progress_bar);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isNumeric()) {
-                m.set(engine.intern("value"), args[0]);
+                m.set(syms->value, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.collapsing_header "label" [children]
-    uiMap.set(engine.intern("collapsing_header"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "collapsing_header");
+    uiMap.set(syms->sym_collapsing_header, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_collapsing_header);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -377,103 +380,103 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.tab_bar "id" [children]
-    uiMap.set(engine.intern("tab_bar"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "tab_bar");
+    uiMap.set(syms->sym_tab_bar, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_tab_bar);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.tab "label" [children]
-    uiMap.set(engine.intern("tab"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "tab");
+    uiMap.set(syms->sym_tab, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_tab);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.tree_node "label" [children]
-    uiMap.set(engine.intern("tree_node"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "tree_node");
+    uiMap.set(syms->sym_tree_node, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_tree_node);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.child "id" [children]
-    uiMap.set(engine.intern("child"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "child");
+    uiMap.set(syms->sym_child, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_child);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.menu_bar [children]
-    uiMap.set(engine.intern("menu_bar"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "menu_bar");
+    uiMap.set(syms->sym_menu_bar, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_menu_bar);
             if (args.size() > 0 && args[0].isArray()) {
-                w.asMap().set(engine.intern("children"), args[0]);
+                w.asMap().set(syms->children, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.menu "label" [children]
-    uiMap.set(engine.intern("menu"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "menu");
+    uiMap.set(syms->sym_menu, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_menu);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.menu_item "label" [on_click]
-    uiMap.set(engine.intern("menu_item"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "menu_item");
+    uiMap.set(syms->sym_menu_item, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_menu_item);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isCallable()) {
-                m.set(engine.intern("on_click"), args[1]);
+                m.set(syms->on_click, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -482,200 +485,200 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.color_edit "label" [color] [on_change]
-    uiMap.set(engine.intern("color_edit"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "color_edit");
+    uiMap.set(syms->sym_color_edit, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_color_edit);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("color"), args[1]);
+                m.set(syms->color, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.color_picker "label" [color] [on_change]
-    uiMap.set(engine.intern("color_picker"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "color_picker");
+    uiMap.set(syms->sym_color_picker, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_color_picker);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("color"), args[1]);
+                m.set(syms->color, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_change"), args[2]);
+                m.set(syms->on_change, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.drag_float "label" [value] [speed] [min] [max] [on_change]
-    uiMap.set(engine.intern("drag_float"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "drag_float");
+    uiMap.set(syms->sym_drag_float, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_drag_float);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("speed"), args[2]);
+                m.set(syms->speed, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("min"), args[3]);
+                m.set(syms->min, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("max"), args[4]);
+                m.set(syms->max, args[4]);
             }
             if (args.size() > 5 && args[5].isCallable()) {
-                m.set(engine.intern("on_change"), args[5]);
+                m.set(syms->on_change, args[5]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.drag_int "label" [value] [speed] [min] [max] [on_change]
-    uiMap.set(engine.intern("drag_int"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "drag_int");
+    uiMap.set(syms->sym_drag_int, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_drag_int);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("speed"), args[2]);
+                m.set(syms->speed, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("min"), args[3]);
+                m.set(syms->min, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("max"), args[4]);
+                m.set(syms->max, args[4]);
             }
             if (args.size() > 5 && args[5].isCallable()) {
-                m.set(engine.intern("on_change"), args[5]);
+                m.set(syms->on_change, args[5]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.drag_float3 "label" [value] [speed] [min] [max] [on_change]
-    uiMap.set(engine.intern("drag_float3"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "drag_float3");
+    uiMap.set(syms->sym_drag_float3, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_drag_float3);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("speed"), args[2]);
+                m.set(syms->speed, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("min"), args[3]);
+                m.set(syms->min, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("max"), args[4]);
+                m.set(syms->max, args[4]);
             }
             if (args.size() > 5 && args[5].isCallable()) {
-                m.set(engine.intern("on_change"), args[5]);
+                m.set(syms->on_change, args[5]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.input_with_hint "label" "hint" [value] [on_change] [on_submit]
-    uiMap.set(engine.intern("input_with_hint"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "input_with_hint");
+    uiMap.set(syms->sym_input_with_hint, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_input_with_hint);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("hint"), args[1]);
+                m.set(syms->hint, args[1]);
             }
             if (args.size() > 2 && args[2].isString()) {
-                m.set(engine.intern("value"), args[2]);
+                m.set(syms->value, args[2]);
             }
             if (args.size() > 3 && args[3].isCallable()) {
-                m.set(engine.intern("on_change"), args[3]);
+                m.set(syms->on_change, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_submit"), args[4]);
+                m.set(syms->on_submit, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.slider_angle "label" [value_rad] [min_deg] [max_deg] [on_change]
-    uiMap.set(engine.intern("slider_angle"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "slider_angle");
+    uiMap.set(syms->sym_slider_angle, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_slider_angle);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("min"), args[2]);
+                m.set(syms->min, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("max"), args[3]);
+                m.set(syms->max, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_change"), args[4]);
+                m.set(syms->on_change, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.small_button "label" [on_click]
-    uiMap.set(engine.intern("small_button"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "small_button");
+    uiMap.set(syms->sym_small_button, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_small_button);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isCallable()) {
-                m.set(engine.intern("on_click"), args[1]);
+                m.set(syms->on_click, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.color_button "label" [color] [on_click]
-    uiMap.set(engine.intern("color_button"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "color_button");
+    uiMap.set(syms->sym_color_button, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_color_button);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("color"), args[1]);
+                m.set(syms->color, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_click"), args[2]);
+                m.set(syms->on_click, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -684,69 +687,69 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.listbox "label" [items] [selected] [height_in_items] [on_change]
-    uiMap.set(engine.intern("listbox"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "listbox");
+    uiMap.set(syms->sym_listbox, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_listbox);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("items"), args[1]);
+                m.set(syms->items, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("selected"), args[2]);
+                m.set(syms->selected, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("height_in_items"), args[3]);
+                m.set(syms->height_in_items, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_change"), args[4]);
+                m.set(syms->on_change, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.popup "id" [children]
-    uiMap.set(engine.intern("popup"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "popup");
+    uiMap.set(syms->sym_popup, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_popup);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.modal "title" [children] [on_close]
-    uiMap.set(engine.intern("modal"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "modal");
+    uiMap.set(syms->sym_modal, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_modal);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("title"), args[0]);
+                m.set(syms->title, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("children"), args[1]);
+                m.set(syms->children, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_close"), args[2]);
+                m.set(syms->on_close, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.open_popup popup_map  ->  sets :value to true on a popup/modal map
     uiMap.set(engine.intern("open_popup"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
             if (args.size() > 0 && args[0].isMap()) {
                 // Copy the Value to get mutable access (shares the same MapData via shared_ptr)
                 Value mapCopy = args[0];
-                mapCopy.asMap().set(engine.intern("value"), Value::boolean(true));
+                mapCopy.asMap().set(syms->value, Value::boolean(true));
             }
             return Value::nil();
         }));
@@ -759,26 +762,26 @@ void registerGuiBindings(ScriptEngine& engine) {
         }));
 
     // ui.context_menu [children]
-    uiMap.set(engine.intern("context_menu"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "context_menu");
+    uiMap.set(syms->sym_context_menu, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_context_menu);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isArray()) {
-                m.set(engine.intern("children"), args[0]);
+                m.set(syms->children, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.main_menu_bar [children]
-    uiMap.set(engine.intern("main_menu_bar"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "main_menu_bar");
+    uiMap.set(syms->sym_main_menu_bar, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_main_menu_bar);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isArray()) {
-                m.set(engine.intern("children"), args[0]);
+                m.set(syms->children, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -787,42 +790,42 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.item_tooltip "text" or ui.item_tooltip [children]
-    uiMap.set(engine.intern("item_tooltip"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "item_tooltip");
+    uiMap.set(syms->sym_item_tooltip, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_item_tooltip);
             auto& m = w.asMap();
             if (args.size() > 0) {
                 if (args[0].isString()) {
-                    m.set(engine.intern("text"), args[0]);
+                    m.set(syms->text, args[0]);
                 } else if (args[0].isArray()) {
-                    m.set(engine.intern("children"), args[0]);
+                    m.set(syms->children, args[0]);
                 }
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.image_button "id" "texture_name" [width] [height] [on_click]
-    uiMap.set(engine.intern("image_button"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "image_button");
+    uiMap.set(syms->sym_image_button, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_image_button);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("texture"), args[1]);
+                m.set(syms->texture, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("width"), args[2]);
+                m.set(syms->width, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("height"), args[3]);
+                m.set(syms->height, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_click"), args[4]);
+                m.set(syms->on_click, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -831,62 +834,62 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.plot_lines "label" [values] [overlay] [min] [max] [width] [height]
-    uiMap.set(engine.intern("plot_lines"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "plot_lines");
+    uiMap.set(syms->sym_plot_lines, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_plot_lines);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isString()) {
-                m.set(engine.intern("overlay"), args[2]);
+                m.set(syms->overlay, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("min"), args[3]);
+                m.set(syms->min, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("max"), args[4]);
+                m.set(syms->max, args[4]);
             }
             if (args.size() > 5 && args[5].isNumeric()) {
-                m.set(engine.intern("width"), args[5]);
+                m.set(syms->width, args[5]);
             }
             if (args.size() > 6 && args[6].isNumeric()) {
-                m.set(engine.intern("height"), args[6]);
+                m.set(syms->height, args[6]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.plot_histogram "label" [values] [overlay] [min] [max] [width] [height]
-    uiMap.set(engine.intern("plot_histogram"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "plot_histogram");
+    uiMap.set(syms->sym_plot_histogram, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_plot_histogram);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isString()) {
-                m.set(engine.intern("overlay"), args[2]);
+                m.set(syms->overlay, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("min"), args[3]);
+                m.set(syms->min, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("max"), args[4]);
+                m.set(syms->max, args[4]);
             }
             if (args.size() > 5 && args[5].isNumeric()) {
-                m.set(engine.intern("width"), args[5]);
+                m.set(syms->width, args[5]);
             }
             if (args.size() > 6 && args[6].isNumeric()) {
-                m.set(engine.intern("height"), args[6]);
+                m.set(syms->height, args[6]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -895,127 +898,127 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.canvas "id" width height [commands]
-    uiMap.set(engine.intern("canvas"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "canvas");
+    uiMap.set(syms->sym_canvas, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_canvas);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("width"), args[1]);
+                m.set(syms->width, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("height"), args[2]);
+                m.set(syms->height, args[2]);
             }
             if (args.size() > 3 && args[3].isArray()) {
-                m.set(engine.intern("commands"), args[3]);
+                m.set(syms->commands, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.tooltip "text"  OR  ui.tooltip [children]
-    uiMap.set(engine.intern("tooltip"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "tooltip");
+    uiMap.set(syms->sym_tooltip, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_tooltip);
             auto& m = w.asMap();
             if (args.size() > 0) {
                 if (args[0].isString()) {
-                    m.set(engine.intern("text"), args[0]);
+                    m.set(syms->text, args[0]);
                 } else if (args[0].isArray()) {
-                    m.set(engine.intern("children"), args[0]);
+                    m.set(syms->children, args[0]);
                 }
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // Draw command constructors for Canvas
 
     // ui.draw_line [x1 y1] [x2 y2] [r g b a] [thickness]
-    uiMap.set(engine.intern("draw_line"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "draw_line");
+    uiMap.set(syms->sym_draw_line, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_draw_line);
             auto& m = w.asMap();
-            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
-            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
-            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 0) m.set(syms->p1, args[0]);
+            if (args.size() > 1) m.set(syms->p2, args[1]);
+            if (args.size() > 2) m.set(syms->color, args[2]);
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("thickness"), args[3]);
+                m.set(syms->thickness, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.draw_rect [x1 y1] [x2 y2] [r g b a] [filled] [thickness]
-    uiMap.set(engine.intern("draw_rect"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "draw_rect");
+    uiMap.set(syms->sym_draw_rect, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_draw_rect);
             auto& m = w.asMap();
-            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
-            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
-            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 0) m.set(syms->p1, args[0]);
+            if (args.size() > 1) m.set(syms->p2, args[1]);
+            if (args.size() > 2) m.set(syms->color, args[2]);
             if (args.size() > 3 && args[3].isBool()) {
-                m.set(engine.intern("filled"), args[3]);
+                m.set(syms->filled, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("thickness"), args[4]);
+                m.set(syms->thickness, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.draw_circle [cx cy] radius [r g b a] [filled] [thickness]
-    uiMap.set(engine.intern("draw_circle"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "draw_circle");
+    uiMap.set(syms->sym_draw_circle, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_draw_circle);
             auto& m = w.asMap();
-            if (args.size() > 0) m.set(engine.intern("center"), args[0]);
+            if (args.size() > 0) m.set(syms->center, args[0]);
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("radius"), args[1]);
+                m.set(syms->radius, args[1]);
             }
-            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
+            if (args.size() > 2) m.set(syms->color, args[2]);
             if (args.size() > 3 && args[3].isBool()) {
-                m.set(engine.intern("filled"), args[3]);
+                m.set(syms->filled, args[3]);
             }
             if (args.size() > 4 && args[4].isNumeric()) {
-                m.set(engine.intern("thickness"), args[4]);
+                m.set(syms->thickness, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.draw_text [x y] "text" [r g b a]
-    uiMap.set(engine.intern("draw_text"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "draw_text");
+    uiMap.set(syms->sym_draw_text, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_draw_text);
             auto& m = w.asMap();
-            if (args.size() > 0) m.set(engine.intern("pos"), args[0]);
+            if (args.size() > 0) m.set(syms->pos, args[0]);
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("text"), args[1]);
+                m.set(syms->text, args[1]);
             }
-            if (args.size() > 2) m.set(engine.intern("color"), args[2]);
-            mergeOptions(args, w, engine);
+            if (args.size() > 2) m.set(syms->color, args[2]);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.draw_triangle [x1 y1] [x2 y2] [x3 y3] [r g b a] [filled] [thickness]
-    uiMap.set(engine.intern("draw_triangle"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "draw_triangle");
+    uiMap.set(syms->sym_draw_triangle, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_draw_triangle);
             auto& m = w.asMap();
-            if (args.size() > 0) m.set(engine.intern("p1"), args[0]);
-            if (args.size() > 1) m.set(engine.intern("p2"), args[1]);
-            if (args.size() > 2) m.set(engine.intern("center"), args[2]);
-            if (args.size() > 3) m.set(engine.intern("color"), args[3]);
+            if (args.size() > 0) m.set(syms->p1, args[0]);
+            if (args.size() > 1) m.set(syms->p2, args[1]);
+            if (args.size() > 2) m.set(syms->center, args[2]);
+            if (args.size() > 3) m.set(syms->color, args[3]);
             if (args.size() > 4 && args[4].isBool()) {
-                m.set(engine.intern("filled"), args[4]);
+                m.set(syms->filled, args[4]);
             }
             if (args.size() > 5 && args[5].isNumeric()) {
-                m.set(engine.intern("thickness"), args[5]);
+                m.set(syms->thickness, args[5]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -1024,128 +1027,128 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.radio_button "label" [active_value] [my_value] [on_change]
-    uiMap.set(engine.intern("radio_button"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "radio_button");
+    uiMap.set(syms->sym_radio_button, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_radio_button);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("my_value"), args[2]);
+                m.set(syms->my_value, args[2]);
             }
             if (args.size() > 3 && args[3].isCallable()) {
-                m.set(engine.intern("on_change"), args[3]);
+                m.set(syms->on_change, args[3]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.selectable "label" [selected] [on_click]
-    uiMap.set(engine.intern("selectable"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "selectable");
+    uiMap.set(syms->sym_selectable, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_selectable);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isBool()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isCallable()) {
-                m.set(engine.intern("on_click"), args[2]);
+                m.set(syms->on_click, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.input_multiline "label" [value] [width] [height] [on_change]
-    uiMap.set(engine.intern("input_multiline"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "input_multiline");
+    uiMap.set(syms->sym_input_multiline, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_input_multiline);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("label"), args[0]);
+                m.set(syms->label, args[0]);
             }
             if (args.size() > 1 && args[1].isString()) {
-                m.set(engine.intern("value"), args[1]);
+                m.set(syms->value, args[1]);
             }
             if (args.size() > 2 && args[2].isNumeric()) {
-                m.set(engine.intern("width"), args[2]);
+                m.set(syms->width, args[2]);
             }
             if (args.size() > 3 && args[3].isNumeric()) {
-                m.set(engine.intern("height"), args[3]);
+                m.set(syms->height, args[3]);
             }
             if (args.size() > 4 && args[4].isCallable()) {
-                m.set(engine.intern("on_change"), args[4]);
+                m.set(syms->on_change, args[4]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.bullet_text "text"
-    uiMap.set(engine.intern("bullet_text"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "bullet_text");
+    uiMap.set(syms->sym_bullet_text, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_bullet_text);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("text"), args[0]);
+                w.asMap().set(syms->text, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.separator_text "label"
-    uiMap.set(engine.intern("separator_text"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "separator_text");
+    uiMap.set(syms->sym_separator_text, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_separator_text);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("label"), args[0]);
+                w.asMap().set(syms->label, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.indent [width]
-    uiMap.set(engine.intern("indent"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "indent");
+    uiMap.set(syms->sym_indent, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_indent);
             if (args.size() > 0 && args[0].isNumeric()) {
-                w.asMap().set(engine.intern("width"), args[0]);
+                w.asMap().set(syms->width, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.unindent [width]
-    uiMap.set(engine.intern("unindent"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "unindent");
+    uiMap.set(syms->sym_unindent, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_unindent);
             if (args.size() > 0 && args[0].isNumeric()) {
-                w.asMap().set(engine.intern("width"), args[0]);
+                w.asMap().set(syms->width, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.dummy width height
-    uiMap.set(engine.intern("dummy"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "dummy");
+    uiMap.set(syms->sym_dummy, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_dummy);
             if (args.size() >= 2 && args[0].isNumeric() && args[1].isNumeric()) {
-                w.asMap().set(engine.intern("width"), args[0]);
-                w.asMap().set(engine.intern("height"), args[1]);
+                w.asMap().set(syms->width, args[0]);
+                w.asMap().set(syms->height, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.new_line
-    uiMap.set(engine.intern("new_line"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>&) -> Value {
-            return makeWidget(engine, "new_line");
+    uiMap.set(syms->sym_new_line, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>&) -> Value {
+            return makeWidget(*syms, syms->sym_new_line);
         }));
 
     // =========================================================================
@@ -1265,60 +1268,60 @@ void registerGuiBindings(ScriptEngine& engine) {
     addVar("separator_text_padding", ImGuiStyleVar_SeparatorTextPadding);
 
     // ui.push_color :symbol [r g b a]
-    uiMap.set(engine.intern("push_color"), makeFn(
-        [&engine, colorSymbolMap](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "push_color");
+    uiMap.set(syms->sym_push_color, makeFn(
+        [syms, colorSymbolMap = std::move(colorSymbolMap)](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_push_color);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isSymbol()) {
                 auto it = colorSymbolMap.find(args[0].asSymbol());
                 if (it != colorSymbolMap.end()) {
-                    m.set(engine.intern("value"), Value::integer(it->second));
+                    m.set(syms->value, Value::integer(it->second));
                 }
             }
             if (args.size() > 1 && args[1].isArray()) {
-                m.set(engine.intern("color"), args[1]);
+                m.set(syms->color, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.pop_color [count]
-    uiMap.set(engine.intern("pop_color"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "pop_color");
+    uiMap.set(syms->sym_pop_color, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_pop_color);
             if (args.size() > 0 && args[0].isNumeric()) {
-                w.asMap().set(engine.intern("count"), args[0]);
+                w.asMap().set(syms->count, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.push_var :symbol value_or_array
-    uiMap.set(engine.intern("push_var"), makeFn(
-        [&engine, varSymbolMap](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "push_var");
+    uiMap.set(syms->sym_push_var, makeFn(
+        [syms, varSymbolMap = std::move(varSymbolMap)](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_push_var);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isSymbol()) {
                 auto it = varSymbolMap.find(args[0].asSymbol());
                 if (it != varSymbolMap.end()) {
-                    m.set(engine.intern("value"), Value::integer(it->second));
+                    m.set(syms->value, Value::integer(it->second));
                 }
             }
             if (args.size() > 1) {
-                m.set(engine.intern("size"), args[1]);
+                m.set(syms->size, args[1]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.pop_var [count]
-    uiMap.set(engine.intern("pop_var"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "pop_var");
+    uiMap.set(syms->sym_pop_var, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_pop_var);
             if (args.size() > 0 && args[0].isNumeric()) {
-                w.asMap().set(engine.intern("count"), args[0]);
+                w.asMap().set(syms->count, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -1327,24 +1330,24 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.push_theme "name"  ->  pushes a named style preset
-    uiMap.set(engine.intern("push_theme"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "push_theme");
+    uiMap.set(syms->sym_push_theme, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_push_theme);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("label"), args[0]);
+                w.asMap().set(syms->label, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.pop_theme "name"  ->  pops a named style preset
-    uiMap.set(engine.intern("pop_theme"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "pop_theme");
+    uiMap.set(syms->sym_pop_theme, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_pop_theme);
             if (args.size() > 0 && args[0].isString()) {
-                w.asMap().set(engine.intern("label"), args[0]);
+                w.asMap().set(syms->label, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
@@ -1369,38 +1372,38 @@ void registerGuiBindings(ScriptEngine& engine) {
     // =========================================================================
 
     // ui.table "id" num_cols [children]
-    uiMap.set(engine.intern("table"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "table");
+    uiMap.set(syms->sym_table, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_table);
             auto& m = w.asMap();
             if (args.size() > 0 && args[0].isString()) {
-                m.set(engine.intern("id"), args[0]);
+                m.set(syms->id, args[0]);
             }
             if (args.size() > 1 && args[1].isNumeric()) {
-                m.set(engine.intern("num_columns"), args[1]);
+                m.set(syms->num_columns, args[1]);
             }
             if (args.size() > 2 && args[2].isArray()) {
-                m.set(engine.intern("children"), args[2]);
+                m.set(syms->children, args[2]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.table_row [children]
-    uiMap.set(engine.intern("table_row"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>& args) -> Value {
-            auto w = makeWidget(engine, "table_row");
+    uiMap.set(syms->sym_table_row, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>& args) -> Value {
+            auto w = makeWidget(*syms, syms->sym_table_row);
             if (args.size() > 0 && args[0].isArray()) {
-                w.asMap().set(engine.intern("children"), args[0]);
+                w.asMap().set(syms->children, args[0]);
             }
-            mergeOptions(args, w, engine);
+            mergeOptions(args, w, *syms);
             return w;
         }));
 
     // ui.table_next_column
-    uiMap.set(engine.intern("table_next_column"), makeFn(
-        [&engine](ExecutionContext&, const std::vector<Value>&) -> Value {
-            return makeWidget(engine, "table_next_column");
+    uiMap.set(syms->sym_table_next_column, makeFn(
+        [syms](ExecutionContext&, const std::vector<Value>&) -> Value {
+            return makeWidget(*syms, syms->sym_table_next_column);
         }));
 
     // =========================================================================
@@ -1409,7 +1412,7 @@ void registerGuiBindings(ScriptEngine& engine) {
 
     // ui.show map [=immediate true]  ->  stores map in MapRenderer, returns ID
     uiMap.set(engine.intern("show"), makeFn(
-        [&engine](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
+        [syms](ExecutionContext& ctx, const std::vector<Value>& args) -> Value {
             auto* gui = static_cast<ScriptGui*>(ctx.userData());
             if (!gui || args.empty() || !args[0].isMap()) {
                 return Value::nil();
@@ -1417,7 +1420,7 @@ void registerGuiBindings(ScriptEngine& engine) {
             // Check for =immediate kwarg in trailing map
             bool immediate = false;
             if (args.size() > 1 && args.back().isMap()) {
-                auto imm = args.back().asMap().get(engine.intern("immediate"));
+                auto imm = args.back().asMap().get(syms->immediate);
                 if (imm.isBool()) immediate = imm.asBool();
             }
             return gui->scriptShow(args[0], immediate);

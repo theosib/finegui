@@ -58,58 +58,131 @@ void MapRenderer::setTextureRegistry(TextureRegistry* registry) {
     textureRegistry_ = registry;
 }
 
-int MapRenderer::show(Value rootMap, ExecutionContext& ctx, bool immediate) {
-    int id = nextId_++;
-    int warmup = 0;
+int MapRenderer::computeWarmupFrames(const Value& rootMap, bool immediate) {
     if (!immediate && rootMap.isMap()) {
-        auto& m = rootMap.asMap();
+        auto& m = const_cast<Value&>(rootMap).asMap();
         float w = static_cast<float>(getNumericField(m, syms_.window_size_w, 0.0));
         float h = static_cast<float>(getNumericField(m, syms_.window_size_h, 0.0));
-        if (!(w > 0.0f && h > 0.0f)) warmup = 1;
+        if (!(w > 0.0f && h > 0.0f)) return 1;
     }
-    trees_[id] = Entry{std::move(rootMap), &ctx, warmup};
+    return 0;
+}
+
+int MapRenderer::show(Value rootMap, ExecutionContext& ctx, bool immediate) {
+    int id = nextId_++;
+    int warmup = computeWarmupFrames(rootMap, immediate);
+    if (inRender_) {
+        indexNode(rootMap);
+        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, warmup}});
+    } else {
+        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, warmup});
+        indexNode(it->second.rootMap);
+    }
     return id;
 }
 
 int MapRenderer::stage(Value rootMap, ExecutionContext& ctx) {
     int id = nextId_++;
-    trees_[id] = Entry{std::move(rootMap), &ctx, -1};
+    if (inRender_) {
+        indexNode(rootMap);
+        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, -1}});
+    } else {
+        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, -1});
+        indexNode(it->second.rootMap);
+    }
     return id;
 }
 
 void MapRenderer::goLive(int id) {
+    if (inRender_) {
+        for (auto& op : pendingOps_) {
+            if (op.type == OpType::Insert && op.id == id) {
+                if (op.entry.warmupFrames == -1) {
+                    op.entry.warmupFrames = computeWarmupFrames(op.entry.rootMap, false);
+                }
+                return;
+            }
+        }
+        pendingOps_.push_back(PendingOp{OpType::GoLive, id, {}});
+        return;
+    }
     auto it = trees_.find(id);
     if (it == trees_.end() || it->second.warmupFrames != -1) return;
     auto& entry = it->second;
-    if (entry.rootMap.isMap()) {
-        auto& m = entry.rootMap.asMap();
-        float w = static_cast<float>(getNumericField(m, syms_.window_size_w, 0.0));
-        float h = static_cast<float>(getNumericField(m, syms_.window_size_h, 0.0));
-        entry.warmupFrames = (w > 0.0f && h > 0.0f) ? 0 : 1;
-    } else {
-        entry.warmupFrames = 0;
-    }
+    entry.warmupFrames = computeWarmupFrames(entry.rootMap, false);
 }
 
 bool MapRenderer::isWarmingUp(int id) const {
+    if (inRender_) {
+        for (auto it = pendingOps_.rbegin(); it != pendingOps_.rend(); ++it) {
+            if (it->id == id && it->type == OpType::Insert) {
+                return it->entry.warmupFrames > 0;
+            }
+        }
+        if (pendingClear_ || pendingHideIds_.count(id) > 0) return false;
+    }
     auto it = trees_.find(id);
     return it != trees_.end() && it->second.warmupFrames > 0;
 }
 
 bool MapRenderer::isStaged(int id) const {
+    if (inRender_) {
+        for (auto it = pendingOps_.rbegin(); it != pendingOps_.rend(); ++it) {
+            if (it->id == id && it->type == OpType::Insert) {
+                return it->entry.warmupFrames == -1;
+            }
+        }
+        if (pendingClear_ || pendingHideIds_.count(id) > 0) return false;
+    }
     auto it = trees_.find(id);
     return it != trees_.end() && it->second.warmupFrames == -1;
 }
 
 void MapRenderer::hide(int id) {
-    trees_.erase(id);
+    if (inRender_) {
+        bool removedPending = false;
+        for (auto it = pendingOps_.begin(); it != pendingOps_.end(); ) {
+            if (it->id == id) {
+                it = pendingOps_.erase(it);
+                removedPending = true;
+            } else {
+                ++it;
+            }
+        }
+        if (!removedPending && !pendingClear_ && trees_.find(id) != trees_.end()) {
+            pendingHideIds_.insert(id);
+        }
+        rebuildIdIndex();
+        return;
+    }
+    if (trees_.erase(id) > 0) {
+        rebuildIdIndex();
+    }
 }
 
 void MapRenderer::hideAll() {
+    if (inRender_) {
+        pendingClear_ = true;
+        pendingHideIds_.clear();
+        pendingOps_.clear();
+        idIndex_.clear();
+        return;
+    }
     trees_.clear();
+    idIndex_.clear();
 }
 
 Value* MapRenderer::get(int id) {
+    if (inRender_) {
+        for (auto it = pendingOps_.rbegin(); it != pendingOps_.rend(); ++it) {
+            if (it->id == id && it->type == OpType::Insert) {
+                return &it->entry.rootMap;
+            }
+        }
+        if (pendingClear_ || pendingHideIds_.count(id) > 0) {
+            return nullptr;
+        }
+    }
     auto it = trees_.find(id);
     if (it != trees_.end()) {
         return &it->second.rootMap;
@@ -121,31 +194,64 @@ void MapRenderer::setFocus(const std::string& widgetId) {
     pendingFocusId_ = widgetId;
 }
 
-finescript::Value MapRenderer::findByIdRecursive(finescript::Value& node, uint32_t symId, const std::string& strId) {
-    if (!node.isMap()) return finescript::Value::nil();
-    auto& m = node.asMap();
+void MapRenderer::indexNode(const finescript::Value& node) {
+    if (!node.isMap()) return;
+    const auto& m = node.asMap();
     auto idVal = m.get(syms_.id);
-    if (idVal.isSymbol()) {
-        if (idVal.asSymbol() == symId) return node;
-    } else if (idVal.isString()) {
-        if (idVal.asString() == strId) return node;
+    if (idVal.isString() && !idVal.asString().empty()) {
+        idIndex_.try_emplace(std::string(idVal.asString()), node);
+    } else if (idVal.isSymbol()) {
+        std::string_view sv = engine_.lookupSymbol(idVal.asSymbol());
+        if (!sv.empty()) {
+            idIndex_.try_emplace(std::string(sv), node);
+        }
     }
     auto childrenVal = m.get(syms_.children);
     if (childrenVal.isArray()) {
-        for (auto& child : childrenVal.asArrayMut()) {
-            auto found = findByIdRecursive(child, symId, strId);
-            if (!found.isNil()) return found;
+        for (const auto& child : childrenVal.asArray()) {
+            indexNode(child);
         }
     }
-    return finescript::Value::nil();
+}
+
+void MapRenderer::rebuildIdIndex() {
+    idIndex_.clear();
+    if (!pendingClear_) {
+        for (const auto& [id, entry] : trees_) {
+            if (pendingHideIds_.count(id) > 0) continue;
+            indexNode(entry.rootMap);
+        }
+    }
+    for (const auto& op : pendingOps_) {
+        if (op.type == OpType::Insert) {
+            indexNode(op.entry.rootMap);
+        }
+    }
+}
+
+bool MapRenderer::nodeMatchesId(const finescript::Value& node, const std::string& strId) const {
+    if (!node.isMap()) return false;
+    auto idVal = node.asMap().get(syms_.id);
+    if (idVal.isString()) {
+        return idVal.asString() == strId;
+    }
+    if (idVal.isSymbol()) {
+        return engine_.lookupSymbol(idVal.asSymbol()) == strId;
+    }
+    return false;
 }
 
 finescript::Value MapRenderer::findById(const std::string& widgetId) {
     if (widgetId.empty()) return finescript::Value::nil();
-    uint32_t sym = engine_.intern(widgetId);
-    for (auto& [id, entry] : trees_) {
-        auto found = findByIdRecursive(entry.rootMap, sym, widgetId);
-        if (!found.isNil()) return found;
+    auto it = idIndex_.find(widgetId);
+    if (it != idIndex_.end() && nodeMatchesId(it->second, widgetId)) {
+        return it->second;
+    }
+    // Refresh index in case :children or :id fields were dynamically mutated after show()/stage()
+    rebuildIdIndex();
+    it = idIndex_.find(widgetId);
+    if (it != idIndex_.end()) {
+        return it->second;
     }
     return finescript::Value::nil();
 }
@@ -154,16 +260,59 @@ finescript::Value MapRenderer::findById(uint32_t symbolId) {
     if (symbolId == 0) return finescript::Value::nil();
     std::string str(engine_.lookupSymbol(symbolId));
     if (str.empty()) return finescript::Value::nil();
-    for (auto& [id, entry] : trees_) {
-        auto found = findByIdRecursive(entry.rootMap, symbolId, str);
-        if (!found.isNil()) return found;
+    return findById(str);
+}
+
+void MapRenderer::flushPendingOps() {
+    bool mutated = false;
+    if (pendingClear_) {
+        trees_.clear();
+        pendingClear_ = false;
+        mutated = true;
     }
-    return finescript::Value::nil();
+    if (!pendingHideIds_.empty()) {
+        for (int id : pendingHideIds_) {
+            trees_.erase(id);
+        }
+        pendingHideIds_.clear();
+        mutated = true;
+    }
+    if (!pendingOps_.empty()) {
+        auto ops = std::move(pendingOps_);
+        pendingOps_.clear();
+        for (auto& op : ops) {
+            if (op.type == OpType::Insert) {
+                trees_[op.id] = std::move(op.entry);
+                mutated = true;
+            } else if (op.type == OpType::GoLive) {
+                goLive(op.id);
+            }
+        }
+    }
+    if (mutated) {
+        rebuildIdIndex();
+    }
 }
 
 void MapRenderer::renderAll() {
+    struct RenderGuard {
+        MapRenderer& self;
+        bool outermost;
+        explicit RenderGuard(MapRenderer& r) : self(r), outermost(!r.inRender_) {
+            self.inRender_ = true;
+        }
+        ~RenderGuard() {
+            if (outermost) {
+                self.inRender_ = false;
+                self.flushPendingOps();
+            }
+        }
+    } guard(*this);
+
     currentFocusedId_.clear();
     for (auto& [id, entry] : trees_) {
+        if (pendingClear_) break;
+        if (pendingHideIds_.count(id) > 0) continue;
         if (entry.warmupFrames == -1) continue;  // staged — skip
         if (entry.rootMap.isMap()) {
             if (entry.warmupFrames > 0) {
@@ -2177,8 +2326,16 @@ Value MapRenderer::saveState(int id) {
 
 Value MapRenderer::saveState() {
     auto result = Value::map();
-    for (auto& [id, entry] : trees_) {
-        collectMapState(entry.rootMap, result);
+    if (!pendingClear_) {
+        for (auto& [id, entry] : trees_) {
+            if (pendingHideIds_.count(id) > 0) continue;
+            collectMapState(entry.rootMap, result);
+        }
+    }
+    for (auto& op : pendingOps_) {
+        if (op.type == OpType::Insert) {
+            collectMapState(op.entry.rootMap, result);
+        }
     }
     return result;
 }
@@ -2193,8 +2350,16 @@ void MapRenderer::loadState(int id, const Value& stateMap) {
 
 void MapRenderer::loadState(const Value& stateMap) {
     if (!stateMap.isMap()) return;
-    for (auto& [id, entry] : trees_) {
-        applyMapState(entry.rootMap, stateMap.asMap());
+    if (!pendingClear_) {
+        for (auto& [id, entry] : trees_) {
+            if (pendingHideIds_.count(id) > 0) continue;
+            applyMapState(entry.rootMap, stateMap.asMap());
+        }
+    }
+    for (auto& op : pendingOps_) {
+        if (op.type == OpType::Insert) {
+            applyMapState(op.entry.rootMap, stateMap.asMap());
+        }
     }
 }
 

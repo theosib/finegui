@@ -12,10 +12,13 @@
 #include <finegui/widget_converter.hpp>
 #include <finegui/script_bindings.hpp>
 #include <finegui/map_renderer.hpp>
+#include <finegui/script_gui.hpp>
 #include <finegui/widget_node.hpp>
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
 #include <finescript/map_data.h>
+#include <finescript/native_function.h>
+#include <imgui.h>
 
 #include <iostream>
 #include <cassert>
@@ -2901,6 +2904,398 @@ void test_window_pivot_kwarg() {
 }
 
 // ============================================================================
+// Phase R1.3 Tests: O(1) findById Index & Re-Entrant renderAll()
+// ============================================================================
+
+void test_map_renderer_find_by_id_index() {
+    std::cout << "Testing: MapRenderer::findById O(1) index, dynamic :children mutation, and hide()... ";
+
+    ScriptEngine engine;
+    registerGuiBindings(engine);
+    ExecutionContext ctx(engine);
+    MapRenderer renderer(engine);
+
+    auto btn1 = Value::map();
+    btn1.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+    btn1.asMap().set(engine.intern("label"), Value::string("Btn 1"));
+    btn1.asMap().set(engine.intern("id"), Value::string("btn_1"));
+
+    auto symText = Value::map();
+    symText.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+    symText.asMap().set(engine.intern("text"), Value::string("Hello"));
+    symText.asMap().set(engine.intern("id"), Value::symbol(engine.intern("sym_label")));
+
+    auto group = Value::map();
+    group.asMap().set(engine.intern("type"), Value::symbol(engine.intern("group")));
+    group.asMap().set(engine.intern("id"), Value::string("container_group"));
+    group.asMap().set(engine.intern("children"), Value::array({symText}));
+
+    auto win1 = Value::map();
+    win1.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    win1.asMap().set(engine.intern("title"), Value::string("Win 1"));
+    win1.asMap().set(engine.intern("children"), Value::array({btn1, group}));
+
+    int id1 = renderer.show(win1, ctx, true);
+
+    // 1. O(1) lookup returns the exact same shared_ptr<MapData> reference
+    auto foundBtn1 = renderer.findById("btn_1");
+    assert(foundBtn1.isMap());
+    assert(&foundBtn1.asMap() == &btn1.asMap());
+    assert(foundBtn1.mapPtr() == btn1.mapPtr());
+
+    // Symbol lookup and string lookup both match
+    auto foundSymByStr = renderer.findById("sym_label");
+    auto foundSymBySym = renderer.findById(engine.intern("sym_label"));
+    assert(foundSymByStr.isMap());
+    assert(foundSymBySym.isMap());
+    assert(&foundSymByStr.asMap() == &symText.asMap());
+    assert(&foundSymBySym.asMap() == &symText.asMap());
+
+    // 2. Dynamic :children mutation in-place after show()
+    auto dynChild = Value::map();
+    dynChild.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+    dynChild.asMap().set(engine.intern("label"), Value::string("Dynamic"));
+    dynChild.asMap().set(engine.intern("id"), Value::string("dyn_btn"));
+
+    group.asMap().get(engine.intern("children")).asArrayMut().push_back(dynChild);
+
+    // First lookup after mutation refreshes the index and returns exact MapData reference
+    auto foundDyn = renderer.findById("dyn_btn");
+    assert(foundDyn.isMap());
+    assert(&foundDyn.asMap() == &dynChild.asMap());
+    assert(foundDyn.mapPtr() == dynChild.mapPtr());
+
+    // Subsequent lookup hits the refreshed index directly
+    auto foundDynAgain = renderer.findById("dyn_btn");
+    assert(foundDynAgain.isMap());
+    assert(&foundDynAgain.asMap() == &dynChild.asMap());
+
+    // 3. Stage a second tree and verify its widgets are indexed
+    auto stagedItem = Value::map();
+    stagedItem.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+    stagedItem.asMap().set(engine.intern("text"), Value::string("Staged"));
+    stagedItem.asMap().set(engine.intern("id"), Value::string("staged_item"));
+
+    auto win2 = Value::map();
+    win2.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    win2.asMap().set(engine.intern("title"), Value::string("Win 2"));
+    win2.asMap().set(engine.intern("children"), Value::array({stagedItem}));
+
+    int id2 = renderer.stage(win2, ctx);
+    auto foundStaged = renderer.findById("staged_item");
+    assert(foundStaged.isMap());
+    assert(&foundStaged.asMap() == &stagedItem.asMap());
+
+    // 4. Hiding tree 1 removes its entries from the index while keeping tree 2's entries
+    renderer.hide(id1);
+    assert(renderer.findById("btn_1").isNil());
+    assert(renderer.findById("sym_label").isNil());
+    assert(renderer.findById("dyn_btn").isNil());
+    assert(renderer.findById("staged_item").isMap());
+    assert(&renderer.findById("staged_item").asMap() == &stagedItem.asMap());
+
+    // 5. clear() / hideAll() removes all remaining entries
+    renderer.clear();
+    assert(renderer.findById("staged_item").isNil());
+    (void)id2;
+
+    std::cout << "PASSED\n";
+}
+
+void test_map_renderer_reentrant_show_hide_in_render() {
+    std::cout << "Testing: Re-entrant show()/hide()/stage() inside on_click during renderAll()... ";
+
+    // Set up headless Dear ImGui context so ImGui::Button actually fires on_click inside renderAll()
+    ImGuiContext* imguiCtx = ImGui::CreateContext();
+    ImGui::SetCurrentContext(imguiCtx);
+    ImGuiIO& io = ImGui::GetIO();
+    io.IniFilename = nullptr;
+    io.DisplaySize = ImVec2(800.0f, 600.0f);
+    io.DeltaTime = 1.0f / 60.0f;
+    unsigned char* pixels = nullptr;
+    int texW = 0, texH = 0;
+    io.Fonts->GetTexDataAsRGBA32(&pixels, &texW, &texH);
+    io.Fonts->SetTexID(static_cast<ImTextureID>(1));
+
+    ScriptEngine engine;
+    registerGuiBindings(engine);
+    ExecutionContext ctx(engine);
+    MapRenderer renderer(engine);
+
+    int win1Id = -1;
+    int win2Id = -1;
+    int win3Id = -1;
+    int spawnedWinId = -1;
+    int stagedWinId = -1;
+    bool callbackFired = false;
+    bool win3CallbackFired = false;
+
+    // Build Window 1 at (0, 0) with a large button covering (0..300, 0..200)
+    auto btn1 = Value::map();
+    btn1.asMap().set(engine.intern("type"), Value::symbol(engine.intern("button")));
+    btn1.asMap().set(engine.intern("label"), Value::string("ClickToSwap"));
+    btn1.asMap().set(engine.intern("id"), Value::string("win1_btn"));
+    btn1.asMap().set(engine.intern("width"), Value::number(300.0));
+    btn1.asMap().set(engine.intern("height"), Value::number(200.0));
+
+    auto onClickFn = Value::nativeFunction(std::make_shared<SimpleLambdaFunction>(
+        [&](ExecutionContext& cbCtx, const std::vector<Value>&) -> Value {
+            callbackFired = true;
+
+            // Hide current window (win1) and a sibling window (win2) mid-renderAll()
+            renderer.hide(win1Id);
+            renderer.hide(win2Id);
+
+            // Immediately inside the callback, win1 and win2 should appear hidden to queries
+            assert(renderer.get(win1Id) == nullptr);
+            assert(renderer.get(win2Id) == nullptr);
+            assert(renderer.findById("win1_btn").isNil());
+            assert(renderer.findById("win2_text").isNil());
+
+            // Show a brand-new window during renderAll()
+            auto spawnedLabel = Value::map();
+            spawnedLabel.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+            spawnedLabel.asMap().set(engine.intern("text"), Value::string("Spawned Window"));
+            spawnedLabel.asMap().set(engine.intern("id"), Value::string("spawned_label"));
+
+            auto spawnedWin = Value::map();
+            spawnedWin.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+            spawnedWin.asMap().set(engine.intern("title"), Value::string("Spawned"));
+            spawnedWin.asMap().set(engine.intern("children"), Value::array({spawnedLabel}));
+
+            spawnedWinId = renderer.show(spawnedWin, cbCtx, true);
+            assert(spawnedWinId > 0);
+            assert(renderer.get(spawnedWinId) != nullptr);
+            assert(renderer.findById("spawned_label").isMap());
+            assert(&renderer.findById("spawned_label").asMap() == &spawnedLabel.asMap());
+
+            // Also stage and goLive a window during renderAll()
+            auto stagedWin = Value::map();
+            stagedWin.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+            stagedWin.asMap().set(engine.intern("title"), Value::string("StagedInCallback"));
+            stagedWin.asMap().set(engine.intern("window_size_w"), Value::number(200.0));
+            stagedWin.asMap().set(engine.intern("window_size_h"), Value::number(100.0));
+            stagedWinId = renderer.stage(stagedWin, cbCtx);
+            assert(stagedWinId > 0);
+            assert(renderer.isStaged(stagedWinId));
+            renderer.goLive(stagedWinId);
+            assert(!renderer.isStaged(stagedWinId));
+
+            return Value::nil();
+        }));
+    btn1.asMap().set(engine.intern("on_click"), onClickFn);
+
+    auto win1 = Value::map();
+    win1.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    win1.asMap().set(engine.intern("title"), Value::string("Win1"));
+    win1.asMap().set(engine.intern("window_pos_x"), Value::number(0.0));
+    win1.asMap().set(engine.intern("window_pos_y"), Value::number(0.0));
+    win1.asMap().set(engine.intern("window_size_w"), Value::number(400.0));
+    win1.asMap().set(engine.intern("window_size_h"), Value::number(300.0));
+    win1.asMap().set(engine.intern("window_flags"), Value::array({
+        Value::symbol(engine.intern("no_title_bar")),
+        Value::symbol(engine.intern("no_resize")),
+        Value::symbol(engine.intern("no_move"))
+    }));
+    win1.asMap().set(engine.intern("children"), Value::array({btn1}));
+
+    // Window 2 (will be hidden by win1's callback before renderAll reaches it)
+    auto win2Text = Value::map();
+    win2Text.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+    win2Text.asMap().set(engine.intern("text"), Value::string("Win2 Text"));
+    win2Text.asMap().set(engine.intern("id"), Value::string("win2_text"));
+
+    auto win2 = Value::map();
+    win2.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    win2.asMap().set(engine.intern("title"), Value::string("Win2"));
+    win2.asMap().set(engine.intern("window_pos_x"), Value::number(450.0));
+    win2.asMap().set(engine.intern("window_pos_y"), Value::number(200.0));
+    win2.asMap().set(engine.intern("window_size_w"), Value::number(200.0));
+    win2.asMap().set(engine.intern("window_size_h"), Value::number(100.0));
+    win2.asMap().set(engine.intern("children"), Value::array({win2Text}));
+
+    // Window 3 (closable window whose :visible stays valid and renders after win1 & win2)
+    auto win3Text = Value::map();
+    win3Text.asMap().set(engine.intern("type"), Value::symbol(engine.intern("text")));
+    win3Text.asMap().set(engine.intern("text"), Value::string("Win3 Text"));
+    win3Text.asMap().set(engine.intern("id"), Value::string("win3_text"));
+    win3Text.asMap().set(engine.intern("on_focus"), Value::nativeFunction(
+        std::make_shared<SimpleLambdaFunction>(
+            [&](ExecutionContext&, const std::vector<Value>&) -> Value {
+                win3CallbackFired = true;
+                return Value::nil();
+            })));
+
+    auto win3 = Value::map();
+    win3.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+    win3.asMap().set(engine.intern("title"), Value::string("Win3"));
+    win3.asMap().set(engine.intern("window_pos_x"), Value::number(450.0));
+    win3.asMap().set(engine.intern("window_pos_y"), Value::number(0.0));
+    win3.asMap().set(engine.intern("window_size_w"), Value::number(200.0));
+    win3.asMap().set(engine.intern("window_size_h"), Value::number(100.0));
+    win3.asMap().set(engine.intern("children"), Value::array({win3Text}));
+
+    win1Id = renderer.show(win1, ctx, true);
+    win2Id = renderer.show(win2, ctx, true);
+    win3Id = renderer.show(win3, ctx, true);
+
+    // Frame 1: Initial layout frame
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+    assert(!callbackFired);
+
+    // Frame 2: Hover cursor over Win1's button at (50, 50)
+    io.AddMousePosEvent(50.0f, 50.0f);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+    assert(!callbackFired);
+
+    // Frame 3: Mouse press over Win1's button at (50, 50)
+    io.AddMouseButtonEvent(0, true);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+    assert(!callbackFired);
+
+    // Frame 4: Mouse release over Win1's button -> triggers ImGui::Button -> invokes on_click inside renderAll()
+    io.AddMouseButtonEvent(0, false);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    assert(callbackFired);
+    assert(renderer.get(win1Id) == nullptr);
+    assert(renderer.get(win2Id) == nullptr);
+    assert(renderer.get(win3Id) != nullptr);
+    assert(renderer.get(spawnedWinId) != nullptr);
+    assert(renderer.get(stagedWinId) != nullptr);
+    assert(renderer.findById("win1_btn").isNil());
+    assert(renderer.findById("win2_text").isNil());
+    assert(renderer.findById("win3_text").isMap());
+    assert(renderer.findById("spawned_label").isMap());
+
+    // Frame 4: Render again with the newly spawned windows active
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+    ImGui::DestroyContext(imguiCtx);
+
+    // Also test ScriptGui calling ui.hide and ui.show from inside an on_click script callback
+    ImGuiContext* imguiCtx2 = ImGui::CreateContext();
+    ImGui::SetCurrentContext(imguiCtx2);
+    ImGuiIO& io2 = ImGui::GetIO();
+    io2.IniFilename = nullptr;
+    io2.DisplaySize = ImVec2(800.0f, 600.0f);
+    io2.DeltaTime = 1.0f / 60.0f;
+    unsigned char* pixels2 = nullptr;
+    int texW2 = 0, texH2 = 0;
+    io2.Fonts->GetTexDataAsRGBA32(&pixels2, &texW2, &texH2);
+    io2.Fonts->SetTexID(static_cast<ImTextureID>(1));
+
+    renderer.clear();
+    ScriptGui scriptGui(engine, renderer);
+    bool ok = scriptGui.loadAndRun(R"(
+        set replaced false
+        fn on_replace [] do
+            set replaced true
+            ui.hide
+            ui.show {ui.window "ReplacementWin" [
+                {ui.text "Replaced!" =id "replaced_lbl"}
+            ]} =immediate true
+        end
+        ui.show {ui.window "ScriptReentry" [
+            {ui.button "ReplaceMe" ~on_replace =width 300 =height 200}
+        ] =window_pos_x 0 =window_pos_y 0 =window_size_w 400 =window_size_h 300 =window_flags [:no_title_bar :no_resize :no_move]} =immediate true
+    )", "reentrant_script_gui");
+    assert(ok);
+    assert(scriptGui.isActive());
+    int initialGuiId = scriptGui.guiId();
+
+    // Frame 1: Initial layout frame
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    // Frame 2: Hover cursor over button
+    io2.AddMousePosEvent(50.0f, 50.0f);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    // Frame 3: Press mouse button
+    io2.AddMouseButtonEvent(0, true);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    // Frame 4: Release mouse button -> click
+    io2.AddMouseButtonEvent(0, false);
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    assert(scriptGui.context()->get("replaced").asBool() == true);
+    assert(scriptGui.isActive());
+    assert(scriptGui.guiId() != initialGuiId);
+    assert(renderer.get(initialGuiId) == nullptr);
+    assert(renderer.get(scriptGui.guiId()) != nullptr);
+    assert(renderer.findById("replaced_lbl").isMap());
+
+    scriptGui.close();
+
+    // Test RAII exception safety: if a callback calls hide()/show() and throws during renderAll()
+    // (using on_close on a modal, which fires after ImGui::EndPopup()), inRender_ is reset
+    // and pending operations are still flushed cleanly.
+    renderer.clear();
+    int throwWinId = -1;
+    int survivorWinId = -1;
+    auto throwModal = Value::map();
+    throwModal.asMap().set(engine.intern("type"), Value::symbol(engine.intern("modal")));
+    throwModal.asMap().set(engine.intern("title"), Value::string("ThrowModal"));
+    throwModal.asMap().set(engine.intern("value"), Value::boolean(true));
+    throwModal.asMap().set(engine.intern("on_close"), Value::nativeFunction(
+        std::make_shared<SimpleLambdaFunction>(
+            [&](ExecutionContext& cbCtx, const std::vector<Value>&) -> Value {
+                renderer.hide(throwWinId);
+                auto sWin = Value::map();
+                sWin.asMap().set(engine.intern("type"), Value::symbol(engine.intern("window")));
+                sWin.asMap().set(engine.intern("title"), Value::string("Survivor"));
+                survivorWinId = renderer.show(sWin, cbCtx, true);
+                throw std::runtime_error("simulated callback exception");
+            })));
+
+    throwWinId = renderer.show(throwModal, ctx, true);
+
+    // Frame 1: opens the modal
+    ImGui::NewFrame();
+    renderer.renderAll();
+    ImGui::EndFrame();
+
+    // Frame 2: press Escape to close the modal and trigger on_close after EndPopup()
+    bool caught = false;
+    io2.AddKeyEvent(ImGuiKey_Escape, true);
+    ImGui::NewFrame();
+    try {
+        renderer.renderAll();
+    } catch (const std::runtime_error&) {
+        caught = true;
+    }
+    ImGui::EndFrame();
+
+    assert(caught);
+    assert(renderer.get(throwWinId) == nullptr);
+    assert(survivorWinId > 0);
+    assert(renderer.get(survivorWinId) != nullptr);
+
+    ImGui::DestroyContext(imguiCtx2);
+    (void)win3CallbackFired;
+
+    std::cout << "PASSED\n";
+}
+
+// ============================================================================
 // Main
 // ============================================================================
 
@@ -3081,6 +3476,10 @@ int main() {
         test_window_pivot_interned();
         test_converter_reads_window_pivot();
         test_window_pivot_kwarg();
+
+        // Phase R1.3 tests
+        test_map_renderer_find_by_id_index();
+        test_map_renderer_reentrant_show_hide_in_render();
 
         std::cout << "\n=== All script integration unit tests PASSED ===\n";
     } catch (const std::exception& e) {
