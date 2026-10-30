@@ -36,6 +36,12 @@ endif()
 
 # Script integration tests
 if(FINEGUI_BUILD_SCRIPT)
+    add_executable(test_skin_unit
+        test_skin_unit.cpp
+    )
+    target_link_libraries(test_skin_unit PRIVATE finegui-script-shared)
+    add_test(NAME test_skin_unit COMMAND test_skin_unit)
+
     # Unit tests - conversion, bindings, ScriptGui logic (no Vulkan required)
     add_executable(test_script_unit
         test_script_unit.cpp

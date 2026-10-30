@@ -148,6 +148,17 @@ public:
      */
     void unregisterTexture(TextureHandle handle);
 
+    /**
+     * @brief Load an image for a skin and register it
+     *
+     * The GuiSystem keeps the texture for as long as it lives. A skin can be active at any
+     * time, so nothing outside it is in a position to free one.
+     *
+     * @param path Image file
+     * @return Handle, invalid if it can't be loaded or initialize hasn't run
+     */
+    TextureHandle loadSkinAtlas(const std::string& path);
+
     // ========================================================================
     // Per-Frame: Input
     // ========================================================================

@@ -1549,29 +1549,11 @@ ui.show {ui.window "Actions" [
 ]}
 ```
 
-### Textured Skin System (Planned)
+### Textured Skins
 
-**Not yet implemented.** Full design: [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md)
-
-Replaces ImGui flat-color rendering with 9-slice textured draws from a sprite atlas. Opt-in, non-breaking. Key future API surface:
-
-```cpp
-// C++
-SkinAtlas atlas;
-atlas.loadTexture(gui, "atlas.png");
-auto skin = Skin::loadFromFile("skin.fgs", atlas, engine);
-SkinManager skinMgr;
-skinMgr.registerSkin("name", std::move(skin));
-skinMgr.setActiveSkin("name");
-guiRenderer.setSkinManager(&skinMgr);  // or mapRenderer.setSkinManager(&skinMgr)
-```
-
-Script: `ui.load_skin "name" "path"`, `ui.set_skin "name"`, `ui.push_skin "name"`, `ui.pop_skin`.
-Per-widget: `:skin "custom_element"` map field or `skinOverride` string on WidgetNode.
-
-Unskinned elements fall back to standard ImGui rendering. Skins can be partial.
-
-New widget types (future): `PushSkin`, `PopSkin`. New WidgetNode field: `skinOverride`.
+`finegui::loadSkin(gui, path, engine, context, error)` then `finegui::setActiveSkin(skin.get())`,
+or null for plain ImGui. 9-slice art for every widget, opt-in, partial skins fall back to ImGui.
+Format and ImGui update steps: [SKIN_SYSTEM.md](SKIN_SYSTEM.md)
 
 ### Global Theme Switching (set_theme)
 

@@ -89,11 +89,35 @@ if(NOT EXISTS "${IMGUI_DIR}/imgui.h")
             "Please run: git submodule add https://github.com/ocornut/imgui.git third_party/imgui")
 endif()
 
+# ImGui with skin hooks. The submodule stays exactly as it comes from upstream, so taking an
+# update is a checkout. The patch goes onto copies of the two files it touches, and a hunk
+# that no longer fits stops here: see docs/SKIN_SYSTEM.md for what to do then.
+set(IMGUI_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui-skin-hooks.patch)
+set(IMGUI_PATCHED_DIR ${CMAKE_CURRENT_BINARY_DIR}/imgui-patched)
+set(IMGUI_PATCH_WORK ${CMAKE_CURRENT_BINARY_DIR}/imgui-patched-work)
+file(REMOVE_RECURSE ${IMGUI_PATCH_WORK})
+file(COPY ${IMGUI_DIR}/imgui.cpp ${IMGUI_DIR}/imgui_widgets.cpp DESTINATION ${IMGUI_PATCH_WORK})
+find_program(PATCH_PROGRAM patch REQUIRED)
+execute_process(
+    COMMAND ${PATCH_PROGRAM} -p1 --batch --forward -i ${IMGUI_PATCH}
+    WORKING_DIRECTORY ${IMGUI_PATCH_WORK}
+    RESULT_VARIABLE IMGUI_PATCH_RESULT
+    OUTPUT_VARIABLE IMGUI_PATCH_OUTPUT
+    ERROR_VARIABLE IMGUI_PATCH_OUTPUT)
+if(NOT IMGUI_PATCH_RESULT EQUAL 0)
+    message(FATAL_ERROR "The skin hooks no longer fit this ImGui:\n${IMGUI_PATCH_OUTPUT}")
+endif()
+# Through configure_file so that an unchanged result doesn't recompile ImGui
+configure_file(${IMGUI_PATCH_WORK}/imgui.cpp ${IMGUI_PATCHED_DIR}/imgui.cpp COPYONLY)
+configure_file(${IMGUI_PATCH_WORK}/imgui_widgets.cpp ${IMGUI_PATCHED_DIR}/imgui_widgets.cpp COPYONLY)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+    ${IMGUI_PATCH} ${IMGUI_DIR}/imgui.cpp ${IMGUI_DIR}/imgui_widgets.cpp)
+
 set(IMGUI_SOURCES
-    ${IMGUI_DIR}/imgui.cpp
+    ${IMGUI_PATCHED_DIR}/imgui.cpp
     ${IMGUI_DIR}/imgui_draw.cpp
     ${IMGUI_DIR}/imgui_tables.cpp
-    ${IMGUI_DIR}/imgui_widgets.cpp
+    ${IMGUI_PATCHED_DIR}/imgui_widgets.cpp
     ${IMGUI_DIR}/imgui_demo.cpp
 )
 
@@ -141,12 +165,15 @@ set(FINEGUI_SOURCES
     src/state_dispatcher.cpp
     src/texture_registry.cpp
     src/scene_texture.cpp
+    src/skin.cpp
     src/backend/imgui_impl_finevk.cpp
 )
 
 set(FINEGUI_HEADERS
     include/finegui/finegui.hpp
     include/finegui/gui_system.hpp
+    include/finegui/imgui_skin_hooks.h
+    include/finegui/skin.hpp
     include/finegui/gui_config.hpp
     include/finegui/gui_state.hpp
     include/finegui/gui_draw_data.hpp
@@ -327,6 +354,7 @@ if(FINEGUI_BUILD_SCRIPT)
         src/script/script_bindings.cpp
         src/script/script_gui.cpp
         src/script/script_gui_manager.cpp
+        src/script/skin_loader.cpp
     )
 
     set(FINEGUI_SCRIPT_HEADERS

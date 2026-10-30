@@ -18,6 +18,8 @@ namespace finegui {
 
 struct GuiSystem::Impl {
     finevk::LogicalDevice* device = nullptr;
+    finevk::CommandPool* commandPool = nullptr;
+    std::vector<finevk::TextureRef> skinAtlases;
     GuiConfig config;
 
     // ImGui context
@@ -158,6 +160,7 @@ void GuiSystem::initialize(finevk::RenderPass* renderPass,
     if (!renderPass || !commandPool) {
         throw std::runtime_error("GuiSystem::initialize: renderPass and commandPool required");
     }
+    impl_->commandPool = commandPool;
     if (!impl_->backend) {
         throw std::runtime_error("GuiSystem::initialize: backend not created. Use initialize(RenderSurface*) instead.");
     }
@@ -186,6 +189,14 @@ void GuiSystem::initialize(finevk::RenderSurface* surface, uint32_t subpass) {
     impl_->displayHeight = static_cast<float>(extent.height) / impl_->dpiScale;
 
     initialize(surface->renderPass(), surface->commandPool(), subpass);
+}
+
+TextureHandle GuiSystem::loadSkinAtlas(const std::string& path) {
+    if (!impl_->commandPool) return TextureHandle{};
+    finevk::TextureRef texture = finevk::Texture::fromFile(impl_->device, path, impl_->commandPool, false);
+    if (!texture) return TextureHandle{};
+    impl_->skinAtlases.push_back(texture);
+    return registerTexture(texture.get());
 }
 
 TextureHandle GuiSystem::registerTexture(finevk::Texture* texture, finevk::Sampler* sampler) {

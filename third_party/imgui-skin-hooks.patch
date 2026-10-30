@@ -1,0 +1,228 @@
+--- a/imgui.cpp	2026-10-30 17:14:47
++++ b/imgui.cpp	2026-10-30 17:15:23
+@@ -1194,6 +1194,7 @@
+ #include "imgui.h"
+ #ifndef IMGUI_DISABLE
+ #include "imgui_internal.h"
++#include "finegui/imgui_skin_hooks.h"
+ 
+ // System includes
+ #include <stdio.h>      // vsnprintf, sscanf, printf
+@@ -7115,6 +7116,7 @@
+         const float backup_border_size = style.FrameBorderSize;
+         g.Style.FrameBorderSize = window->WindowBorderSize;
+         ImU32 title_bar_col = GetColorU32((title_bar_is_highlight && g.NavCursorVisible) ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBgCollapsed);
++        if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_TitleBar, title_bar_is_highlight ? ImGuiSkinState_Selected : ImGuiSkinState_Normal, title_bar_rect.Min, title_bar_rect.Max))
+         RenderFrame(title_bar_rect.Min, title_bar_rect.Max, title_bar_col, true, window_rounding);
+         g.Style.FrameBorderSize = backup_border_size;
+     }
+@@ -7138,6 +7140,9 @@
+                 ImRect bg_rect(window->Pos + ImVec2(0, window->TitleBarHeight), window->Pos + window->Size);
+                 ImDrawFlags bg_rounding_flags = (flags & ImGuiWindowFlags_NoTitleBar) ? 0 : ImDrawFlags_RoundCornersBottom;
+                 ImDrawList* bg_draw_list = window->DrawList;
++                const bool skinned_bg = !(flags & ImGuiWindowFlags_ChildWindow) || (flags & ImGuiWindowFlags_Popup);
++                const ImGuiSkinPart bg_part = (flags & ImGuiWindowFlags_Tooltip) ? ImGuiSkinPart_TooltipBg : (flags & ImGuiWindowFlags_Popup) ? ImGuiSkinPart_PopupBg : ImGuiSkinPart_WindowBg;
++                if (!skinned_bg || !ImGuiSkinDraw(bg_draw_list, bg_part, ImGuiSkinState_Normal, bg_rect.Min, bg_rect.Max))
+                 bg_draw_list->AddRectFilled(bg_rect.Min, bg_rect.Max, bg_col, window_rounding, bg_rounding_flags);
+             }
+         }
+@@ -7146,6 +7151,7 @@
+         if (!(flags & ImGuiWindowFlags_NoTitleBar))
+         {
+             ImU32 title_bar_col = GetColorU32(title_bar_is_highlight ? ImGuiCol_TitleBgActive : ImGuiCol_TitleBg);
++            if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_TitleBar, title_bar_is_highlight ? ImGuiSkinState_Selected : ImGuiSkinState_Normal, title_bar_rect.Min, title_bar_rect.Max))
+             window->DrawList->AddRectFilled(title_bar_rect.Min, title_bar_rect.Max, title_bar_col, window_rounding, ImDrawFlags_RoundCornersTop);
+         }
+ 
+@@ -7154,6 +7160,7 @@
+         {
+             ImRect menu_bar_rect = window->MenuBarRect();
+             menu_bar_rect.ClipWith(window->Rect());  // Soft clipping, in particular child window don't have minimum size covering the menu bar so this is useful for them.
++            if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_MenuBar, ImGuiSkinState_Normal, menu_bar_rect.Min, menu_bar_rect.Max))
+             window->DrawList->AddRectFilled(menu_bar_rect.Min, menu_bar_rect.Max, GetColorU32(ImGuiCol_MenuBarBg), (flags & ImGuiWindowFlags_NoTitleBar) ? window_rounding : 0.0f, ImDrawFlags_RoundCornersTop);
+             if (style.FrameBorderSize > 0.0f && menu_bar_rect.Max.y < window->Pos.y + window->Size.y)
+                 window->DrawList->AddLine(menu_bar_rect.GetBL() + ImVec2(window_border_size * 0.5f, 0.0f), menu_bar_rect.GetBR() - ImVec2(window_border_size * 0.5f, 0.0f), GetColorU32(ImGuiCol_Border), style.FrameBorderSize);
+--- a/imgui_widgets.cpp	2026-10-30 17:14:47
++++ b/imgui_widgets.cpp	2026-10-30 17:15:23
+@@ -43,6 +43,7 @@
+ #include "imgui.h"
+ #ifndef IMGUI_DISABLE
+ #include "imgui_internal.h"
++#include "finegui/imgui_skin_hooks.h"
+ 
+ // System includes
+ #include <stdint.h>     // intptr_t
+@@ -798,6 +799,7 @@
+     // Render
+     const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+     RenderNavCursor(bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Button, ImGuiSkinStateOf(hovered, held && hovered), bb.Min, bb.Max))
+     RenderFrame(bb.Min, bb.Max, col, true, style.FrameRounding);
+ 
+     if (g.LogEnabled)
+@@ -875,6 +877,7 @@
+     const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+     const ImU32 text_col = GetColorU32(ImGuiCol_Text);
+     RenderNavCursor(bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Button, ImGuiSkinStateOf(hovered, held && hovered), bb.Min, bb.Max))
+     RenderFrame(bb.Min, bb.Max, bg_col, true, g.Style.FrameRounding);
+     RenderArrow(window->DrawList, bb.Min + ImVec2(ImMax(0.0f, (size.x - g.FontSize) * 0.5f), ImMax(0.0f, (size.y - g.FontSize) * 0.5f)), text_col, dir);
+ 
+@@ -913,7 +916,7 @@
+ 
+     // Render
+     ImU32 bg_col = GetColorU32(held ? ImGuiCol_ButtonActive : ImGuiCol_ButtonHovered);
+-    if (hovered)
++    if (hovered && !ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_CloseButton, ImGuiSkinStateOf(hovered, held), bb.Min, bb.Max))
+         window->DrawList->AddRectFilled(bb.Min, bb.Max, bg_col);
+     RenderNavCursor(bb, id, ImGuiNavRenderCursorFlags_Compact);
+     const ImU32 cross_col = GetColorU32(ImGuiCol_Text);
+@@ -1091,12 +1094,14 @@
+     // Render
+     const ImU32 bg_col = GetColorU32(ImGuiCol_ScrollbarBg);
+     const ImU32 grab_col = GetColorU32(held ? ImGuiCol_ScrollbarGrabActive : hovered ? ImGuiCol_ScrollbarGrabHovered : ImGuiCol_ScrollbarGrab, alpha);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_ScrollbarTrack, ImGuiSkinState_Normal, bb_frame.Min, bb_frame.Max))
+     window->DrawList->AddRectFilled(bb_frame.Min, bb_frame.Max, bg_col, window->WindowRounding, draw_rounding_flags);
+     ImRect grab_rect;
+     if (axis == ImGuiAxis_X)
+         grab_rect = ImRect(ImLerp(bb.Min.x, bb.Max.x, grab_v_norm), bb.Min.y, ImLerp(bb.Min.x, bb.Max.x, grab_v_norm) + grab_h_pixels, bb.Max.y);
+     else
+         grab_rect = ImRect(bb.Min.x, ImLerp(bb.Min.y, bb.Max.y, grab_v_norm), bb.Max.x, ImLerp(bb.Min.y, bb.Max.y, grab_v_norm) + grab_h_pixels);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_ScrollbarGrab, ImGuiSkinStateOf(hovered, held), grab_rect.Min, grab_rect.Max))
+     window->DrawList->AddRectFilled(grab_rect.Min, grab_rect.Max, grab_col, style.ScrollbarRounding);
+ 
+     return held;
+@@ -1166,6 +1171,7 @@
+     // Render
+     const ImU32 col = GetColorU32((held && hovered) ? ImGuiCol_ButtonActive : hovered ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+     RenderNavCursor(bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Button, ImGuiSkinStateOf(hovered, held && hovered), bb.Min, bb.Max))
+     RenderFrame(bb.Min, bb.Max, col, true, g.Style.FrameRounding);
+     if (bg_col.w > 0.0f)
+         window->DrawList->AddRectFilled(bb.Min + padding, bb.Max - padding, GetColorU32(bg_col));
+@@ -1262,6 +1268,7 @@
+     if (is_visible)
+     {
+         RenderNavCursor(total_bb, id);
++        if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Checkbox, ImGuiSkinStateOf(hovered, held && hovered), check_bb.Min, check_bb.Max))
+         RenderFrame(check_bb.Min, check_bb.Max, GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg), true, style.FrameRounding);
+         ImU32 check_col = GetColorU32(ImGuiCol_CheckMark);
+         if (mixed_value)
+@@ -1365,6 +1372,7 @@
+ 
+     RenderNavCursor(total_bb, id);
+     const int num_segment = window->DrawList->_CalcCircleAutoSegmentCount(radius);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Radio, ImGuiSkinStateOf(hovered, held && hovered), check_bb.Min, check_bb.Max))
+     window->DrawList->AddCircleFilled(center, radius, GetColorU32((held && hovered) ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg), num_segment);
+     if (active)
+     {
+@@ -1433,11 +1441,12 @@
+     }
+ 
+     // Render
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_ProgressTrack, ImGuiSkinState_Normal, bb.Min, bb.Max))
+     RenderFrame(bb.Min, bb.Max, GetColorU32(ImGuiCol_FrameBg), true, style.FrameRounding);
+     bb.Expand(ImVec2(-style.FrameBorderSize, -style.FrameBorderSize));
+     float fill_x0 = ImLerp(bb.Min.x, bb.Max.x, fill_n0);
+     float fill_x1 = ImLerp(bb.Min.x, bb.Max.x, fill_n1);
+-    if (fill_x0 < fill_x1)
++    if (fill_x0 < fill_x1 && !ImGuiSkinDrawClipped(window->DrawList, ImGuiSkinPart_ProgressFill, ImGuiSkinState_Normal, bb.Min, bb.Max, ImVec2(fill_x0, bb.Min.y), ImVec2(fill_x1, bb.Max.y)))
+         RenderRectFilledInRangeH(window->DrawList, bb, GetColorU32(ImGuiCol_PlotHistogram), fill_x0, fill_x1, style.FrameRounding);
+ 
+     // Default displaying the fraction as percentage string, but user can override it
+@@ -1943,12 +1952,14 @@
+     const ImU32 frame_col = GetColorU32(hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+     const float value_x2 = ImMax(bb.Min.x, bb.Max.x - arrow_size);
+     RenderNavCursor(bb, id);
+-    if (!(flags & ImGuiComboFlags_NoPreview))
++    const bool skinned_combo = ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Frame, ImGuiSkinStateOf(hovered, popup_open), bb.Min, bb.Max);
++    if (!skinned_combo && !(flags & ImGuiComboFlags_NoPreview))
+         window->DrawList->AddRectFilled(bb.Min, ImVec2(value_x2, bb.Max.y), frame_col, style.FrameRounding, (flags & ImGuiComboFlags_NoArrowButton) ? ImDrawFlags_RoundCornersAll : ImDrawFlags_RoundCornersLeft);
+     if (!(flags & ImGuiComboFlags_NoArrowButton))
+     {
+         ImU32 bg_col = GetColorU32((popup_open || hovered) ? ImGuiCol_ButtonHovered : ImGuiCol_Button);
+         ImU32 text_col = GetColorU32(ImGuiCol_Text);
++        if (!skinned_combo)
+         window->DrawList->AddRectFilled(ImVec2(value_x2, bb.Min.y), bb.Max, bg_col, style.FrameRounding, (w <= arrow_size) ? ImDrawFlags_RoundCornersAll : ImDrawFlags_RoundCornersRight);
+         if (value_x2 + arrow_size - style.FramePadding.x <= bb.Max.x)
+             RenderArrow(window->DrawList, ImVec2(value_x2 + style.FramePadding.y, bb.Min.y + style.FramePadding.y), text_col, ImGuiDir_Down, 1.0f);
+@@ -2761,6 +2772,7 @@
+     // Draw frame
+     const ImU32 frame_col = GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+     RenderNavCursor(frame_bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Frame, ImGuiSkinStateOf(hovered, g.ActiveId == id), frame_bb.Min, frame_bb.Max))
+     RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, false, style.FrameRounding);
+     if (color_marker != 0 && style.ColorMarkerSize > 0.0f)
+         RenderColorComponentMarker(frame_bb, GetColorU32(color_marker), style.FrameRounding);
+@@ -3353,6 +3365,7 @@
+     // Draw frame
+     const ImU32 frame_col = GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+     RenderNavCursor(frame_bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_SliderTrack, ImGuiSkinStateOf(hovered, g.ActiveId == id), frame_bb.Min, frame_bb.Max))
+     RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, false, style.FrameRounding);
+     if (color_marker != 0 && style.ColorMarkerSize > 0.0f)
+         RenderColorComponentMarker(frame_bb, GetColorU32(color_marker), style.FrameRounding);
+@@ -3366,6 +3379,7 @@
+ 
+     // Render grab
+     if (grab_bb.Max.x > grab_bb.Min.x)
++        if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_SliderGrab, ImGuiSkinStateOf(hovered, g.ActiveId == id), grab_bb.Min, grab_bb.Max))
+         window->DrawList->AddRectFilled(grab_bb.Min, grab_bb.Max, GetColorU32(g.ActiveId == id ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab), style.GrabRounding);
+ 
+     // Display value using user-provided display format so user can add prefix/suffix/decorations to the value.
+@@ -3508,6 +3522,7 @@
+     // Draw frame
+     const ImU32 frame_col = GetColorU32(g.ActiveId == id ? ImGuiCol_FrameBgActive : hovered ? ImGuiCol_FrameBgHovered : ImGuiCol_FrameBg);
+     RenderNavCursor(frame_bb, id);
++    if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_SliderTrack, ImGuiSkinStateOf(hovered, g.ActiveId == id), frame_bb.Min, frame_bb.Max))
+     RenderFrame(frame_bb.Min, frame_bb.Max, frame_col, true, g.Style.FrameRounding);
+ 
+     // Slider behavior
+@@ -3518,6 +3533,7 @@
+ 
+     // Render grab
+     if (grab_bb.Max.y > grab_bb.Min.y)
++        if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_SliderGrab, ImGuiSkinStateOf(hovered, g.ActiveId == id), grab_bb.Min, grab_bb.Max))
+         window->DrawList->AddRectFilled(grab_bb.Min, grab_bb.Max, GetColorU32(g.ActiveId == id ? ImGuiCol_SliderGrabActive : ImGuiCol_SliderGrab), style.GrabRounding);
+ 
+     // Display value using user-provided display format so user can add prefix/suffix/decorations to the value.
+@@ -5396,6 +5412,7 @@
+     if (!is_multiline)
+     {
+         RenderNavCursor(frame_bb, id);
++        if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Frame, ImGuiSkinStateOf(hovered, g.ActiveId == id), frame_bb.Min, frame_bb.Max))
+         RenderFrame(frame_bb.Min, frame_bb.Max, GetColorU32(ImGuiCol_FrameBg), true, style.FrameRounding);
+     }
+ 
+@@ -7038,6 +7055,7 @@
+         {
+             // Framed type
+             const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
++            if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Header, ImGuiSkinStateOf(hovered, held && hovered), frame_bb.Min, frame_bb.Max))
+             RenderFrame(frame_bb.Min, frame_bb.Max, bg_col, true, style.FrameRounding);
+             RenderNavCursor(frame_bb, id, nav_render_cursor_flags);
+             if (span_all_columns && !span_all_columns_label)
+@@ -7059,6 +7077,7 @@
+             if (hovered || selected)
+             {
+                 const ImU32 bg_col = GetColorU32((held && hovered) ? ImGuiCol_HeaderActive : hovered ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
++                if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Header, (held && hovered) ? ImGuiSkinState_Active : hovered ? ImGuiSkinState_Hovered : ImGuiSkinState_Selected, frame_bb.Min, frame_bb.Max))
+                 RenderFrame(frame_bb.Min, frame_bb.Max, bg_col, false);
+             }
+             RenderNavCursor(frame_bb, id, nav_render_cursor_flags);
+@@ -7440,6 +7459,7 @@
+         {
+             // Between 1.91.0 and 1.91.4 we made selected Selectable use an arbitrary lerp between _Header and _HeaderHovered. Removed that now. (#8106)
+             ImU32 col = GetColorU32((held && highlighted) ? ImGuiCol_HeaderActive : highlighted ? ImGuiCol_HeaderHovered : ImGuiCol_Header);
++            if (!ImGuiSkinDraw(window->DrawList, ImGuiSkinPart_Header, (held && highlighted) ? ImGuiSkinState_Active : highlighted ? ImGuiSkinState_Hovered : ImGuiSkinState_Selected, bb.Min, bb.Max))
+             RenderFrame(bb.Min, bb.Max, col, false, 0.0f);
+         }
+         if (g.NavId == id)
+@@ -10590,6 +10610,7 @@
+     {
+         ImDrawList* display_draw_list = window->DrawList;
+         const ImU32 tab_col = GetColorU32((held || hovered) ? ImGuiCol_TabHovered : tab_contents_visible ? (tab_bar_focused ? ImGuiCol_TabSelected : ImGuiCol_TabDimmedSelected) : (tab_bar_focused ? ImGuiCol_Tab : ImGuiCol_TabDimmed));
++        if (!ImGuiSkinDraw(display_draw_list, ImGuiSkinPart_Tab, (held || hovered) ? ImGuiSkinStateOf(hovered, held) : tab_contents_visible ? ImGuiSkinState_Selected : ImGuiSkinState_Normal, bb.Min, bb.Max))
+         TabItemBackground(display_draw_list, bb, flags, tab_col);
+         if (tab_contents_visible && (tab_bar->Flags & ImGuiTabBarFlags_DrawSelectedOverline) && style.TabBarOverlineSize > 0.0f)
+         {

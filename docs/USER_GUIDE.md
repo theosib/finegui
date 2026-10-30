@@ -1171,42 +1171,17 @@ ui.show {ui.window "Settings" [
 
 ---
 
-## Textured Skin System (Planned)
+## Textured Skins
 
-> **Status:** Not yet implemented. See [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md) for the full design.
+Skins replace ImGui's flat rectangles with 9-slice art for every widget, along with a font and
+style. They're opt-in, and parts a skin leaves out stay plain ImGui. See
+[SKIN_SYSTEM.md](SKIN_SYSTEM.md) for the definition format and for how to take ImGui updates.
 
-The textured skin system will replace ImGui's flat-colored rectangles with artist-authored textures from a sprite atlas, using 9-slice rendering. This enables game UIs to match the visual style of the rest of the game — ornate window borders, beveled buttons, themed scrollbars, etc.
-
-**Key points for projects planning ahead:**
-
-- The system is **opt-in and non-breaking**. All existing code continues to work unchanged.
-- A `SkinManager` will be passed to `GuiRenderer` and/or `MapRenderer` via `setSkinManager()`.
-- Skins are defined in finescript files (`.fgs`) mapping widget elements to atlas regions.
-- Each element supports per-state textures (normal, hovered, active, disabled) with automatic fallback.
-- Per-widget skin overrides will be available via a `skinOverride` field (C++) or `:skin` map field (script).
-- `pushSkin` / `popSkin` widgets will allow scoped skin changes within a tree.
-- Widgets without skin definitions fall back to standard ImGui rendering, so skins can be partial.
-
-**Planned C++ usage:**
 ```cpp
-SkinAtlas atlas;
-atlas.loadTexture(gui, "assets/ui/medieval_atlas.png");
-auto skin = Skin::loadFromFile("assets/ui/medieval.fgs", atlas, engine);
-
-SkinManager skinMgr;
-skinMgr.registerSkin("medieval", std::move(skin));
-skinMgr.setActiveSkin("medieval");
-
-guiRenderer.setSkinManager(&skinMgr);
+std::string error;
+auto skin = finegui::loadSkin(gui, "ui/skin/hearth.fgs", engine, context, error);
+if (skin) finegui::setActiveSkin(skin.get());
 ```
-
-**Planned script usage:**
-```
-ui.load_skin "medieval" "assets/ui/medieval.fgs"
-ui.set_skin "medieval"
-```
-
-If you are building a project on finegui now, you can use the default ImGui style and adopt the skin system later without changing any widget code — only add skin loading and activation at startup.
 
 ---
 

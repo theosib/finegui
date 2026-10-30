@@ -84,7 +84,9 @@ C++ side: `GuiRenderer` could accept a `Theme` struct or just use the same map a
 
 ---
 
-## Phase B: Textured Skin System (Future)
+## Phase B: Textured Skin System
+
+Built, differently from the sketch below: see [SKIN_SYSTEM.md](SKIN_SYSTEM.md).
 
 Full custom-rendered widgets using texture atlases and `ImDrawList`. This replaces ImGui's default rectangle rendering with textured visuals (stone borders, parchment backgrounds, ornate buttons).
 

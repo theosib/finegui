@@ -118,7 +118,7 @@
 - [x] PushStyleVar / PopStyleVar (retained mode)
 - [x] Named theme presets (push_theme / pop_theme)
 - [x] Script-accessible theme switching (Dark/Light/Classic)
-- [ ] Textured skin system (9-slice, SkinAtlas, SkinnedRenderer) — Phase B, planned. See [SKIN_SYSTEM_PLAN.md](SKIN_SYSTEM_PLAN.md)
+- [x] Textured skin system. See [SKIN_SYSTEM.md](SKIN_SYSTEM.md)
 
 ## Script Integration
 - [x] finescript ui.* builder functions
