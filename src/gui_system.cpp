@@ -9,6 +9,7 @@
 
 #include <stdexcept>
 #include <chrono>
+#include <unordered_set>
 
 namespace finegui {
 
@@ -53,6 +54,8 @@ struct GuiSystem::Impl {
     GuiMode guiMode = GuiMode::Auto;
     finevk::InputManager* connectedInput = nullptr;
     int listenerId = -1;
+    std::unordered_set<int> takenKeys;     // Pressed, and kept from the game
+    std::unordered_set<int> takenButtons;
 
     ~Impl() {
         // Disconnect from InputManager before cleanup
@@ -107,7 +110,9 @@ GuiSystem::GuiSystem(finevk::LogicalDevice* device, const GuiConfig& config)
 
     // Configure ImGui
     ImGuiIO& io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    if (config.enableKeyboard) {
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    }
 
     if (config.enableGamepad) {
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableGamepad;
@@ -309,6 +314,8 @@ void GuiSystem::disconnectFromInputManager() {
     }
     impl_->connectedInput = nullptr;
     impl_->listenerId = -1;
+    impl_->takenKeys.clear();
+    impl_->takenButtons.clear();
 }
 
 finevk::ListenerResult GuiSystem::handleInputEvent(const finevk::InputEvent& fvEvent) {
@@ -320,11 +327,32 @@ finevk::ListenerResult GuiSystem::handleInputEvent(const finevk::InputEvent& fvE
     ImGui::SetCurrentContext(impl_->context);
     ImGuiIO& io = ImGui::GetIO();
 
+    // A release goes wherever its press went, whatever the GUI wants by now. Keep one from the
+    // game and it thinks the key is still held; hand it one for a press the GUI took and it
+    // ends a drag that never began.
+    if (fvEvent.type == finevk::InputEventType::KeyRelease) {
+        return impl_->takenKeys.erase(fvEvent.key) > 0 ? finevk::ListenerResult::Consumed
+                                                       : finevk::ListenerResult::Reject;
+    }
+    if (fvEvent.type == finevk::InputEventType::MouseButtonRelease) {
+        return impl_->takenButtons.erase(fvEvent.mouseButton) > 0 ? finevk::ListenerResult::Consumed
+                                                                  : finevk::ListenerResult::Reject;
+    }
+
+    auto take = [&]() {
+        if (fvEvent.type == finevk::InputEventType::KeyPress) {
+            impl_->takenKeys.insert(fvEvent.key);
+        } else if (fvEvent.type == finevk::InputEventType::MouseButtonPress) {
+            impl_->takenButtons.insert(fvEvent.mouseButton);
+        }
+        return finevk::ListenerResult::Consumed;
+    };
+
     switch (impl_->guiMode) {
         case GuiMode::Passive:
             return finevk::ListenerResult::Used;
         case GuiMode::Exclusive:
-            return finevk::ListenerResult::Consumed;
+            return take();
         case GuiMode::Auto:
         default:
             break;
@@ -332,16 +360,14 @@ finevk::ListenerResult GuiSystem::handleInputEvent(const finevk::InputEvent& fvE
 
     // Auto mode: check event category vs WantCapture*
     bool isKeyEvent = (fvEvent.type == finevk::InputEventType::KeyPress ||
-                       fvEvent.type == finevk::InputEventType::KeyRelease ||
                        fvEvent.type == finevk::InputEventType::KeyRepeat ||
                        fvEvent.type == finevk::InputEventType::CharInput);
     bool isMouseEvent = (fvEvent.type == finevk::InputEventType::MouseButtonPress ||
-                         fvEvent.type == finevk::InputEventType::MouseButtonRelease ||
                          fvEvent.type == finevk::InputEventType::MouseScroll);
     bool isMouseMove = (fvEvent.type == finevk::InputEventType::MouseMove);
 
-    if (isKeyEvent && io.WantCaptureKeyboard) return finevk::ListenerResult::Consumed;
-    if (isMouseEvent && io.WantCaptureMouse) return finevk::ListenerResult::Consumed;
+    if (isKeyEvent && io.WantCaptureKeyboard) return take();
+    if (isMouseEvent && io.WantCaptureMouse) return take();
     if (isMouseMove && io.WantCaptureMouse) return finevk::ListenerResult::Consumed;
     if (isMouseMove) return finevk::ListenerResult::Used;  // Always pass moves along
 

@@ -12,8 +12,11 @@
 
 #include <finevk/finevk.hpp>
 
+#include <imgui.h>
+
 #include <iostream>
 #include <cassert>
+#include <cstdlib>
 
 using namespace finegui;
 
@@ -405,6 +408,93 @@ void test_handle_input_event_exclusive_mode() {
     std::cout << "PASSED\n";
 }
 
+// Plain assert compiles away in a Release build, and this is what guards a held key
+#define REQUIRE(condition) \
+    do { \
+        if (!(condition)) { \
+            std::cerr << "FAILED: " << __FILE__ << ":" << __LINE__ << ": " #condition "\n"; \
+            std::exit(1); \
+        } \
+    } while (0)
+
+void test_release_follows_press() {
+    std::cout << "Testing: a release goes where its press went... ";
+
+    auto ctx = TestContext::create("test_release_follows_press");
+
+    GuiConfig guiConfig;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+
+    gui.beginFrame();
+    gui.endFrame();
+
+    auto key = [](finevk::InputEventType type) {
+        finevk::InputEvent event{};
+        event.type = type;
+        event.key = GLFW_KEY_W;
+        return event;
+    };
+    auto button = [](finevk::InputEventType type) {
+        finevk::InputEvent event{};
+        event.type = type;
+        event.mouseButton = GLFW_MOUSE_BUTTON_LEFT;
+        return event;
+    };
+    const auto keyDown = key(finevk::InputEventType::KeyPress);
+    const auto keyUp = key(finevk::InputEventType::KeyRelease);
+    const auto buttonDown = button(finevk::InputEventType::MouseButtonPress);
+    const auto buttonUp = button(finevk::InputEventType::MouseButtonRelease);
+    const auto passed = finevk::ListenerResult::Reject;
+    const auto kept = finevk::ListenerResult::Consumed;
+
+    // The game saw the press, then the GUI started capturing: the game still needs the release
+    REQUIRE(gui.handleInputEvent(keyDown) == passed);
+    REQUIRE(gui.handleInputEvent(buttonDown) == passed);
+    ImGui::GetIO().WantCaptureKeyboard = true;
+    ImGui::GetIO().WantCaptureMouse = true;
+    REQUIRE(gui.handleInputEvent(keyUp) == passed);
+    REQUIRE(gui.handleInputEvent(buttonUp) == passed);
+
+    // The GUI took the press, then stopped capturing: the game never saw that press
+    REQUIRE(gui.handleInputEvent(keyDown) == kept);
+    REQUIRE(gui.handleInputEvent(buttonDown) == kept);
+    ImGui::GetIO().WantCaptureKeyboard = false;
+    ImGui::GetIO().WantCaptureMouse = false;
+    REQUIRE(gui.handleInputEvent(keyUp) == kept);
+    REQUIRE(gui.handleInputEvent(buttonUp) == kept);
+
+    // And that was the one release it owed
+    REQUIRE(gui.handleInputEvent(keyUp) == passed);
+    REQUIRE(gui.handleInputEvent(buttonUp) == passed);
+
+    // Exclusive mode takes presses, but not the release of one the game already has
+    REQUIRE(gui.handleInputEvent(keyDown) == passed);
+    gui.setGuiMode(GuiMode::Exclusive);
+    REQUIRE(gui.handleInputEvent(keyUp) == passed);
+    REQUIRE(gui.handleInputEvent(keyDown) == kept);
+    gui.setGuiMode(GuiMode::Auto);
+    REQUIRE(gui.handleInputEvent(keyUp) == kept);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
+void test_keyboard_navigation_option() {
+    std::cout << "Testing: enableKeyboard turns keyboard navigation on and off... ";
+
+    auto ctx = TestContext::create("test_keyboard_navigation_option");
+
+    GuiConfig guiConfig;
+    guiConfig.enableKeyboard = false;
+    GuiSystem gui(ctx->renderer->device(), guiConfig);
+    gui.initialize(ctx->renderer.get());
+    REQUIRE((ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_NavEnableKeyboard) == 0);
+
+    ctx->renderer->waitIdle();
+    std::cout << "PASSED\n";
+}
+
 void test_gui_mode_switching() {
     std::cout << "Testing: GuiMode switching... ";
 
@@ -494,6 +584,8 @@ int main() {
         test_handle_input_event_auto_mode();
         test_handle_input_event_passive_mode();
         test_handle_input_event_exclusive_mode();
+        test_release_follows_press();
+        test_keyboard_navigation_option();
         test_gui_mode_switching();
         test_connect_disconnect_input_manager();
 
