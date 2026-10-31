@@ -1125,6 +1125,7 @@ int MapRenderer::parseTableFlags(MapData& m) {
             else if (s == syms_.sym_flag_borders_v)     result |= ImGuiTableFlags_BordersV;
             else if (s == syms_.sym_flag_borders_inner) result |= ImGuiTableFlags_BordersInner;
             else if (s == syms_.sym_flag_borders_outer) result |= ImGuiTableFlags_BordersOuter;
+            else if (s == syms_.sym_flag_sizing_fixed_fit) result |= ImGuiTableFlags_SizingFixedFit;
             else if (s == syms_.sym_flag_resizable)     result |= ImGuiTableFlags_Resizable;
             else if (s == syms_.sym_flag_sortable)      result |= ImGuiTableFlags_Sortable;
             else if (s == syms_.sym_flag_scroll_x)      result |= ImGuiTableFlags_ScrollX;

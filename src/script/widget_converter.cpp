@@ -53,6 +53,7 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     sym_flag_borders_v     = engine.intern("borders_v");
     sym_flag_borders_inner = engine.intern("borders_inner");
     sym_flag_borders_outer = engine.intern("borders_outer");
+    sym_flag_sizing_fixed_fit = engine.intern("sizing_fixed_fit");
     sym_flag_resizable     = engine.intern("resizable");
     sym_flag_sortable      = engine.intern("sortable");
     sym_flag_scroll_x      = engine.intern("scroll_x");

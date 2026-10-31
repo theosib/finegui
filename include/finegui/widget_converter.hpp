@@ -47,6 +47,7 @@ struct ConverterSymbols {
     uint32_t sym_flag_row_bg = 0, sym_flag_borders = 0;
     uint32_t sym_flag_borders_h = 0, sym_flag_borders_v = 0;
     uint32_t sym_flag_borders_inner = 0, sym_flag_borders_outer = 0;
+    uint32_t sym_flag_sizing_fixed_fit = 0;
     uint32_t sym_flag_resizable = 0, sym_flag_sortable = 0;
     uint32_t sym_flag_scroll_x = 0, sym_flag_scroll_y = 0;
 
