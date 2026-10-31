@@ -1459,7 +1459,7 @@ Builder functions (return widget maps):
 |----------|-----------|-------------|
 | `ui.window` | `title children` | Window with title and child array. Set `:window_size_w` and `:window_size_h` map fields for initial size. Set `:window_flags` to a flag symbol array (see [Window Control](#window-control)). Set `:window_pos_x`/`:window_pos_y` for explicit positioning and `:window_pivot_x`/`:window_pivot_y` (default 0.0) to control the anchor point (use 0.5/0.5 to center at the given position). |
 | `ui.text` | `content` | Static text |
-| `ui.button` | `label [on_click]` | Button with optional callback |
+| `ui.button` | `label [on_click]` | Button with optional callback. `=icon "texture_name"` puts a picture at its left with the label beside it, `=icon_size` sizes it, `=width` keeps a column uniform, and `=selected true` rings it |
 | `ui.checkbox` | `label value [on_change]` | Boolean toggle |
 | `ui.slider` | `label value min max [on_change]` | Float slider. Supports `=format` for display format. |
 | `ui.slider_int` | `label value min max [on_change]` | Integer slider. Supports `=format` for display format. |

@@ -3,6 +3,7 @@
 #include <finescript/interner.h>
 #include <imgui.h>
 #include <cstring>
+#include <algorithm>
 #include <cfloat>
 #include <cmath>
 
@@ -626,16 +627,54 @@ void MapRenderer::renderText(MapData& m) {
     ImGui::TextUnformatted(text.c_str());
 }
 
+// A picture at the left of the button and the label beside it, so a column of them lines up
+// where centred labels would each start somewhere different.
+static bool iconButton(const std::string& label, TextureHandle icon, float iconSize, float w, float h) {
+    const ImGuiStyle& style = ImGui::GetStyle();
+    if (iconSize <= 0) iconSize = ImGui::GetFontSize();
+    const ImVec2 textSize = ImGui::CalcTextSize(label.c_str());
+    const float gap = label.empty() ? 0.0f : style.ItemInnerSpacing.x;
+    if (w <= 0) w = style.FramePadding.x * 2 + iconSize + gap + textSize.x;
+    if (h <= 0) h = style.FramePadding.y * 2 + std::max(iconSize, textSize.y);
+
+    ImGui::PushID(label.c_str());
+    const bool clicked = ImGui::Button("##icon", {w, h});
+    ImGui::PopID();
+
+    const ImVec2 min = ImGui::GetItemRectMin();
+    const float middle = (min.y + ImGui::GetItemRectMax().y) * 0.5f;
+    const ImVec2 at{min.x + style.FramePadding.x, middle - iconSize * 0.5f};
+    ImDrawList* draw = ImGui::GetWindowDrawList();
+    draw->AddImage(static_cast<ImTextureID>(icon), at, {at.x + iconSize, at.y + iconSize}, {0, 0}, {1, 1},
+                   ImGui::GetColorU32(ImVec4(1, 1, 1, 1)));
+    draw->AddText({at.x + iconSize + gap, middle - textSize.y * 0.5f}, ImGui::GetColorU32(ImGuiCol_Text),
+                  label.c_str());
+    return clicked;
+}
+
 void MapRenderer::renderButton(MapData& m, ExecutionContext& ctx) {
     auto label = getStringField(m, syms_.label, "Button");
     float w = static_cast<float>(getNumericField(m, syms_.width, 0.0));
     float h = static_cast<float>(getNumericField(m, syms_.height, 0.0));
+    auto iconName = getStringField(m, syms_.icon, "");
+
+    TextureHandle icon;
+    if (!iconName.empty() && textureRegistry_) icon = textureRegistry_->get(iconName);
 
     bool clicked;
-    if (w > 0 || h > 0) {
+    if (icon.valid()) {
+        float iconSize = static_cast<float>(getNumericField(m, syms_.icon_size, 0.0));
+        clicked = iconButton(label, icon, iconSize, w, h);
+    } else if (w > 0 || h > 0) {
         clicked = ImGui::Button(label.c_str(), {w, h});
     } else {
         clicked = ImGui::Button(label.c_str());
+    }
+
+    auto selectedVal = m.get(syms_.selected);
+    if (selectedVal.isBool() && selectedVal.asBool()) {
+        ImGui::GetWindowDrawList()->AddRect(ImGui::GetItemRectMin(), ImGui::GetItemRectMax(),
+                                            ImGui::GetColorU32(ImGuiCol_CheckMark), 4.0f, 0, 2.0f);
     }
 
     if (clicked) {

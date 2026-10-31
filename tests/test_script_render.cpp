@@ -920,6 +920,33 @@ void test_script_rendering() {
     }
     std::cout << "ok";
 
+    // --- Test 21b: Button with an icon. A name that isn't registered falls back to plain ---
+    std::cout << "\n  21b. Icon button... ";
+    {
+        TextureRegistry texRegistry;
+        mapRenderer.setTextureRegistry(&texRegistry);
+
+        ScriptGui scriptGui(engine, mapRenderer);
+        bool ok = scriptGui.loadAndRun(R"(
+            ui.show {ui.window "Icon Buttons" [
+                {ui.button "Build" =icon "not_loaded" =icon_size 24 =width 170 =selected true}
+                {ui.button "Plain" =selected false}
+            ]}
+        )", "test21b_icon");
+        assert(ok);
+
+        auto children = scriptGui.mapTree()->asMap().get(mapRenderer.syms().children);
+        auto& button = children.asArray()[0];
+        assert(button.asMap().get(mapRenderer.syms().icon).asString() == "not_loaded");
+        assert(button.asMap().get(mapRenderer.syms().icon_size).asNumber() == 24.0);
+        assert(button.asMap().get(mapRenderer.syms().selected).asBool());
+
+        runFrames(window.get(), renderer.get(), gui, guiRenderer, mapRenderer, nullptr, 3);
+        scriptGui.close();
+        mapRenderer.setTextureRegistry(nullptr);
+    }
+    std::cout << "ok";
+
     // --- Test 22: Image widget from script (no texture registered = placeholder) ---
     std::cout << "\n  22. Image widget (placeholder)... ";
     {

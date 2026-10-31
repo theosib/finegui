@@ -1103,7 +1103,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 |----------|---------------|-------|
 | `ui.window` | `ui.window "Title" [children]` | Supports `:window_size_w`/`:window_size_h` for sizing, `:window_pivot_x`/`:window_pivot_y` for position anchor (default 0.0; use 0.5/0.5 to center at position) |
 | `ui.text` | `ui.text "content"` | |
-| `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end` |
+| `ui.button` | `ui.button "label" [on_click]` | on_click: `fn [] do ... end`. Options: `=icon "texture_name"`, `=icon_size`, `=width`, `=selected` |
 | `ui.checkbox` | `ui.checkbox "label" value [on_change]` | on_change receives bool |
 | `ui.slider` | `ui.slider "label" value min max [on_change]` | on_change receives float; supports `=format` |
 | `ui.slider_int` | `ui.slider_int "label" value min max [on_change]` | on_change receives int; supports `=format` |
