@@ -19,6 +19,7 @@ struct ConverterSymbols {
     uint32_t visible = 0, enabled = 0;
     uint32_t selected = 0;
     uint32_t icon = 0, icon_size = 0;
+    uint32_t wrap_width = 0;
 
     // Phase 3 field keys
     uint32_t color = 0, overlay = 0, size = 0;

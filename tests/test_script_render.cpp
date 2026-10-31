@@ -931,6 +931,7 @@ void test_script_rendering() {
             ui.show {ui.window "Icon Buttons" [
                 {ui.button "Build" =icon "not_loaded" =icon_size 24 =width 170 =selected true}
                 {ui.button "Plain" =selected false}
+                {ui.text_wrapped "Wrapped at a set width, not the window's edge" =wrap_width 120}
             ]}
         )", "test21b_icon");
         assert(ok);

@@ -1118,7 +1118,7 @@ Registers `ui` and `gui` as constant map objects on the engine.
 | `ui.same_line` | `ui.same_line [offset]` | |
 | `ui.spacing` | `ui.spacing` | |
 | `ui.text_colored` | `ui.text_colored [r g b a] "text"` | Color as array |
-| `ui.text_wrapped` | `ui.text_wrapped "text"` | |
+| `ui.text_wrapped` | `ui.text_wrapped "text"` | Use `=wrap_width` inside tooltips and auto-sizing windows |
 | `ui.text_disabled` | `ui.text_disabled "text"` | |
 | `ui.progress_bar` | `ui.progress_bar fraction` | |
 | `ui.collapsing_header` | `ui.collapsing_header "label" [children]` | |

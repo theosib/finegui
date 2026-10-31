@@ -1475,7 +1475,7 @@ Builder functions (return widget maps):
 | `ui.dummy` | `width height` | Invisible spacer of given size |
 | `ui.new_line` | *(none)* | Force line break after SameLine |
 | `ui.text_colored` | `color_array text` | Colored text |
-| `ui.text_wrapped` | `text` | Wrapping text |
+| `ui.text_wrapped` | `text` | Wrapping text. Inside a tooltip or other auto-sizing window, give it `=wrap_width`: wrapping at the window's edge makes such a window open too tall for a frame |
 | `ui.text_disabled` | `text` | Grayed text |
 | `ui.progress_bar` | `fraction` | Progress bar |
 | `ui.plot_lines` | `label [values] [overlay] [min] [max] [width] [height]` | Line chart sparkline |

@@ -950,7 +950,16 @@ void MapRenderer::renderTextColored(MapData& m) {
 
 void MapRenderer::renderTextWrapped(MapData& m) {
     auto text = getStringField(m, syms_.text);
-    ImGui::TextWrapped("%s", text.c_str());
+    float wrapWidth = static_cast<float>(getNumericField(m, syms_.wrap_width, 0.0));
+    if (wrapWidth <= 0) {
+        ImGui::TextWrapped("%s", text.c_str());
+        return;
+    }
+    // A window sizing itself to fit has no width on its first frame, so text wrapped at the
+    // window's edge measures very tall, and the window shows at that height for a frame
+    ImGui::PushTextWrapPos(ImGui::GetCursorPosX() + wrapWidth);
+    ImGui::TextUnformatted(text.c_str());
+    ImGui::PopTextWrapPos();
 }
 
 void MapRenderer::renderTextDisabled(MapData& m) {

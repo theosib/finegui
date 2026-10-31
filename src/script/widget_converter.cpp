@@ -26,6 +26,7 @@ void ConverterSymbols::intern(finescript::ScriptEngine& engine) {
     selected = engine.intern("selected");
     icon     = engine.intern("icon");
     icon_size = engine.intern("icon_size");
+    wrap_width = engine.intern("wrap_width");
 
     // Phase 3 field keys
     color        = engine.intern("color");
