@@ -156,6 +156,4 @@
   so a password field shows what's typed.
 - **`on_change` on `ui.input` fires when the field loses focus,** not per key, which the guide's table
   doesn't say. A script reading its own copy while the field's in use sees the old text.
-- **`enableKeyboard = false` also means no Tab between fields.** It's what a game wants while playing
-  and not what a form wants, and one `GuiSystem` has one setting.
 - **Only built on macOS,** like the rest of these repos. `CMakeLists.txt` has `MSVC` branches, untested.
