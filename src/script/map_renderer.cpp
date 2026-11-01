@@ -398,6 +398,13 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         pendingFocusId_.clear();
     }
 
+    // Focus: once, on first appearance. It has to come before the item, and it has to be this
+    // call: SetItemDefaultFocus only tells keyboard navigation, which a text field doesn't wake for.
+    if (getBoolField(m, syms_.auto_focus, false)) {
+        ImGui::SetKeyboardFocusHere(0);
+        m.set(syms_.auto_focus, Value::boolean(false));
+    }
+
     // Dispatch by type symbol
     auto typeVal = m.get(syms_.type);
     if (typeVal.isSymbol()) {
@@ -485,12 +492,6 @@ void MapRenderer::renderNode(MapData& m, ExecutionContext& ctx) {
         else {
             ImGui::TextColored({1, 0, 0, 1}, "[Unknown widget type]");
         }
-    }
-
-    // Focus: auto-focus on first appearance
-    bool wantAutoFocus = getBoolField(m, syms_.auto_focus, false);
-    if (wantAutoFocus) {
-        ImGui::SetItemDefaultFocus();
     }
 
     // Focus: track focus changes for on_focus/on_blur callbacks
