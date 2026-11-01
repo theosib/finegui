@@ -146,3 +146,16 @@
 - [x] Keyboard shortcuts / hotkeys (bind keys to actions)
 - [x] Serialization (save/load UI layout state)
 - [x] API reference documentation for all widget types and script bindings
+
+## Known Problems
+
+- **`auto_focus` in the retained renderer.** `src/retained/gui_renderer.cpp` still calls
+  `SetItemDefaultFocus` after the item, which only tells keyboard navigation, so a text field there
+  waits for a click. `MapRenderer` was fixed: `SetKeyboardFocusHere` before the item, once.
+- **`ui.input` has no password mode.** `ImGuiInputTextFlags_Password` isn't reachable from a script,
+  so a password field shows what's typed.
+- **`on_change` on `ui.input` fires when the field loses focus,** not per key, which the guide's table
+  doesn't say. A script reading its own copy while the field's in use sees the old text.
+- **`enableKeyboard = false` also means no Tab between fields.** It's what a game wants while playing
+  and not what a form wants, and one `GuiSystem` has one setting.
+- **Only built on macOS,** like the rest of these repos. `CMakeLists.txt` has `MSVC` branches, untested.
