@@ -477,7 +477,7 @@ void GuiSystem::endFrame() {
                     cmd.indexOffset = static_cast<uint32_t>(idxOffset + pcmd->IdxOffset);
                     cmd.indexCount = pcmd->ElemCount;
                     cmd.vertexOffset = static_cast<uint32_t>(vtxOffset + pcmd->VtxOffset);
-                    cmd.texture.id = reinterpret_cast<uint64_t>(pcmd->GetTexID());
+                    cmd.texture.id = static_cast<uint64_t>(pcmd->GetTexID());
                     cmd.scissorRect = glm::ivec4(
                         static_cast<int>(pcmd->ClipRect.x),
                         static_cast<int>(pcmd->ClipRect.y),
