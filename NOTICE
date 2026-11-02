@@ -1,0 +1,5 @@
+finegui
+Copyright 2026 Timothy Miller
+
+third_party/imgui is Dear ImGui by Omar Cornut, under its own licence:
+see third_party/imgui/LICENSE.txt.
