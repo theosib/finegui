@@ -67,6 +67,9 @@ public:
     ImGuiBackend(finevk::RenderSurface* surface);
     ~ImGuiBackend();
 
+    /// Where gui.vert.spv and gui.frag.spv are. Call before initialize().
+    void setShaderDir(std::string dir) { shaderDir_ = std::move(dir); }
+
     // Non-copyable, non-movable (for simplicity)
     ImGuiBackend(const ImGuiBackend&) = delete;
     ImGuiBackend& operator=(const ImGuiBackend&) = delete;

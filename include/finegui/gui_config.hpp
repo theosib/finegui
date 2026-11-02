@@ -51,6 +51,13 @@ struct GuiConfig {
     /// Enable gamepad navigation
     bool enableGamepad = false;
 
+    /// Where ImGui keeps its window layout (empty = imgui.ini in the working directory)
+    std::string iniPath;
+
+    /// Where gui.vert.spv and gui.frag.spv are (empty = where finegui's own build put them,
+    /// which is no use to a program that's been installed somewhere else)
+    std::string shaderDir;
+
     // ========================================================================
     // Performance settings
     // ========================================================================

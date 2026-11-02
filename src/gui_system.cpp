@@ -110,6 +110,9 @@ GuiSystem::GuiSystem(finevk::LogicalDevice* device, const GuiConfig& config)
 
     // Configure ImGui
     ImGuiIO& io = ImGui::GetIO();
+    if (!impl_->config.iniPath.empty()) {
+        io.IniFilename = impl_->config.iniPath.c_str();  // ImGui keeps the pointer
+    }
     if (config.enableKeyboard) {
         io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
     }
@@ -185,6 +188,9 @@ void GuiSystem::initialize(finevk::RenderSurface* surface, uint32_t subpass) {
 
     // Create backend with the surface (provides device, framesInFlight, deferDelete)
     impl_->backend = std::make_unique<backend::ImGuiBackend>(surface);
+    if (!impl_->config.shaderDir.empty()) {
+        impl_->backend->setShaderDir(impl_->config.shaderDir);
+    }
 
     // Get display size from surface (framebuffer size) and convert to logical size
     // For high-DPI displays, displayWidth/Height should be the logical size,
