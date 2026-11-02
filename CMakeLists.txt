@@ -97,8 +97,23 @@ set(IMGUI_PATCH ${CMAKE_CURRENT_SOURCE_DIR}/third_party/imgui-skin-hooks.patch)
 set(IMGUI_PATCHED_DIR ${CMAKE_CURRENT_BINARY_DIR}/imgui-patched)
 set(IMGUI_PATCH_WORK ${CMAKE_CURRENT_BINARY_DIR}/imgui-patched-work)
 file(REMOVE_RECURSE ${IMGUI_PATCH_WORK})
-file(COPY ${IMGUI_DIR}/imgui.cpp ${IMGUI_DIR}/imgui_widgets.cpp DESTINATION ${IMGUI_PATCH_WORK})
-find_program(PATCH_PROGRAM patch REQUIRED)
+# As LF copies: git on Windows may check them out CRLF, and the patch wouldn't fit
+foreach(_imgui_file imgui.cpp imgui_widgets.cpp)
+    file(READ ${IMGUI_DIR}/${_imgui_file} _imgui_text)
+    string(REPLACE "\r\n" "\n" _imgui_text "${_imgui_text}")
+    file(WRITE ${IMGUI_PATCH_WORK}/${_imgui_file} "${_imgui_text}")
+endforeach()
+# Windows has no patch of its own, but Git for Windows brings one
+set(_patch_hints)
+if(WIN32)
+    find_package(Git QUIET)
+    if(GIT_EXECUTABLE)
+        get_filename_component(_git_dir "${GIT_EXECUTABLE}" DIRECTORY)
+        list(APPEND _patch_hints "${_git_dir}/../usr/bin" "${_git_dir}/../../usr/bin")
+    endif()
+    list(APPEND _patch_hints "C:/Program Files/Git/usr/bin")
+endif()
+find_program(PATCH_PROGRAM patch HINTS ${_patch_hints} REQUIRED)
 execute_process(
     COMMAND ${PATCH_PROGRAM} -p1 --batch --forward -i ${IMGUI_PATCH}
     WORKING_DIRECTORY ${IMGUI_PATCH_WORK}
@@ -235,13 +250,19 @@ add_library(finegui STATIC ${FINEGUI_SOURCES} ${FINEGUI_HEADERS})
 finegui_configure_target(finegui)
 
 # --- Shared library ---
-add_library(finegui-shared SHARED ${FINEGUI_SOURCES} ${FINEGUI_HEADERS})
-finegui_configure_target(finegui-shared)
-set_target_properties(finegui-shared PROPERTIES
-    OUTPUT_NAME finegui
-    VERSION ${PROJECT_VERSION}
-    SOVERSION ${PROJECT_VERSION_MAJOR}
-)
+# Not on Windows: nothing is marked dllexport, and the DLL's import library would be finegui.lib,
+# the static one's name. The -shared names stand for the static libraries there.
+if(WIN32)
+    add_library(finegui-shared ALIAS finegui)
+else()
+    add_library(finegui-shared SHARED ${FINEGUI_SOURCES} ${FINEGUI_HEADERS})
+    finegui_configure_target(finegui-shared)
+    set_target_properties(finegui-shared PROPERTIES
+        OUTPUT_NAME finegui
+        VERSION ${PROJECT_VERSION}
+        SOVERSION ${PROJECT_VERSION_MAJOR}
+    )
+endif()
 
 # =============================================================================
 # finegui-retained library (optional retained-mode widget system)
@@ -297,13 +318,17 @@ if(FINEGUI_BUILD_RETAINED)
     finegui_retained_configure_target(finegui-retained finegui)
 
     # --- Shared library ---
-    add_library(finegui-retained-shared SHARED ${FINEGUI_RETAINED_SOURCES} ${FINEGUI_RETAINED_HEADERS})
-    finegui_retained_configure_target(finegui-retained-shared finegui-shared)
-    set_target_properties(finegui-retained-shared PROPERTIES
-        OUTPUT_NAME finegui-retained
-        VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-    )
+    if(WIN32)
+        add_library(finegui-retained-shared ALIAS finegui-retained)
+    else()
+        add_library(finegui-retained-shared SHARED ${FINEGUI_RETAINED_SOURCES} ${FINEGUI_RETAINED_HEADERS})
+        finegui_retained_configure_target(finegui-retained-shared finegui-shared)
+        set_target_properties(finegui-retained-shared PROPERTIES
+            OUTPUT_NAME finegui-retained
+            VERSION ${PROJECT_VERSION}
+            SOVERSION ${PROJECT_VERSION_MAJOR}
+        )
+    endif()
 endif()
 
 # =============================================================================
@@ -398,13 +423,17 @@ if(FINEGUI_BUILD_SCRIPT)
     finegui_script_configure_target(finegui-script finegui-retained)
 
     # --- Shared library ---
-    add_library(finegui-script-shared SHARED ${FINEGUI_SCRIPT_SOURCES} ${FINEGUI_SCRIPT_HEADERS})
-    finegui_script_configure_target(finegui-script-shared finegui-retained-shared)
-    set_target_properties(finegui-script-shared PROPERTIES
-        OUTPUT_NAME finegui-script
-        VERSION ${PROJECT_VERSION}
-        SOVERSION ${PROJECT_VERSION_MAJOR}
-    )
+    if(WIN32)
+        add_library(finegui-script-shared ALIAS finegui-script)
+    else()
+        add_library(finegui-script-shared SHARED ${FINEGUI_SCRIPT_SOURCES} ${FINEGUI_SCRIPT_HEADERS})
+        finegui_script_configure_target(finegui-script-shared finegui-retained-shared)
+        set_target_properties(finegui-script-shared PROPERTIES
+            OUTPUT_NAME finegui-script
+            VERSION ${PROJECT_VERSION}
+            SOVERSION ${PROJECT_VERSION_MAJOR}
+        )
+    endif()
 endif()
 
 # =============================================================================
