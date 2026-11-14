@@ -155,7 +155,10 @@ private:
     finevk::GraphicsPipelinePtr pipeline_;
 
     // Descriptor resources
-    finevk::DescriptorPoolPtr descriptorPool_;
+    /// Texture descriptor sets come from these. A full pool gets another beside it, so a GUI can
+    /// show any number of textures; each set frees itself back to the pool it came from.
+    std::vector<finevk::DescriptorPoolPtr> descriptorPools_;
+    void addDescriptorPool();
 
     // Default sampler for textures
     finevk::SamplerPtr defaultSampler_;

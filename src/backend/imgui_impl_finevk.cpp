@@ -101,11 +101,16 @@ void ImGuiBackend::createDescriptorResources() {
         .combinedImageSampler(0, VK_SHADER_STAGE_FRAGMENT_BIT)
         .build();
 
-    // Create descriptor pool from layout (auto-sizes pool types)
-    descriptorPool_ = finevk::DescriptorPool::fromLayout(
-        descriptorSetLayout_.get(), 100)
+    addDescriptorPool();
+}
+
+void ImGuiBackend::addDescriptorPool() {
+    // Sized from the layout; another is added whenever these run out
+    constexpr uint32_t SETS_PER_POOL = 128;
+    descriptorPools_.push_back(finevk::DescriptorPool::fromLayout(
+        descriptorSetLayout_.get(), SETS_PER_POOL)
         .allowFree()
-        .build();
+        .build());
 }
 
 void ImGuiBackend::createPipeline(finevk::RenderPass* renderPass,
@@ -294,7 +299,19 @@ finevk::DescriptorSetPtr ImGuiBackend::allocateTextureDescriptor(finevk::Texture
 
 finevk::DescriptorSetPtr ImGuiBackend::allocateTextureDescriptor(VkImageView view, VkSampler sampler)
 {
-    auto set = descriptorPool_->allocateManaged(descriptorSetLayout_.get());
+    // Any pool with room, newest first: freed sets leave room in older ones too
+    finevk::DescriptorSetPtr set;
+    for (auto it = descriptorPools_.rbegin(); it != descriptorPools_.rend() && !set; ++it) {
+        try {
+            set = (*it)->allocateManaged(descriptorSetLayout_.get());
+        } catch (const std::runtime_error&) {
+            // Full (or fragmented): try the next
+        }
+    }
+    if (!set) {
+        addDescriptorPool();
+        set = descriptorPools_.back()->allocateManaged(descriptorSetLayout_.get());
+    }
 
     finevk::DescriptorWriter(device_)
         .writeImage(set->handle(), 0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
