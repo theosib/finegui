@@ -1,6 +1,7 @@
 #pragma once
 
 #include <imgui.h>
+#include "lifetime.hpp"
 #include <functional>
 #include <string>
 #include <vector>
@@ -21,7 +22,7 @@ using HotkeyCallback = std::function<void()>;
 ///   hotkeys.bind(ImGuiKey_F5, []() { refresh(); });
 ///   // Each frame (between beginFrame/endFrame):
 ///   hotkeys.update();
-class HotkeyManager {
+class HotkeyManager : public LifetimeHolder {
 public:
     HotkeyManager() = default;
 
@@ -40,6 +41,9 @@ public:
 
     /// Unbind everything.
     void unbindAll();
+
+    /// Unbind what was bound while `lifetime` was current (lifetime.hpp)
+    void endLifetime(Lifetime lifetime) override;
 
     /// Enable/disable a specific binding.
     void setEnabled(int id, bool enabled);
@@ -66,6 +70,7 @@ private:
         ImGuiInputFlags flags;
         HotkeyCallback callback;
         bool enabled = true;
+        Lifetime lifetime = FOREVER;
     };
 
     int nextId_ = 1;

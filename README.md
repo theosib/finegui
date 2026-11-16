@@ -67,6 +67,10 @@ same object. See [Dynamic Updates](docs/USER_GUIDE.md#dynamic-updates-from-scrip
 - **Threaded rendering.** Draw data can be captured on one thread and submitted on another.
 - **High-DPI.** Layout is in logical pixels, and fonts are rasterized at the screen's real density.
 - **Messages from C++.** Scripts register handlers, and C++ can deliver to them from any thread.
+- **Lifetimes.** Everything shown or loaded while a lifetime is current (windows, script GUIs,
+  textures, tweens, hotkeys, a carried drag-and-drop item, and what ImGui remembers of the
+  windows) goes in one `endLifetime` call, so a title screen and a session never see each
+  other's leftovers. See [Lifetimes](docs/USER_GUIDE.md#lifetimes).
 
 ## Quick start
 

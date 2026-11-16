@@ -4,6 +4,7 @@
  */
 
 #include <finegui/gui_system.hpp>
+#include <finegui/lifetime.hpp>
 
 #include "backend/imgui_impl_finevk.hpp"
 
@@ -17,10 +18,29 @@ namespace finegui {
 // Implementation structure
 // ============================================================================
 
-struct GuiSystem::Impl {
+// The lifetime holder is the Impl, not the GuiSystem, which can move
+struct GuiSystem::Impl : LifetimeHolder {
     finevk::LogicalDevice* device = nullptr;
     finevk::CommandPool* commandPool = nullptr;
-    std::vector<finevk::TextureRef> skinAtlases;
+    struct SkinAtlas {
+        finevk::TextureRef texture;
+        Lifetime lifetime = FOREVER;
+    };
+    std::vector<SkinAtlas> skinAtlases;
+    std::unordered_map<uint64_t, Lifetime> textureLifetimes;  ///< Registered, by handle id
+
+    /// Let go of the textures registered and the images loaded under it
+    void endLifetime(Lifetime lifetime) override {
+        for (auto it = textureLifetimes.begin(); it != textureLifetimes.end();) {
+            if (it->second == lifetime) {
+                if (backend) backend->unregisterTexture(it->first);
+                it = textureLifetimes.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        std::erase_if(skinAtlases, [lifetime](const SkinAtlas& a) { return a.lifetime == lifetime; });
+    }
     GuiConfig config;
 
     // ImGui context
@@ -206,8 +226,12 @@ TextureHandle GuiSystem::loadSkinAtlas(const std::string& path) {
     if (!impl_->commandPool) return TextureHandle{};
     finevk::TextureRef texture = finevk::Texture::fromFile(impl_->device, path, impl_->commandPool, false);
     if (!texture) return TextureHandle{};
-    impl_->skinAtlases.push_back(texture);
+    impl_->skinAtlases.push_back(Impl::SkinAtlas{texture, currentLifetime()});
     return registerTexture(texture.get());
+}
+
+size_t GuiSystem::textureCount() const {
+    return impl_->textureLifetimes.size();
 }
 
 TextureHandle GuiSystem::registerTexture(finevk::Texture* texture, finevk::Sampler* sampler) {
@@ -219,6 +243,7 @@ TextureHandle GuiSystem::registerTexture(finevk::Texture* texture, finevk::Sampl
     handle.id = impl_->backend->registerTexture(texture, sampler);
     handle.width = texture->width();
     handle.height = texture->height();
+    impl_->textureLifetimes[handle.id] = currentLifetime();
 
     return handle;
 }
@@ -234,6 +259,7 @@ TextureHandle GuiSystem::registerTexture(finevk::ImageView* imageView,
     handle.id = impl_->backend->registerTexture(imageView, sampler);
     handle.width = width;
     handle.height = height;
+    impl_->textureLifetimes[handle.id] = currentLifetime();
 
     return handle;
 }
@@ -241,6 +267,7 @@ TextureHandle GuiSystem::registerTexture(finevk::ImageView* imageView,
 void GuiSystem::unregisterTexture(TextureHandle handle) {
     if (handle.valid() && impl_->backend) {
         impl_->backend->unregisterTexture(handle.id);
+        impl_->textureLifetimes.erase(handle.id);
     }
 }
 

@@ -17,6 +17,8 @@
 #include <iostream>
 #include <cassert>
 #include <cstdlib>
+#include <stdexcept>
+#include <string>
 
 using namespace finegui;
 
@@ -572,6 +574,75 @@ void test_connect_disconnect_input_manager() {
 // Main
 // ============================================================================
 
+// Textures registered while a lifetime is current are let go of when it ends, and the GUI goes on
+// drawing what's left (validation is on, so a freed descriptor still in use would show)
+// assert() is compiled out in a Release build; this isn't
+void require(bool ok, const char* what) {
+    if (!ok) throw std::runtime_error(std::string("check failed: ") + what);
+}
+
+void test_textures_go_with_their_lifetime() {
+    std::cout << "Testing: GUI textures go with their lifetime... ";
+    // Not TestContext: an offscreen surface asks the physical device, which that lets go of
+    auto instance = finevk::Instance::create().applicationName("test_texture_lifetime").enableValidation(true).build();
+    auto window = finevk::Window::create(instance.get()).title("test_texture_lifetime").size(800, 600).build();
+    auto physicalDevice = instance->selectPhysicalDevice(window.get());
+    auto device = physicalDevice.createLogicalDevice().surface(window->surface()).build();
+    window->bindDevice(device.get());
+    finevk::RendererConfig config;
+    auto renderer = finevk::SimpleRenderer::create(window.get(), config);
+    GuiConfig guiConfig;
+    guiConfig.msaaSamples = renderer->msaaSamples();
+    GuiSystem gui(renderer->device(), guiConfig);
+    gui.initialize(renderer.get());
+
+    auto makeTarget = [&] {
+        auto target = finevk::OffscreenSurface::create(device.get()).extent(32, 32).enableDepth().build();
+        target->beginFrame();
+        target->beginRenderPass({0.8f, 0.3f, 0.1f, 1.0f});
+        target->endRenderPass();
+        target->endFrame();
+        return target;
+    };
+    auto keptTarget = makeTarget();
+    auto sessionTarget = makeTarget();
+    size_t before = gui.textureCount();
+    TextureHandle kept = gui.registerTexture(keptTarget->colorImageView(), keptTarget->colorSampler(), 32, 32);
+    TextureHandle session;
+    {
+        LifetimeScope scope(7);
+        session = gui.registerTexture(sessionTarget->colorImageView(), sessionTarget->colorSampler(), 32, 32);
+        gui.registerTexture(sessionTarget->colorImageView(), sessionTarget->colorSampler(), 32, 32);
+    }
+    require(gui.textureCount() == before + 3, "three more textures");
+
+    auto draw = [&](bool withSession) {
+        if (auto frame = renderer->beginFrame()) {
+            gui.beginFrame();
+            ImGui::Begin("Textures");
+            ImGui::Image(kept, ImVec2(32, 32));
+            if (withSession) ImGui::Image(session, ImVec2(32, 32));
+            ImGui::End();
+            gui.endFrame();
+            renderer->beginRenderPass({0.1f, 0.1f, 0.1f, 1.0f});
+            gui.render(frame);
+            renderer->endRenderPass();
+            renderer->endFrame();
+        }
+    };
+    for (int i = 0; i < 3; ++i) draw(true);
+    renderer->waitIdle();
+
+    endLifetime(7);
+    require(gui.textureCount() == before + 1, "the lifetime's two textures gone");
+    for (int i = 0; i < 3; ++i) draw(false);
+    renderer->waitIdle();
+
+    gui.unregisterTexture(kept);
+    require(gui.textureCount() == before, "back to none");
+    std::cout << "PASSED\n";
+}
+
 int main() {
     std::cout << "=== finegui Phase 2 Tests ===\n\n";
 
@@ -581,6 +652,7 @@ int main() {
         test_input_processing();
         test_state_updates();
         test_offscreen_texture_in_gui();
+        test_textures_go_with_their_lifetime();
         test_handle_input_event_auto_mode();
         test_handle_input_event_passive_mode();
         test_handle_input_event_exclusive_mode();

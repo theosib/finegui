@@ -9,6 +9,7 @@
  */
 
 #include "gui_system.hpp"
+#include "lifetime.hpp"
 #include "gui_config.hpp"
 #include "gui_state.hpp"
 #include "gui_draw_data.hpp"

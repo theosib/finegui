@@ -49,6 +49,13 @@ if(FINEGUI_BUILD_SCRIPT)
     target_link_libraries(test_script_unit PRIVATE finegui-script-shared)
     add_test(NAME test_script_unit COMMAND test_script_unit)
 
+    # Lifetimes across the core, retained and script parts (no Vulkan required)
+    add_executable(test_lifetime_unit
+        test_lifetime_unit.cpp
+    )
+    target_link_libraries(test_lifetime_unit PRIVATE finegui-script-shared finegui-retained-shared)
+    add_test(NAME test_lifetime_unit COMMAND test_lifetime_unit)
+
     # Integration tests - rendering with Vulkan
     add_executable(test_script_render
         test_script_render.cpp

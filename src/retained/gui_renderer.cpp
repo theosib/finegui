@@ -1,6 +1,7 @@
 #include <finegui/gui_renderer.hpp>
 #include <finegui/gui_system.hpp>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <cstring>
 #include <algorithm>
 #include <cmath>
@@ -50,13 +51,28 @@ int GuiRenderer::show(WidgetNode tree, bool immediate) {
         !(tree.windowSizeW > 0.0f && tree.windowSizeH > 0.0f)) {
         warmup = 1;
     }
-    trees_.emplace(id, Entry{std::move(tree), warmup});
+    trees_.emplace(id, Entry{std::move(tree), warmup, currentLifetime()});
     return id;
+}
+
+void GuiRenderer::endLifetime(Lifetime lifetime) {
+    for (auto it = trees_.begin(); it != trees_.end();) {
+        if (it->second.lifetime != lifetime) {
+            ++it;
+            continue;
+        }
+        const WidgetNode& tree = it->second.tree;
+        if (tree.type == WidgetNode::Type::Window && ImGui::GetCurrentContext()) {
+            if (ImGuiWindow* window = ImGui::FindWindowByName(tree.label.c_str())) window->StateStorage.Clear();
+            ImGui::ClearWindowSettings(tree.label.c_str());
+        }
+        it = trees_.erase(it);
+    }
 }
 
 int GuiRenderer::stage(WidgetNode tree) {
     int id = nextId_++;
-    trees_.emplace(id, Entry{std::move(tree), -1});
+    trees_.emplace(id, Entry{std::move(tree), -1, currentLifetime()});
     return id;
 }
 

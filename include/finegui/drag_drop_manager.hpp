@@ -1,6 +1,7 @@
 #pragma once
 
 #include <imgui.h>
+#include "lifetime.hpp"
 #include <string>
 
 namespace finegui {
@@ -18,7 +19,7 @@ namespace finegui {
 ///   mapRenderer.setDragDropManager(&dndManager);
 ///   // Each frame, after all renderers:
 ///   dndManager.renderCursorItem();
-class DragDropManager {
+class DragDropManager : public LifetimeHolder {
 public:
     /// What the cursor is currently carrying (empty if nothing).
     struct CursorItem {
@@ -56,8 +57,12 @@ public:
     /// but before gui.endFrame().
     void renderCursorItem();
 
+    /// Drop what the cursor carries if it was picked up while `lifetime` was current
+    void endLifetime(Lifetime lifetime) override;
+
 private:
     CursorItem cursorItem_;
+    Lifetime cursorLifetime_ = FOREVER;
 };
 
 } // namespace finegui

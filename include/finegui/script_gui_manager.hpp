@@ -1,6 +1,7 @@
 #pragma once
 
 #include <finegui/script_gui.hpp>
+#include <finegui/lifetime.hpp>
 #include <finescript/script_engine.h>
 #include <cstdint>
 #include <memory>
@@ -15,7 +16,7 @@ class MapRenderer;
 
 /// Manages multiple ScriptGui instances. Provides broadcast messaging,
 /// lifetime management, and a single processPendingMessages() call per frame.
-class ScriptGuiManager {
+class ScriptGuiManager : public LifetimeHolder {
 public:
     ScriptGuiManager(finescript::ScriptEngine& engine, MapRenderer& renderer);
     ~ScriptGuiManager();
@@ -49,6 +50,9 @@ public:
     /// Close all GUIs.
     void closeAll();
 
+    /// Close and destroy the GUIs made while `lifetime` was current (lifetime.hpp)
+    void endLifetime(Lifetime lifetime) override;
+
     /// Remove closed/inactive GUIs from the managed list.
     void cleanup();
 
@@ -62,6 +66,7 @@ private:
     finescript::ScriptEngine& engine_;
     MapRenderer& renderer_;
     std::vector<std::unique_ptr<ScriptGui>> guis_;
+    std::vector<Lifetime> lifetimes_;  ///< Of each of guis_, in the same order
 
     struct PendingBroadcast {
         uint32_t type;

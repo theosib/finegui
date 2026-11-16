@@ -26,8 +26,12 @@ void HotkeyManager::update() {
 int HotkeyManager::bind(ImGuiKeyChord chord, HotkeyCallback callback,
                          ImGuiInputFlags flags) {
     int id = nextId_++;
-    bindings_.push_back({id, chord, flags, std::move(callback), true});
+    bindings_.push_back({id, chord, flags, std::move(callback), true, currentLifetime()});
     return id;
+}
+
+void HotkeyManager::endLifetime(Lifetime lifetime) {
+    std::erase_if(bindings_, [lifetime](const Binding& b) { return b.lifetime == lifetime; });
 }
 
 void HotkeyManager::unbind(int id) {

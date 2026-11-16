@@ -22,6 +22,7 @@ ScriptGui* ScriptGuiManager::showFromSource(
     }
     auto* ptr = gui.get();
     guis_.push_back(std::move(gui));
+    lifetimes_.push_back(currentLifetime());
     return ptr;
 }
 
@@ -84,10 +85,31 @@ void ScriptGuiManager::closeAll() {
 }
 
 void ScriptGuiManager::cleanup() {
-    guis_.erase(
-        std::remove_if(guis_.begin(), guis_.end(),
-                        [](const std::unique_ptr<ScriptGui>& g) { return !g->isActive(); }),
-        guis_.end());
+    size_t kept = 0;
+    for (size_t i = 0; i < guis_.size(); ++i) {
+        if (!guis_[i]->isActive()) continue;
+        guis_[kept] = std::move(guis_[i]);
+        lifetimes_[kept] = lifetimes_[i];
+        ++kept;
+    }
+    guis_.resize(kept);
+    lifetimes_.resize(kept);
+}
+
+void ScriptGuiManager::endLifetime(Lifetime lifetime) {
+    size_t kept = 0;
+    for (size_t i = 0; i < guis_.size(); ++i) {
+        if (lifetimes_[i] == lifetime) {
+            guis_[i]->close();
+            guis_[i].reset();
+            continue;
+        }
+        guis_[kept] = std::move(guis_[i]);
+        lifetimes_[kept] = lifetimes_[i];
+        ++kept;
+    }
+    guis_.resize(kept);
+    lifetimes_.resize(kept);
 }
 
 ScriptGui* ScriptGuiManager::findByGuiId(int guiId) {

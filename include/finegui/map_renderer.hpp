@@ -3,6 +3,7 @@
 #include <finegui/widget_converter.hpp>
 #include <finegui/drag_drop_manager.hpp>
 #include <finegui/texture_registry.hpp>
+#include <finegui/lifetime.hpp>
 #include <finescript/value.h>
 #include <finescript/script_engine.h>
 #include <finescript/execution_context.h>
@@ -27,7 +28,10 @@ namespace finegui {
 ///   int id = renderer.show(mapTree, ctx);
 ///   // Each frame (between gui.beginFrame/endFrame):
 ///   renderer.renderAll();
-class MapRenderer {
+/// A tree belongs to the lifetime current when it was shown or staged (lifetime.hpp). Ending
+/// that lifetime hides it, and ImGui forgets the windows it drew: where they were, how big,
+/// what was open in them.
+class MapRenderer : public LifetimeHolder {
 public:
     explicit MapRenderer(finescript::ScriptEngine& engine);
 
@@ -57,6 +61,10 @@ public:
 
     /// Remove all map trees.
     void hideAll();
+
+    /// Hide every tree shown or staged under `lifetime`, and forget the windows they drew.
+    /// During renderAll, when it ends.
+    void endLifetime(Lifetime lifetime) override;
     void clear() { hideAll(); }
 
     /// Get a reference to a stored root map Value.
@@ -119,7 +127,13 @@ private:
         finescript::Value rootMap;
         finescript::ExecutionContext* ctx;
         int warmupFrames = 0;  // >0 = warming up, 0 = normal, -1 = staged
+        Lifetime lifetime = FOREVER;
+        std::vector<std::string> windows;  // Names this tree has passed to ImGui::Begin
     };
+
+    Entry* currentEntry_ = nullptr;          // The tree being drawn
+    std::vector<std::string> pendingForget_;  // Windows to forget once the frame's drawn
+    void forgetWindows(const std::vector<std::string>& names);
 
     enum class OpType {
         Insert,

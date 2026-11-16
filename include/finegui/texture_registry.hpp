@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lifetime.hpp"
 #include "texture_handle.hpp"
 #include <string>
 #include <unordered_map>
@@ -16,7 +17,8 @@ namespace finegui {
 ///   TextureRegistry registry;
 ///   registry.registerTexture("sword_icon", swordHandle);
 ///   // In script: ui.image "sword_icon" 48 48
-class TextureRegistry {
+/// A name belongs to the lifetime current when it was registered (lifetime.hpp).
+class TextureRegistry : public LifetimeHolder {
 public:
     /// Register (or replace) a texture by name.
     void registerTexture(const std::string& name, TextureHandle handle);
@@ -36,8 +38,15 @@ public:
     /// Return the number of registered textures.
     size_t size() const { return textures_.size(); }
 
+    /// Forget the names registered under `lifetime`
+    void endLifetime(Lifetime lifetime) override;
+
 private:
-    std::unordered_map<std::string, TextureHandle> textures_;
+    struct Named {
+        TextureHandle handle;
+        Lifetime lifetime = FOREVER;
+    };
+    std::unordered_map<std::string, Named> textures_;
 };
 
 } // namespace finegui

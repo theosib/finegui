@@ -180,6 +180,7 @@ set(FINEGUI_SOURCES
     src/gui_system.cpp
     src/state_dispatcher.cpp
     src/texture_registry.cpp
+    src/lifetime.cpp
     src/scene_texture.cpp
     src/skin.cpp
     src/backend/imgui_impl_finevk.cpp
@@ -196,6 +197,7 @@ set(FINEGUI_HEADERS
     include/finegui/input_adapter.hpp
     include/finegui/texture_handle.hpp
     include/finegui/texture_registry.hpp
+    include/finegui/lifetime.hpp
     include/finegui/scene_texture.hpp
     include/finegui/widget_state.hpp
 )

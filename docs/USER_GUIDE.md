@@ -2178,6 +2178,43 @@ The `HotkeyManager` must outlive the `ScriptGui` that references it.
 
 ---
 
+## Lifetimes
+
+A program with distinct stretches, such as a title screen and then a session, gives each a
+`Lifetime` (any number but `FOREVER`, which is 0 and the default) and makes it current while it
+builds what belongs there:
+
+```cpp
+#include <finegui/lifetime.hpp>
+
+constexpr finegui::Lifetime MENUS = 1, SESSION = 2;
+
+finegui::setCurrentLifetime(SESSION);   // or a LifetimeScope for a block
+int hud = mapRenderer.show(hudTree, ctx);
+textures.registerTexture("map", gui.registerTexture(minimap.get()));
+hotkeys.bind(ImGuiKey_Escape, openPauseMenu);
+
+// ... later, between frames, once the GPU has finished with them:
+finegui::endLifetime(SESSION);
+```
+
+Ending it takes away everything made while it was current, in every holder at once:
+
+| Holder | What goes |
+|--------|-----------|
+| `MapRenderer`, `GuiRenderer` | Trees shown or staged, and ImGui's memory of the windows they drew (position, size, collapsed, open nodes, scroll) |
+| `ScriptGuiManager` | Script GUIs, closed and destroyed with their contexts |
+| `GuiSystem` | Textures registered, and skin images loaded (descriptor sets and images freed) |
+| `TextureRegistry` | Names registered |
+| `TweenManager`, `HotkeyManager` | Tweens started, keys bound |
+| `DragDropManager` | The carried item, if it was picked up then |
+
+A holder is anything derived from `LifetimeHolder`, and is on the list while it exists. Ending a
+lifetime from inside a frame (a button's callback) is allowed: the trees are hidden at once and
+removed when the frame ends, so anything their callbacks point into must last that long. Freeing
+textures needs the GPU done with them, so a program that ends a lifetime for good waits for its
+frames in flight first.
+
 ## Build System
 
 finegui is organized as layered libraries:

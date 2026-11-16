@@ -1,5 +1,6 @@
 #pragma once
 
+#include "lifetime.hpp"
 #include "widget_node.hpp"
 #include <vector>
 #include <functional>
@@ -28,7 +29,7 @@ enum class TweenProperty {
 
 using TweenCallback = std::function<void(int tweenId)>;
 
-class TweenManager {
+class TweenManager : public LifetimeHolder {
 public:
     explicit TweenManager(GuiRenderer& renderer);
 
@@ -95,6 +96,9 @@ public:
     /// Cancel all active tweens.
     void cancelAll();
 
+    /// Cancel the tweens started while `lifetime` was current (lifetime.hpp)
+    void endLifetime(Lifetime lifetime) override;
+
     /// Check if a tween is still active.
     bool isActive(int tweenId) const;
 
@@ -114,6 +118,7 @@ private:
         Easing easing;
         TweenCallback onComplete;
         bool started;  // false until first frame (for auto-from)
+        Lifetime lifetime = FOREVER;
     };
 
     struct ShakeTween {
@@ -127,6 +132,7 @@ private:
         float basePosY;
         bool started;
         TweenCallback onComplete;
+        Lifetime lifetime = FOREVER;
     };
 
     GuiRenderer& renderer_;

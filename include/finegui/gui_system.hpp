@@ -151,13 +151,18 @@ public:
     /**
      * @brief Load an image for a skin and register it
      *
-     * The GuiSystem keeps the texture for as long as it lives. A skin can be active at any
-     * time, so nothing outside it is in a position to free one.
+     * The GuiSystem keeps the texture until the lifetime current now ends (lifetime.hpp), or for
+     * as long as it lives under FOREVER. A skin can be active at any time, so nothing outside it
+     * is in a position to free one sooner. A texture registered by the methods above belongs to
+     * the lifetime current then in the same way, and is unregistered when that lifetime ends.
      *
      * @param path Image file
      * @return Handle, invalid if it can't be loaded or initialize hasn't run
      */
     TextureHandle loadSkinAtlas(const std::string& path);
+
+    /// Textures registered through this GuiSystem (and loaded skin images) not yet let go of
+    [[nodiscard]] size_t textureCount() const;
 
     // ========================================================================
     // Per-Frame: Input

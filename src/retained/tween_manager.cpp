@@ -194,7 +194,7 @@ int TweenManager::animate(int guiId, std::vector<int> childPath,
         id, guiId, std::move(childPath), prop,
         std::numeric_limits<float>::quiet_NaN(), // auto-from: read on first frame
         toValue, duration, 0.0f, easing,
-        std::move(onComplete), false
+        std::move(onComplete), false, currentLifetime()
     });
     return id;
 }
@@ -207,7 +207,7 @@ int TweenManager::animate(int guiId, std::vector<int> childPath,
     tweens_.push_back(Tween{
         id, guiId, std::move(childPath), prop,
         fromValue, toValue, duration, 0.0f, easing,
-        std::move(onComplete), false
+        std::move(onComplete), false, currentLifetime()
     });
     return id;
 }
@@ -261,7 +261,7 @@ int TweenManager::shake(int guiId, float duration, float amplitude, float freque
     int id = nextId_++;
     shakes_.push_back(ShakeTween{
         id, guiId, duration, 0.0f, amplitude, frequency,
-        0.0f, 0.0f, false, std::move(onComplete)
+        0.0f, 0.0f, false, std::move(onComplete), currentLifetime()
     });
     return id;
 }
@@ -291,6 +291,11 @@ void TweenManager::cancelAll(int guiId) {
 void TweenManager::cancelAll() {
     tweens_.clear();
     shakes_.clear();
+}
+
+void TweenManager::endLifetime(Lifetime lifetime) {
+    std::erase_if(tweens_, [lifetime](const Tween& t) { return t.lifetime == lifetime; });
+    std::erase_if(shakes_, [lifetime](const ShakeTween& t) { return t.lifetime == lifetime; });
 }
 
 bool TweenManager::isActive(int tweenId) const {

@@ -5,6 +5,11 @@ namespace finegui {
 
 void DragDropManager::pickUp(const CursorItem& item) {
     cursorItem_ = item;
+    cursorLifetime_ = currentLifetime();
+}
+
+void DragDropManager::endLifetime(Lifetime lifetime) {
+    if (cursorLifetime_ == lifetime) cursorItem_.clear();
 }
 
 DragDropManager::CursorItem DragDropManager::dropItem() {

@@ -3,6 +3,7 @@
 #include "widget_node.hpp"
 #include "widget_state.hpp"
 #include "drag_drop_manager.hpp"
+#include "lifetime.hpp"
 #include <map>
 #include <string>
 
@@ -22,7 +23,7 @@ class GuiSystem;
 ///   gui.beginFrame();
 ///   renderer.renderAll();
 ///   gui.endFrame();
-class GuiRenderer {
+class GuiRenderer : public LifetimeHolder {
 public:
     explicit GuiRenderer(GuiSystem& gui);
 
@@ -54,6 +55,10 @@ public:
 
     /// Remove all widget trees.
     void hideAll();
+
+    /// Hide every tree shown or staged while `lifetime` was current (lifetime.hpp), and make
+    /// ImGui forget the windows they were
+    void endLifetime(Lifetime lifetime) override;
 
     /// Get a reference to a live widget tree (for direct mutation).
     /// Returns nullptr if the ID is not found.
@@ -101,6 +106,7 @@ private:
     struct Entry {
         WidgetNode tree;
         int warmupFrames = 0;  // >0 = warming up, 0 = normal, -1 = staged
+        Lifetime lifetime = FOREVER;
     };
     std::map<int, Entry> trees_;
 

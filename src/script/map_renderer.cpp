@@ -2,6 +2,7 @@
 #include <finescript/map_data.h>
 #include <finescript/interner.h>
 #include <imgui.h>
+#include <imgui_internal.h>
 #include <cstring>
 #include <algorithm>
 #include <cfloat>
@@ -74,9 +75,9 @@ int MapRenderer::show(Value rootMap, ExecutionContext& ctx, bool immediate) {
     int warmup = computeWarmupFrames(rootMap, immediate);
     if (inRender_) {
         indexNode(rootMap);
-        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, warmup}});
+        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, warmup, currentLifetime(), {}}});
     } else {
-        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, warmup});
+        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, warmup, currentLifetime(), {}});
         indexNode(it->second.rootMap);
     }
     return id;
@@ -86,9 +87,9 @@ int MapRenderer::stage(Value rootMap, ExecutionContext& ctx) {
     int id = nextId_++;
     if (inRender_) {
         indexNode(rootMap);
-        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, -1}});
+        pendingOps_.push_back(PendingOp{OpType::Insert, id, Entry{std::move(rootMap), &ctx, -1, currentLifetime(), {}}});
     } else {
-        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, -1});
+        auto [it, _] = trees_.emplace(id, Entry{std::move(rootMap), &ctx, -1, currentLifetime(), {}});
         indexNode(it->second.rootMap);
     }
     return id;
@@ -171,6 +172,43 @@ void MapRenderer::hideAll() {
     }
     trees_.clear();
     idIndex_.clear();
+}
+
+void MapRenderer::endLifetime(Lifetime lifetime) {
+    std::vector<std::string> forget;
+    if (inRender_) {
+        std::erase_if(pendingOps_, [lifetime](const PendingOp& op) {
+            return op.type == OpType::Insert && op.entry.lifetime == lifetime;
+        });
+        for (const auto& [id, entry] : trees_) {
+            if (entry.lifetime != lifetime) continue;
+            if (!pendingClear_) pendingHideIds_.insert(id);
+            pendingForget_.insert(pendingForget_.end(), entry.windows.begin(), entry.windows.end());
+        }
+        rebuildIdIndex();
+        return;
+    }
+    for (auto it = trees_.begin(); it != trees_.end();) {
+        if (it->second.lifetime == lifetime) {
+            forget.insert(forget.end(), it->second.windows.begin(), it->second.windows.end());
+            it = trees_.erase(it);
+        } else {
+            ++it;
+        }
+    }
+    rebuildIdIndex();
+    forgetWindows(forget);
+}
+
+void MapRenderer::forgetWindows(const std::vector<std::string>& names) {
+    if (names.empty() || !ImGui::GetCurrentContext()) return;
+    for (const std::string& name : names) {
+        if (ImGuiWindow* window = ImGui::FindWindowByName(name.c_str())) {
+            window->StateStorage.Clear();  // Open tree nodes, tabs, and the like
+            window->Scroll = window->ScrollTarget = ImVec2(0.0f, 0.0f);
+        }
+        ImGui::ClearWindowSettings(name.c_str());  // Position, size, collapsed
+    }
 }
 
 Value* MapRenderer::get(int id) {
@@ -278,6 +316,11 @@ void MapRenderer::flushPendingOps() {
         pendingHideIds_.clear();
         mutated = true;
     }
+    if (!pendingForget_.empty()) {
+        auto names = std::move(pendingForget_);
+        pendingForget_.clear();
+        forgetWindows(names);
+    }
     if (!pendingOps_.empty()) {
         auto ops = std::move(pendingOps_);
         pendingOps_.clear();
@@ -316,6 +359,7 @@ void MapRenderer::renderAll() {
         if (pendingHideIds_.count(id) > 0) continue;
         if (entry.warmupFrames == -1) continue;  // staged — skip
         if (entry.rootMap.isMap()) {
+            currentEntry_ = &entry;
             if (entry.warmupFrames > 0) {
                 // Render invisibly so ImGui computes layout.
                 // Use ImGui's style stack rather than mutating the map.
@@ -328,6 +372,7 @@ void MapRenderer::renderAll() {
             }
         }
     }
+    currentEntry_ = nullptr;
     lastFocusedId_ = currentFocusedId_;
 }
 
@@ -558,6 +603,10 @@ void MapRenderer::renderWindow(MapData& m, ExecutionContext& ctx) {
     bool open = true;
     bool windowOpen = ImGui::Begin(title.c_str(), isClosable ? &open : nullptr,
                                     static_cast<ImGuiWindowFlags>(wflags));
+    if (currentEntry_ && std::find(currentEntry_->windows.begin(), currentEntry_->windows.end(), title) ==
+                             currentEntry_->windows.end()) {
+        currentEntry_->windows.push_back(title);
+    }
 
     // Capture draw list and window geometry for vertex post-processing
     ImDrawList* drawList = ImGui::GetWindowDrawList();
